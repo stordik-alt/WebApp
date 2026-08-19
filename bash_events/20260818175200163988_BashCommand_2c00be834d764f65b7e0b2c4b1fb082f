@@ -1,0 +1,8 @@
+{
+  "command": "git clone --depth 1 --branch main https://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@github.com/stordik-alt/Produktivity-webapp.git Produktivity-webapp",
+  "cwd": "/workspace/project",
+  "timeout": 120,
+  "id": "2c00be834d764f65b7e0b2c4b1fb082f",
+  "timestamp": "2026-08-18T17:52:00.163988Z",
+  "kind": "BashCommand"
+}

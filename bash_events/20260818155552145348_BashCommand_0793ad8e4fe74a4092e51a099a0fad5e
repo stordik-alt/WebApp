@@ -1,0 +1,8 @@
+{
+  "command": "git checkout main",
+  "cwd": "/workspace/project/Produktivity-webapp",
+  "timeout": 30,
+  "id": "0793ad8e4fe74a4092e51a099a0fad5e",
+  "timestamp": "2026-08-18T15:55:52.145348Z",
+  "kind": "BashCommand"
+}

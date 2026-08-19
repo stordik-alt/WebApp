@@ -1,0 +1,8 @@
+{
+  "command": "chmod +x /workspace/project/Produktivity-webapp/.openhands/setup.sh && source /workspace/project/Produktivity-webapp/.openhands/setup.sh",
+  "cwd": "/workspace/project/Produktivity-webapp",
+  "timeout": 600,
+  "id": "a0c61ddf51394e948a846a742a7e6c12",
+  "timestamp": "2026-08-18T15:39:20.637190Z",
+  "kind": "BashCommand"
+}

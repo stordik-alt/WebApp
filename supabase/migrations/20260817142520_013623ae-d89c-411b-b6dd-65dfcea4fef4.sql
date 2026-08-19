@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.prevent_duplicate_quality_alert_history() FROM PUBLIC, anon, authenticated;

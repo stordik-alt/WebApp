@@ -1,0 +1,10 @@
+{
+  "id": "d3740c1d33764232b421f64614718897",
+  "timestamp": "2026-08-18T15:39:25.123376Z",
+  "command_id": "82c1d28e1d6745a6b91f0242a27b8e62",
+  "order": 0,
+  "exit_code": -1,
+  "stdout": null,
+  "stderr": "Error executing command: [Errno 2] No such file or directory: '/workspace/project/Produktivity-webapp'",
+  "kind": "BashOutput"
+}

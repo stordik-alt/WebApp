@@ -1,0 +1,8 @@
+{
+  "command": "git rev-parse --verify --quiet HEAD",
+  "cwd": "/workspace/project/Produktivity-webapp",
+  "timeout": 10,
+  "id": "e2a8eab7e271450c9cdb063eacf31ce5",
+  "timestamp": "2026-08-18T15:36:20.129282Z",
+  "kind": "BashCommand"
+}

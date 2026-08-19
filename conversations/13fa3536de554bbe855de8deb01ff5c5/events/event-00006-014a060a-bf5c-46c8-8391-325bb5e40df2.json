@@ -1,0 +1,1 @@
+{"id":"014a060a-bf5c-46c8-8391-325bb5e40df2","timestamp":"2026-08-18T15:58:13.999927","source":"user","parent_id":"3cde6e34-8c4d-4bb8-9ef4-9d3db8a32cd1","llm_message":{"role":"user","content":[{"cache_prompt":false,"type":"text","text":"otestuj aplikaci, chyby které najdeš, tak oprav"}],"thinking_blocks":[]},"activated_skills":[],"extended_content":[],"kind":"MessageEvent"}

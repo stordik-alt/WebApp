@@ -1,0 +1,8 @@
+{
+  "command": "mkdir -p .git/hooks && chmod +x .openhands/pre-commit.sh",
+  "cwd": "/workspace/project/Produktivity-webapp",
+  "timeout": 30,
+  "id": "f6e6429025474eb8844a98071ea6e94d",
+  "timestamp": "2026-08-18T15:36:15.379050Z",
+  "kind": "BashCommand"
+}

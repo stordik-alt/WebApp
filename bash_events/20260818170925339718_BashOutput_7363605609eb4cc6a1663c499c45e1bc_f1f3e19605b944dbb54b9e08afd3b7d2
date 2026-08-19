@@ -1,0 +1,10 @@
+{
+  "id": "f1f3e19605b944dbb54b9e08afd3b7d2",
+  "timestamp": "2026-08-18T17:09:25.339718Z",
+  "command_id": "7363605609eb4cc6a1663c499c45e1bc",
+  "order": 0,
+  "exit_code": 1,
+  "stdout": null,
+  "stderr": "chmod: cannot access '/workspace/project/Produktivity-webapp/.openhands/setup.sh': No such file or directory\n",
+  "kind": "BashOutput"
+}

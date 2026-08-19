@@ -1,0 +1,1 @@
+{"id":"77be47be-5f48-488e-b7b1-4da31e459fcb","timestamp":"2026-08-18T17:53:09.950132","source":"user","parent_id":"6ffac0c5-b8b3-4b27-a2ab-20eb36fa6c25","llm_message":{"role":"user","content":[{"cache_prompt":false,"type":"text","text":"Projdi celý projekt a zkus si ho spustit"}],"thinking_blocks":[]},"activated_skills":[],"extended_content":[],"kind":"MessageEvent"}

@@ -1,0 +1,10 @@
+{
+  "id": "c663f6c46b1246f8a9e709b93d204143",
+  "timestamp": "2026-08-18T17:52:00.325995Z",
+  "command_id": "b2627fefc80a4f1daf0e43f780c84456",
+  "order": 0,
+  "exit_code": 128,
+  "stdout": null,
+  "stderr": "fatal: detected dubious ownership in repository at '/workspace/project/Produktivity-webapp'\nTo add an exception for this directory, call:\n\n\tgit config --global --add safe.directory /workspace/project/Produktivity-webapp\n",
+  "kind": "BashOutput"
+}

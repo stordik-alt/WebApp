@@ -1,0 +1,10 @@
+{
+  "id": "8f566b0ecf5043ceb91bab6cc7796df0",
+  "timestamp": "2026-08-18T17:09:25.061991Z",
+  "command_id": "06ed9563c3ed4cd0908304d14e95828e",
+  "order": 0,
+  "exit_code": 128,
+  "stdout": null,
+  "stderr": "fatal: destination path 'Produktivity-webapp' already exists and is not an empty directory.\n",
+  "kind": "BashOutput"
+}
