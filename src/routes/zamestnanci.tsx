@@ -56,6 +56,7 @@ type FormState = {
   qual_tup: boolean;
   active: boolean;
   is_temporary: boolean;
+  position_type: "standard" | "handler" | "vlnař";
   note: string;
 };
 
@@ -66,6 +67,7 @@ const EMPTY: FormState = {
   qual_tup: false,
   active: true,
   is_temporary: false,
+  position_type: "standard",
   note: "",
 };
 
@@ -86,6 +88,7 @@ function EmployeesPage() {
         qual_tup: form.qual_tup,
         active: form.active,
         is_temporary: form.is_temporary,
+        position_type: form.position_type,
         note: form.note.trim() || null,
       };
       if (editing) {
@@ -135,6 +138,7 @@ function EmployeesPage() {
       qual_tup: emp.qual_tup,
       active: emp.active,
       is_temporary: emp.is_temporary,
+      position_type: emp.position_type,
       note: emp.note ?? "",
     });
     setOpen(true);
@@ -203,6 +207,27 @@ function EmployeesPage() {
                     />
                     Dočasný (bez profilu, výkon není v reportech)
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="positionType">Typ pozice</Label>
+                  <select
+                    id="positionType"
+                    className="flex h-11 w-full rounded-md border border-border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={form.position_type}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        position_type: e.target.value as "standard" | "handler" | "vlnař",
+                      })
+                    }
+                  >
+                    <option value="standard">Standardní (HA/TUP s OEE/normami)</option>
+                    <option value="handler">Handler (hodnocení práce)</option>
+                    <option value="vlnař">Vlnař (hodnocení práce)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground">
+                    Handler a vlnař: denní/týdenní záznamy bez OEE/norem.
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="note">Poznámka</Label>
@@ -289,10 +314,14 @@ function EmployeesPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {emp.is_temporary ? (
+                    {emp.position_type === "standard" ? (
                       <Badge variant="outline" className="text-[10px]">
-                        Dočasný
+                        Standard
                       </Badge>
+                    ) : emp.position_type === "handler" ? (
+                      <Badge className="bg-purple-500 text-white">Handler</Badge>
+                    ) : emp.position_type === "vlnař" ? (
+                      <Badge className="bg-blue-500 text-white">Vlnař</Badge>
                     ) : null}
                   </TableCell>
                   <TableCell className="max-w-[240px] truncate text-muted-foreground">

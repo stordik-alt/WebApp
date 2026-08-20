@@ -11,7 +11,10 @@ export type Employee = {
   note: string | null;
   is_demo: boolean;
   created_at: string;
+  position_type: "standard" | "handler" | "vlnař";
 };
+
+export const POSITION_TYPES = ["standard", "handler", "vlnař"] as const;
 
 export type DailyRecord = {
   id: string;

@@ -141,6 +141,7 @@ export type Database = {
           is_temporary: boolean;
           note: string | null;
           personal_no: string | null;
+          position_type: "standard" | "handler" | "vlnař";
           qual_ha: boolean;
           qual_tup: boolean;
           updated_at: string;
@@ -154,6 +155,7 @@ export type Database = {
           is_temporary?: boolean;
           note?: string | null;
           personal_no?: string | null;
+          position_type?: "standard" | "handler" | "vlnař";
           qual_ha?: boolean;
           qual_tup?: boolean;
           updated_at?: string;
@@ -167,6 +169,7 @@ export type Database = {
           is_temporary?: boolean;
           note?: string | null;
           personal_no?: string | null;
+          position_type?: "standard" | "handler" | "vlnař";
           qual_ha?: boolean;
           qual_tup?: boolean;
           updated_at?: string;
