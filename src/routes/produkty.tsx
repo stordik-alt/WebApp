@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductNorms, useProducts, useDailyRecords } from "@/lib/data";
-import { currentNorm, getNormHistory, recalculatePerformance, type Product } from "@/lib/products";
+import { currentNorm, getNormHistory, recalculatePerformance, recalculateOeeForEmployees, type Product } from "@/lib/products";
 import { fmt } from "@/lib/metrics";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ function ProductsPage() {
   const [operation, setOperation] = useState<"HA" | "TUP">("HA");
   const [normValue, setNormValue] = useState("");
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [employeesPerProduct, setEmployeesPerProduct] = useState("1");
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["products"] });
@@ -63,15 +64,22 @@ function ProductsPage() {
 
   const addProduct = useMutation({
     mutationFn: async () => {
+      const empNum = employeesPerProduct === "" ? 1 : Number(employeesPerProduct);
       const { error } = await supabase
         .from("products")
-        .insert({ code: code.trim(), name: name.trim() || null, ...approval() });
+        .insert({ 
+          code: code.trim(), 
+          name: name.trim() || null,
+          employees_per_product: empNum,
+          ...approval() 
+        });
       if (error) throw error;
     },
     onSuccess: () => {
       invalidate();
       setCode("");
       setName("");
+      setEmployeesPerProduct("1");
       toast.success("Produkt uložen");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -121,6 +129,14 @@ function ProductsPage() {
       });
       if (error) throw error;
 
+      // Získáme employees_per_product z produktu
+      const { data: productData } = await supabase
+        .from("products")
+        .select("employees_per_product")
+        .eq("id", selected.id)
+        .single();
+      const employeesPerProduct = productData?.employees_per_product ?? 1;
+
       // Pokud se norma snížila, přepočítáme všechny záznamy
       if (oldNormHistory.length > 0) {
         const oldNormAtFirst = oldNormHistory[0]; // nejstarší norma v historii
@@ -128,7 +144,7 @@ function ProductsPage() {
           // Získáme všechny záznamy pro tento produkt
           const { data: dailyRecords } = await supabase
             .from("daily_records")
-            .select("id, performance, available_time, work_date, product_id")
+            .select("id, performance, available_time, work_date, product_id, oee")
             .eq("product_id", selected.id)
             .eq("approval_status", "approved");
 
@@ -151,6 +167,32 @@ function ProductsPage() {
               }
               toast.info(`Přepočítáno ${recalculations.length} záznamů kvůli snížení normy.`);
             }
+          }
+        }
+      }
+
+      // Pokud employees_per_product > 1 a v záznamech je méně zaměstnanců, přepočítáme OEE
+      if (employeesPerProduct > 1) {
+        const { data: dailyRecords } = await supabase
+          .from("daily_records")
+          .select("id, oee, work_date, product_id")
+          .eq("product_id", selected.id)
+          .eq("approval_status", "approved");
+
+        if (dailyRecords && dailyRecords.length > 0) {
+          const recalculationsOee = recalculateOeeForEmployees(
+            dailyRecords as unknown as import("@/lib/metrics").DailyRecord[],
+            employeesPerProduct,
+          );
+
+          if (recalculationsOee.length > 0) {
+            for (const { recordId, newOee } of recalculationsOee) {
+              await supabase
+                .from("daily_records")
+                .update({ oee: newOee })
+                .eq("id", recordId);
+            }
+            toast.info(`Přepočítáno ${recalculationsOee.length} OEE kvůli počtu zaměstnanců.`);
           }
         }
       }
@@ -181,6 +223,20 @@ function ProductsPage() {
             <div className="grid gap-1.5">
               <Label>Popis</Label>
               <Input className="h-11" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Zaměstnanci na produkt (počet operátorů na linku)</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                className="h-11"
+                value={employeesPerProduct}
+                onChange={(e) => setEmployeesPerProduct(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Např. H_32346264-005 je určen pro 2 operátory.
+              </p>
             </div>
             <Button
               className="h-11"

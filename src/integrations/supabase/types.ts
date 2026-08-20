@@ -323,6 +323,7 @@ export type Database = {
           approved_by: string | null;
           code: string;
           created_at: string;
+          employees_per_product: number;
           first_seen_date: string;
           id: string;
           is_demo: boolean;
@@ -338,6 +339,7 @@ export type Database = {
           approved_by?: string | null;
           code: string;
           created_at?: string;
+          employees_per_product?: number;
           first_seen_date?: string;
           id?: string;
           is_demo?: boolean;
@@ -353,6 +355,7 @@ export type Database = {
           approved_by?: string | null;
           code?: string;
           created_at?: string;
+          employees_per_product?: number;
           first_seen_date?: string;
           id?: string;
           is_demo?: boolean;
