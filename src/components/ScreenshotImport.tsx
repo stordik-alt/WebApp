@@ -30,6 +30,7 @@ type DraftRow = {
   oee: string;
   performance: string;
   availableTime: string;
+  helpScore: string;
   confidence: number;
   include: boolean;
 };
@@ -151,6 +152,7 @@ export function ScreenshotImport({
             oee: row.oee !== null ? String(row.oee) : "",
             performance: row.performance !== null ? String(row.performance) : "",
             availableTime: row.available_time !== null ? String(row.available_time) : "",
+            helpScore: "0",
             confidence: row.confidence,
             include: true,
           };
@@ -184,7 +186,9 @@ export function ScreenshotImport({
           ),
       );
       if (!selected.length)
-        throw new Error("Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.");
+        throw new Error(
+          "Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.",
+        );
       if (!line.trim()) throw new Error("Doplňte linku.");
 
       // 1) Produkt a norma
@@ -244,7 +248,7 @@ export function ScreenshotImport({
         employee_id: r.employeeId!,
         position: r.position,
         oee: r.oee === "" ? null : Number(r.oee),
-        help_score: 0,
+        help_score: Number(r.helpScore || 0),
         performance: r.performance === "" ? null : Number(r.performance),
         available_time: r.availableTime === "" ? null : Number(r.availableTime),
         source: "screenshot",
@@ -272,12 +276,14 @@ export function ScreenshotImport({
       }
 
       // Výpomoc: jedna hodnota za pracovníka + datum + směnu (nevzniká 0 za každou linku).
-      const evalRows = Array.from(new Set(selected.map((r) => r.employeeId!))).map((employee_id) => ({
-        employee_id,
-        work_date: workDate,
-        shift,
-        help_score: 0,
-      }));
+      const evalRows = Array.from(new Set(selected.map((r) => r.employeeId!))).map(
+        (employee_id) => ({
+          employee_id,
+          work_date: workDate,
+          shift,
+          help_score: Number(selected.find((r) => r.employeeId === employee_id)?.helpScore || 0),
+        }),
+      );
       const { error: ee } = await supabase
         .from("shift_evaluations")
         .upsert(evalRows, { onConflict: "employee_id,work_date,shift", ignoreDuplicates: true });
@@ -444,7 +450,8 @@ export function ScreenshotImport({
             </div>
             <div className="grid gap-1.5">
               <Label>
-                Linka {!result.line ? <span className="text-destructive">(nerozpoznáno)</span> : null}
+                Linka{" "}
+                {!result.line ? <span className="text-destructive">(nerozpoznáno)</span> : null}
               </Label>
               <Input
                 value={line}
@@ -503,8 +510,8 @@ export function ScreenshotImport({
           ) : null}
           {existingProduct && haNorm && !isNormChange ? (
             <p className="text-xs text-muted-foreground">
-              Existující produkt se stejnou normou – použije se stávající záznam ({haNorm.norm_per_hour}{" "}
-              ks/h).
+              Existující produkt se stejnou normou – použije se stávající záznam (
+              {haNorm.norm_per_hour} ks/h).
             </p>
           ) : null}
 
@@ -603,8 +610,21 @@ export function ScreenshotImport({
                     />
                   </div>
                   <div className="grid gap-1">
-                    <Label className="text-xs">Výpomoc</Label>
-                    <Input className="h-11" value="0" disabled />
+                    <Label className="text-xs">Výpomoc ({r.helpScore})</Label>
+                    <Input
+                      type="range"
+                      min={-100}
+                      max={100}
+                      step={5}
+                      value={r.helpScore}
+                      onChange={(e) => patch(r.key, { helpScore: e.target.value })}
+                      className="cursor-pointer p-0"
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>-100</span>
+                      <span>0</span>
+                      <span>+100</span>
+                    </div>
                   </div>
                 </div>
               </div>
