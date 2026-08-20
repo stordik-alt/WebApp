@@ -114,7 +114,7 @@ function resolveAiProviders(): AiProvider[] {
  */
 export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { imageDataUrl: string }) => {
+  .validator((input: { imageDataUrl: string }) => {
     if (!input?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("Neplatný obrázek.");
     }
@@ -167,7 +167,9 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       if (res.status === 429)
         throw new Error("AI služba je dočasně přetížena, zkuste to prosím za chvíli.");
       if (res.status === 402)
-        throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
+        throw new Error(
+          "Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.",
+        );
       throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
     }
 
