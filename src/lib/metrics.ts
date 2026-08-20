@@ -7,6 +7,7 @@ export type Employee = {
   qual_ha: boolean;
   qual_tup: boolean;
   active: boolean;
+  is_temporary: boolean;
   note: string | null;
   is_demo: boolean;
   created_at: string;

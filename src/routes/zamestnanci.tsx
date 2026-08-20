@@ -34,9 +34,16 @@ export const Route = createFileRoute("/zamestnanci")({
   head: () => ({
     meta: [
       { title: "Zaměstnanci – Výkonnost operátorů" },
-      { name: "description", content: "Evidence pracovníků výroby DPS, kvalifikace HA a TUP, aktivní a neaktivní zaměstnanci." },
+      {
+        name: "description",
+        content:
+          "Evidence pracovníků výroby DPS, kvalifikace HA a TUP, aktivní a neaktivní zaměstnanci.",
+      },
       { property: "og:title", content: "Zaměstnanci – Výkonnost operátorů" },
-      { property: "og:description", content: "Evidence pracovníků výroby DPS včetně kvalifikací HA a TUP." },
+      {
+        property: "og:description",
+        content: "Evidence pracovníků výroby DPS včetně kvalifikací HA a TUP.",
+      },
     ],
   }),
   component: EmployeesPage,
@@ -48,6 +55,7 @@ type FormState = {
   qual_ha: boolean;
   qual_tup: boolean;
   active: boolean;
+  is_temporary: boolean;
   note: string;
 };
 
@@ -57,6 +65,7 @@ const EMPTY: FormState = {
   qual_ha: false,
   qual_tup: false,
   active: true,
+  is_temporary: false,
   note: "",
 };
 
@@ -76,6 +85,7 @@ function EmployeesPage() {
         qual_ha: form.qual_ha,
         qual_tup: form.qual_tup,
         active: form.active,
+        is_temporary: form.is_temporary,
         note: form.note.trim() || null,
       };
       if (editing) {
@@ -124,6 +134,7 @@ function EmployeesPage() {
       qual_ha: emp.qual_ha,
       qual_tup: emp.qual_tup,
       active: emp.active,
+      is_temporary: emp.is_temporary,
       note: emp.note ?? "",
     });
     setOpen(true);
@@ -185,6 +196,13 @@ function EmployeesPage() {
                       TUP
                     </label>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={form.is_temporary}
+                      onCheckedChange={(v) => setForm({ ...form, is_temporary: v === true })}
+                    />
+                    Dočasný (bez profilu, výkon není v reportech)
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="note">Poznámka</Label>
@@ -226,6 +244,7 @@ function EmployeesPage() {
               <TableHead>Osobní číslo</TableHead>
               <TableHead>Kvalifikace</TableHead>
               <TableHead>Stav</TableHead>
+              <TableHead>Typ</TableHead>
               <TableHead>Poznámka</TableHead>
               <TableHead className="text-right">Akce</TableHead>
             </TableRow>
@@ -247,11 +266,7 @@ function EmployeesPage() {
               rows.map((emp) => (
                 <TableRow key={emp.id} className={emp.active ? "" : "opacity-60"}>
                   <TableCell className="font-medium">
-                    <Link
-                      to="/zamestnanec/$id"
-                      params={{ id: emp.id }}
-                      className="hover:underline"
-                    >
+                    <Link to="/zamestnanec/$id" params={{ id: emp.id }} className="hover:underline">
                       {emp.full_name}
                     </Link>
                     {emp.is_demo ? (
@@ -272,6 +287,13 @@ function EmployeesPage() {
                     ) : (
                       <Badge variant="outline">Neaktivní</Badge>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {emp.is_temporary ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        Dočasný
+                      </Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell className="max-w-[240px] truncate text-muted-foreground">
                     {emp.note ?? "–"}
