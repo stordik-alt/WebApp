@@ -522,6 +522,127 @@ export type Database = {
           },
         ];
       };
+      handler_evaluations: {
+        Row: {
+          approval_status: string;
+          approved_at: string | null;
+          approved_by: string | null;
+          created_at: string;
+          employee_id: string;
+          id: string;
+          is_demo: boolean;
+          note: string | null;
+          score: number;
+          shift: string;
+          submitted_by: string | null;
+          updated_at: string;
+          work_date: string;
+        };
+        Insert: {
+          approval_status?: string;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          employee_id: string;
+          id?: string;
+          is_demo?: boolean;
+          note?: string | null;
+          score?: number;
+          shift: string;
+          submitted_by?: string | null;
+          updated_at?: string;
+          work_date: string;
+        };
+        Update: {
+          approval_status?: string;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          employee_id?: string;
+          id?: string;
+          is_demo?: boolean;
+          note?: string | null;
+          score?: number;
+          shift?: string;
+          submitted_by?: string | null;
+          updated_at?: string;
+          work_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "handler_evaluations_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      weekly_handler_evaluations: {
+        Row: {
+          alert_cause: string | null;
+          alert_note: string | null;
+          alert_resolved: boolean;
+          approval_status: string;
+          approved_at: string | null;
+          approved_by: string | null;
+          avg_score: number;
+          created_at: string;
+          employee_id: string;
+          id: string;
+          is_alert: boolean;
+          is_demo: boolean;
+          iso_week: number;
+          iso_year: number;
+          submitted_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          alert_cause?: string | null;
+          alert_note?: string | null;
+          alert_resolved?: boolean;
+          approval_status?: string;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          avg_score?: number;
+          created_at?: string;
+          employee_id: string;
+          id?: string;
+          is_alert?: boolean;
+          is_demo?: boolean;
+          iso_week: number;
+          iso_year: number;
+          submitted_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          alert_cause?: string | null;
+          alert_note?: string | null;
+          alert_resolved?: boolean;
+          approval_status?: string;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          avg_score?: number;
+          created_at?: string;
+          employee_id?: string;
+          id?: string;
+          is_alert?: boolean;
+          is_demo?: boolean;
+          iso_week?: number;
+          iso_year?: number;
+          submitted_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "weekly_handler_evaluations_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_roles: {
         Row: {
           created_at: string;
