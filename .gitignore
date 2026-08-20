@@ -33,3 +33,4 @@ dist-ssr
 *.sw?
 test-results/
 playwright-report/
+.env
