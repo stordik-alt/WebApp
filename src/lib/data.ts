@@ -135,16 +135,23 @@ export function useShiftAggregates(from?: string, to?: string) {
   const daily = useDailyRecords(from, to);
   const evals = useShiftEvaluations();
   const links = useCoworkerLinks();
+  const emp = useEmployees();
   const shifts = useMemo(
-    () => aggregateShifts(daily.data ?? [], evals.data ?? [], links.data ?? []),
-    [daily.data, evals.data, links.data],
+    () =>
+      aggregateShifts(
+        daily.data ?? [],
+        evals.data ?? [],
+        links.data ?? [],
+        emp.data ?? [],
+      ),
+    [daily.data, evals.data, links.data, emp.data],
   );
   return {
     shifts,
     records: daily.data ?? [],
     evaluations: evals.data ?? [],
     links: links.data ?? [],
-    isLoading: daily.isLoading || evals.isLoading || links.isLoading,
+    isLoading: daily.isLoading || evals.isLoading || links.isLoading || emp.isLoading,
   };
 }
 

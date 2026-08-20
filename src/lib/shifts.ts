@@ -61,9 +61,14 @@ export function aggregateShifts(
   records: DailyRecord[],
   evaluations: ShiftEvaluation[] = [],
   links: CoworkerLink[] = [],
+  employees: { id: string; is_temporary: boolean }[] = [],
 ): ShiftAggregate[] {
+  // Exclude temporary employees (is_temporary = true)
+  const tempEmployeeIds = new Set(employees.filter((e) => e.is_temporary).map((e) => e.id));
+  const filteredRecords = records.filter((r) => !tempEmployeeIds.has(r.employee_id));
+
   const groups = new Map<string, DailyRecord[]>();
-  for (const r of records) {
+  for (const r of filteredRecords) {
     const k = shiftKey(r.employee_id, r.work_date, r.shift);
     groups.set(k, [...(groups.get(k) ?? []), r]);
   }
