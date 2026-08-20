@@ -25,15 +25,46 @@ import {
 import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
 import { aggregateShifts, avgValid } from "@/lib/shifts";
 import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
+import { FileText } from "lucide-react";
 
 export const Route = createFileRoute("/reporty")({
   head: () => ({
     meta: [
       { title: "Reporty – Výkonnost operátorů" },
-      { name: "description", content: "Detailní report OEE, Quality Score, výpomoci a týmové spolupráce podle zaměstnance a období." },
+      {
+        name: "description",
+        content:
+          "Detailní report OEE, Quality Score, výpomoci a týmové spolupráce podle zaměstnance a období.",
+      },
       { property: "og:title", content: "Reporty – Výkonnost operátorů" },
-      { property: "og:description", content: "Filtrovatelné reporty výkonnosti pracovníků výroby DPS." },
+      {
+        property: "og:description",
+        content: "Filtrovatelné reporty výkonnosti pracovníků výroby DPS.",
+      },
     ],
+    style: `
+      @media print {
+        @page { margin: 0.5in; size: A4; }
+        body { background: white; color: black; }
+        .print\\:hidden { display: none !important; }
+        .print\\:flex { display: flex !important; }
+        .print\\:block { display: block !important; }
+        .print\\:table-row { display: table-row !important; }
+        .print\\:table-cell { display: table-cell !important; }
+        .no-print { display: none !important; }
+        .border { border: 1px solid #ccc !important; }
+        .shadow-none { box-shadow: none !important; }
+        .p-0 { padding: 0 !important; }
+        .px-4 { padding-left: 0 !important; padding-right: 0 !important; }
+        .py-3 { padding-top: 0 !important; padding-bottom: 0 !important; }
+        h2 { font-size: 18pt; margin: 10px 0; }
+        h3 { font-size: 14pt; margin: 8px 0; }
+        th { font-weight: bold; border-bottom: 2px solid #000; padding: 4px; }
+        td { border-bottom: 1px solid #eee; padding: 4px; }
+        tr:last-child td { border-bottom: none; }
+        .container { max-width: 100%; }
+      }
+    `,
   }),
   component: ReportsPage,
 });
@@ -118,8 +149,8 @@ function ReportsPage() {
       title="Reporty"
       subtitle="Detailní přehled OEE, Quality, výpomoci a týmů za zvolené období"
       actions={
-        <Button variant="outline" disabled title="Export bude doplněn v dalším kroku">
-          Export (připravujeme)
+        <Button size="sm" onClick={() => window.print()}>
+          <FileText className="h-4 w-4" /> Tisk / PDF
         </Button>
       }
     >
@@ -181,7 +212,11 @@ function ReportsPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <KpiCard label="Směn v období" value={filteredDaily.length} />
-        <KpiCard label="Průměrné OEE" value={fmt(avgValid(filteredShifts.map((d) => d.oee)))} unit="%" />
+        <KpiCard
+          label="Průměrné OEE"
+          value={fmt(avgValid(filteredShifts.map((d) => d.oee)))}
+          unit="%"
+        />
         <KpiCard
           label="Průměrná výpomoc"
           value={fmt(avgValid(filteredShifts.map((d) => d.help)), 0)}
