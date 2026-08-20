@@ -4,8 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useProductNorms, useProducts } from "@/lib/data";
-import { currentNorm, type Product } from "@/lib/products";
+import { useProductNorms, useProducts, useDailyRecords } from "@/lib/data";
+import { currentNorm, getNormHistory, recalculatePerformance, type Product } from "@/lib/products";
 import { fmt } from "@/lib/metrics";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,7 @@ function ProductsPage() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["products"] });
     qc.invalidateQueries({ queryKey: ["product_norms"] });
+    qc.invalidateQueries({ queryKey: ["daily"] });
   };
 
   const addProduct = useMutation({
@@ -97,6 +98,10 @@ function ProductsPage() {
       if (existing && Number(existing.norm_per_hour) === normNum) {
         throw new Error("Stejná norma už platí – nová verze není potřeba.");
       }
+
+      // Získáme historii norem PŘED uložením nové
+      const oldNormHistory = getNormHistory(norms, selected.id, operation);
+
       if (existing) {
         const { error } = await supabase
           .from("product_norms")
@@ -115,6 +120,40 @@ function ProductsPage() {
         ...approval(),
       });
       if (error) throw error;
+
+      // Pokud se norma snížila, přepočítáme všechny záznamy
+      if (oldNormHistory.length > 0) {
+        const oldNormAtFirst = oldNormHistory[0]; // nejstarší norma v historii
+        if (oldNormAtFirst && normNum < oldNormAtFirst.norm_per_hour) {
+          // Získáme všechny záznamy pro tento produkt
+          const { data: dailyRecords } = await supabase
+            .from("daily_records")
+            .select("id, performance, available_time, work_date, product_id")
+            .eq("product_id", selected.id)
+            .eq("approval_status", "approved");
+
+          if (dailyRecords && dailyRecords.length > 0) {
+            const recalculations = recalculatePerformance(
+              dailyRecords as unknown as import("@/lib/metrics").DailyRecord[],
+              oldNormHistory,
+              normNum,
+              selected.id,
+              operation,
+            );
+
+            // provedeme batch update
+            if (recalculations.length > 0) {
+              for (const { recordId, newPerformance } of recalculations) {
+                await supabase
+                  .from("daily_records")
+                  .update({ performance: newPerformance })
+                  .eq("id", recordId);
+              }
+              toast.info(`Přepočítáno ${recalculations.length} záznamů kvůli snížení normy.`);
+            }
+          }
+        }
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -245,7 +284,10 @@ function ProductsPage() {
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">
-                          {p.code} {p.name ? <span className="text-muted-foreground">– {p.name}</span> : null}
+                          {p.code}{" "}
+                          {p.name ? (
+                            <span className="text-muted-foreground">– {p.name}</span>
+                          ) : null}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
                           <Badge variant="secondary">

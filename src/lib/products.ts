@@ -1,3 +1,5 @@
+import type { DailyRecord } from "./metrics";
+
 export type Product = {
   id: string;
   code: string;
@@ -49,4 +51,59 @@ export function normValidAt(
 
 export function currentNorm(norms: ProductNorm[], productId: string, operation: "HA" | "TUP") {
   return normValidAt(norms, productId, operation, new Date().toISOString().slice(0, 10));
+}
+
+/**
+ * Získat historii norem pro produkt a operaci (seřazenou od nejstarší k nejnovější).
+ */
+export function getNormHistory(
+  norms: ProductNorm[],
+  productId: string,
+  operation: "HA" | "TUP",
+): ProductNorm[] {
+  return norms
+    .filter((n) => n.product_id === productId && n.operation === operation)
+    .sort((a, b) => a.valid_from.localeCompare(b.valid_from));
+}
+
+/**
+ * Přepočítat performance všech záznamů při změně normy.
+ * Pokud se norma sníží: přepočítá všechny záznamy (performance * new_norm / old_norm_at_date).
+ * Pokud se norma zvýší: zůstanou původní hodnoty (neměníme).
+ * 
+ * @param records Všechny denní záznamy
+ * @param oldNorms Původní norma platná ke dni záznamu
+ * @param newNorm Nová norma
+ * @param productId ID produktu
+ * @param operation Operace (HA/TUP)
+ * @returns Pole { recordId, newPerformance } pro všechny změněné záznamy
+ */
+export function recalculatePerformance(
+  records: DailyRecord[],
+  oldNorms: ProductNorm[],
+  newNorm: number,
+  productId: string,
+  operation: "HA" | "TUP",
+): { recordId: string; newPerformance: number }[] {
+  const result: { recordId: string; newPerformance: number }[] = [];
+
+  for (const record of records) {
+    // Zjistíme, jaká norma byla platná k datu záznamu
+    const oldNormAtDate = normValidAt(oldNorms, productId, operation, record.work_date);
+    if (!oldNormAtDate) continue; // Když neznáme starou normu, nepočítáme
+
+    // Pokud se norma zvýšila nebo zůstala stejná, nepřepočítáváme
+    if (newNorm >= oldNormAtDate.norm_per_hour) continue;
+
+    // Pokud nemáme performance nebo available_time, nemůžeme přepočítávat
+    if (record.performance === null || record.available_time === null) continue;
+    if (record.performance === undefined || record.available_time === undefined) continue;
+    if (record.available_time <= 0) continue;
+
+    // Vzorec: new_performance = old_performance * (new_norm / old_norm_at_date)
+    const newPerformance = record.performance * (newNorm / oldNormAtDate.norm_per_hour);
+    result.push({ recordId: record.id, newPerformance: Math.round(newPerformance * 100) / 100 });
+  }
+
+  return result;
 }
