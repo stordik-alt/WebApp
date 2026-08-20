@@ -17,6 +17,7 @@ import {
   UserCog,
   LogOut,
   BarChart3,
+  Award,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ResideoLogo } from "@/components/ResideoLogo";
@@ -39,6 +40,7 @@ const NAV = [
   { to: "/premereni-norem", label: "Přeměření norem", icon: Ruler, roles: STAFF },
   { to: "/reporty", label: "Reporty", icon: FileBarChart, roles: STAFF },
   { to: "/analyza", label: "Analýza / IPI", icon: Activity, roles: STAFF },
+  { to: "/hodnoceni", label: "Hodnocení handlerů", icon: Award, roles: STAFF },
   { to: "/zebricek", label: "Žebříček", icon: Trophy, roles: STAFF },
   { to: "/ke-schvaleni", label: "Ke schválení", icon: ShieldCheck, roles: ["admin" as AppRole] },
   { to: "/uzivatele", label: "Uživatelé", icon: UserCog, roles: ["admin" as AppRole] },
