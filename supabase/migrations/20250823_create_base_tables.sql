@@ -86,9 +86,14 @@ CREATE OR REPLACE FUNCTION public.set_updated_at() RETURNS trigger
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
 
-CREATE TRIGGER IF NOT EXISTS employees_updated_at BEFORE UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS daily_records_updated_at BEFORE UPDATE ON public.daily_records FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-CREATE TRIGGER IF NOT EXISTS weekly_records_updated_at BEFORE UPDATE ON public.weekly_records FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+DROP TRIGGER IF EXISTS employees_updated_at ON public.employees;
+CREATE TRIGGER employees_updated_at BEFORE UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS daily_records_updated_at ON public.daily_records;
+CREATE TRIGGER daily_records_updated_at BEFORE UPDATE ON public.daily_records FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS weekly_records_updated_at ON public.weekly_records;
+CREATE TRIGGER weekly_records_updated_at BEFORE UPDATE ON public.weekly_records FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- 8. Vytvoření RLS politik
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
