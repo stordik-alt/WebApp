@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalyzaRouteImport } from './routes/analyza'
 import { Route as DenniDataRouteImport } from './routes/denni-data'
+import { Route as HodnoceniRouteImport } from './routes/hodnoceni'
 import { Route as KeSchvaleniRouteImport } from './routes/ke-schvaleni'
 import { Route as MojeVysledkyRouteImport } from './routes/moje-vysledky'
 import { Route as OAplikaciRouteImport } from './routes/o-aplikaci'
@@ -38,6 +39,11 @@ const AnalyzaRoute = AnalyzaRouteImport.update({
 const DenniDataRoute = DenniDataRouteImport.update({
   id: '/denni-data',
   path: '/denni-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HodnoceniRoute = HodnoceniRouteImport.update({
+  id: '/hodnoceni',
+  path: '/hodnoceni',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KeSchvaleniRoute = KeSchvaleniRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/hodnoceni': typeof HodnoceniRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/hodnoceni': typeof HodnoceniRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/hodnoceni': typeof HodnoceniRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/hodnoceni'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/hodnoceni'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/hodnoceni'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyzaRoute: typeof AnalyzaRoute
   DenniDataRoute: typeof DenniDataRoute
+  HodnoceniRoute: typeof HodnoceniRoute
   KeSchvaleniRoute: typeof KeSchvaleniRoute
   MojeVysledkyRoute: typeof MojeVysledkyRoute
   OAplikaciRoute: typeof OAplikaciRoute
@@ -246,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/denni-data'
       fullPath: '/denni-data'
       preLoaderRoute: typeof DenniDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hodnoceni': {
+      id: '/hodnoceni'
+      path: '/hodnoceni'
+      fullPath: '/hodnoceni'
+      preLoaderRoute: typeof HodnoceniRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ke-schvaleni': {
@@ -339,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyzaRoute: AnalyzaRoute,
   DenniDataRoute: DenniDataRoute,
+  HodnoceniRoute: HodnoceniRoute,
   KeSchvaleniRoute: KeSchvaleniRoute,
   MojeVysledkyRoute: MojeVysledkyRoute,
   OAplikaciRoute: OAplikaciRoute,
