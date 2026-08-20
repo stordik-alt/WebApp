@@ -27,3 +27,22 @@ npm run dev
 - TypeScript
 - React
 - Tailwind CSS
+
+## Deployment na Vercel
+
+Projekt je nastaven pro hosting na Vercelu. Build (`npm run build`) používá Nitro preset `vercel` a vytvoří `.vercel/output` (Vercel Build Output API) — SSR běží jako serverless funkce, statické soubory se servírují z CDN.
+
+Postup:
+
+1. **Propojit repozitář** ve Vercel Dashboardu (**Add New → Project → Import Git Repository**). Vercel detekuje build automaticky (`npm run build`), není potřeba nic měnit v nastavení.
+2. **Nastavit environment variables** (**Settings → Environment Variables**) podle `.env.example`:
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (klientská část)
+   - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server funkce)
+   - `OPENROUTER_API_KEY` (OCR přes AI – OpenRouter, výchozí vision model `qwen/qwen3-vl-8b-instruct`, lze změnit přes `OPENROUTER_MODEL`)
+   - `LOVABLE_API_KEY` (OCR přes AI – fallback, použije se automaticky, když OpenRouter vrátí 402/429 nebo je nedostupný; doporučeno nastavit oba klíče)
+3. **Deploy** — push do propojené větve spustí automatický deploy, případně lokálně přes `npx vercel --prod`.
+
+Poznámky:
+
+- Lokální preview produkčního buildu: `npm run build` + `npx vercel dev` (nebo `npx vercel build && npx vercel deploy --prebuilt`). Původní `npm run preview` (`vite preview`) funguje jen pro build bez Nitro přesměrování.
+- Preview deploymenty může blokovat **Deployment Protection** — buď ji vypněte, nebo použijte *Protection Bypass for Automation* (Settings → Deployment Protection).

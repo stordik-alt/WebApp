@@ -53,8 +53,59 @@ Pravidla:
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(",", ".").replace(/[^\d.\-]/g, ""));
+  const n =
+    typeof v === "number"
+      ? v
+      : Number(
+          String(v)
+            .replace(",", ".")
+            .replace(/[^\d.\-]/g, ""),
+        );
   return Number.isFinite(n) ? n : null;
+}
+
+type AiProvider = {
+  kind: "openrouter" | "lovable";
+  url: string;
+  model: string;
+  headers: Record<string, string>;
+};
+
+/** Fallback řetěz AI providerů pro OCR obrázků — zkouší se v pořadí, při chybě
+ * vyčerpání kreditů/rate-limitu (402/429) nebo síťové chybě se přejde na dalšího.
+ * OpenRouter: qwen/qwen3-vl-8b-instruct (lze přepsat přes OPENROUTER_MODEL). */
+function resolveAiProviders(): AiProvider[] {
+  const providers: AiProvider[] = [];
+  const openrouterKey = process.env["OPENROUTER_API_KEY"];
+  if (openrouterKey) {
+    providers.push({
+      kind: "openrouter",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      model: process.env["OPENROUTER_MODEL"] ?? "qwen/qwen3-vl-8b-instruct",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openrouterKey}`,
+      },
+    });
+  }
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  if (lovableKey) {
+    providers.push({
+      kind: "lovable",
+      url: "https://ai.gateway.lovable.dev/v1/chat/completions",
+      model: "google/gemini-3.6-flash",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": lovableKey,
+      },
+    });
+  }
+  if (providers.length === 0) {
+    throw new Error(
+      "Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY). Rozpoznávání ze screenshotu není dostupné, ruční zadání funguje beze změny.",
+    );
+  }
+  return providers;
 }
 
 /**
@@ -70,38 +121,53 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ data }): Promise<OcrResult> => {
-    const key = process.env["LOVABLE_API_KEY"];
-    if (!key) {
-      throw new Error(
-        "Chybí konfigurace AI služby (LOVABLE_API_KEY). Rozpoznávání ze screenshotu není dostupné, ruční zadání funguje beze změny.",
-      );
+    const providers = resolveAiProviders();
+    const attempts: string[] = [];
+
+    let res: Response | undefined;
+    for (const provider of providers) {
+      try {
+        res = await fetch(provider.url, {
+          method: "POST",
+          headers: provider.headers,
+          body: JSON.stringify({
+            model: provider.model,
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: SYSTEM },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Extrahuj data z tohoto screenshotu." },
+                  { type: "image_url", image_url: { url: data.imageDataUrl } },
+                ],
+              },
+            ],
+          }),
+        });
+        // 402/429 = vyčerpané kredity / rate-limit → zkus dalšího providera
+        if (res.ok || (res.status !== 402 && res.status !== 429)) break;
+        attempts.push(`${provider.kind}:${res.status}`);
+        res = undefined;
+      } catch {
+        // síťová chyba / nedostupnost → zkus dalšího providera
+        attempts.push(`${provider.kind}:network`);
+        res = undefined;
+      }
     }
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-      body: JSON.stringify({
-        model: "google/gemini-3.6-flash",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SYSTEM },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extrahuj data z tohoto screenshotu." },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
-            ],
-          },
-        ],
-      }),
-    });
+    if (!res) {
+      throw new Error(
+        `AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`,
+      );
+    }
 
     if (!res.ok) {
       const body = await res.text();
       if (res.status === 429)
         throw new Error("AI služba je dočasně přetížena, zkuste to prosím za chvíli.");
       if (res.status === 402)
-        throw new Error("Vyčerpané AI kredity pracovního prostoru. Doplňte kredity v Lovable.");
+        throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
       throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
     }
 
@@ -113,15 +179,21 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     try {
       parsed = JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim());
     } catch {
-      throw new Error("AI vrátila neočekávanou odpověď. Zkuste jiný screenshot nebo zadejte ručně.");
+      throw new Error(
+        "AI vrátila neočekávanou odpověď. Zkuste jiný screenshot nebo zadejte ručně.",
+      );
     }
 
-    const rawRows = Array.isArray(parsed["rows"]) ? (parsed["rows"] as Record<string, unknown>[]) : [];
+    const rawRows = Array.isArray(parsed["rows"])
+      ? (parsed["rows"] as Record<string, unknown>[])
+      : [];
     const rows: OcrRow[] = rawRows
       .map((r) => ({
         employee_name: String(r["employee_name"] ?? "").trim(),
         position:
-          r["position"] === "HA" || r["position"] === "TUP" ? (r["position"] as "HA" | "TUP") : null,
+          r["position"] === "HA" || r["position"] === "TUP"
+            ? (r["position"] as "HA" | "TUP")
+            : null,
         oee: toNum(r["oee"]),
         performance: toNum(r["performance"]),
         available_time: toNum(r["available_time"]),
