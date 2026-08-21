@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export type OcrProduct = {
+  product_code: string;
+  norm_per_hour: number | null;
+  confidence: number;
+};
+
 export type OcrRow = {
   employee_name: string;
   position: "HA" | "TUP" | null;
@@ -16,6 +22,7 @@ export type OcrResult = {
   line: string | null;
   product_code: string | null;
   norm_per_hour: number | null;
+  products: OcrProduct[];
   header_confidence: number;
   rows: OcrRow[];
   raw?: string;
@@ -27,18 +34,27 @@ Ze screenshotu výrobní tabulky vrať POUZE JSON podle schématu níže.
 DŮLEŽITÉ: Screenshoty mají typicky hlavičku s datem/časem, linkou, pracovníky, produktem a tabulku po hodinách. Sloupce mohou být:
 Produkt | Hodina | reálný | norma | Výkon | Kvalita | Dostupnost | Odstávky | důvod.
 Hodnoty Výkon a Dostupnost v jednotlivých hodinách jsou PROCENTA. OEE v hlavičce je celkové OEE linky/směny.
+Screenshot může obsahovat více produktů během jedné směny. Při výrobním přejezdu musíš zachytit KAŽDÝ produkt a jeho hodinovou normu.
 
 Schéma:
 {
   "work_date": "YYYY-MM-DD nebo null",
   "shift": "Ranní | Odpolední | Noční | null",
   "line": "označení linky nebo null",
-  "product_code": "kód/název výrobku nebo null",
+  "product_code": "první/hlavní produkt nebo null",
   "norm_per_hour": číslo (ks/h, norma CELÉ HA linky) nebo null,
+  "products": [
+    {
+      "product_code": "kód/název výrobku",
+      "norm_per_hour": číslo v ks/h nebo null,
+      "confidence": 0..1
+    }
+  ],
   "header_confidence": 0..1,
   "hourly_metrics": [
     {
       "hour": číslo nebo null,
+      "product_code": "produkt platný v této hodině nebo null",
       "performance_pct": číslo v % nebo null,
       "availability_pct": číslo v % nebo null,
       "norm_per_hour": číslo nebo null
@@ -64,12 +80,14 @@ PRAVIDLA PRO SMĚNOVÉ PRŮMĚRY:
 - performance NENÍ počet kusů a available_time NENÍ počet minut. Obě hodnoty jsou procenta.
 - Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá průměr ze všech těchto hodin, pokud jsou platné – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
 
-PRAVIDLA PRO NORMU:
+PRAVIDLA PRO NORMU PRODUKTU:
 - Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
-- Po rozpoznání všech hodinových řádků vyber pro normu řádek, kde je Dostupnost přesně 100 %.
-- Hodinovou normu použij z libovolného takového řádku; pokud je takových řádků více, použij první platnou normu.
-- Pokud žádný řádek nemá Dostupnost 100 %, normu nech null, pokud není spolehlivě uvedena přímo v hlavičce.
-- Pokud je první nebo poslední hodinový řádek zjevně neúplný, jeho normu nepoužívej jako jediný zdroj normy. Preferuj konzistentní normu z plných hodin uprostřed směny.
+- Každý hodinový řádek musí mít pokud možno product_code odpovídající výrobě v dané hodině.
+- Pro KAŽDÝ produkt samostatně hledej libovolný hodinový řádek, kde je Dostupnost přesně 100 %. Z tohoto řádku vezmi norm_per_hour.
+- Pokud pro daný produkt žádná hodina s Dostupností 100 % neexistuje, server přepočítá použitelnou normu z dostupnosti na 100 % jako norm / dostupnost * 100.
+- Pokud je pro produkt více 100% řádků, použij první platnou normu.
+- Nezaměňuj normu jednoho produktu za normu jiného produktu při výrobním přejezdu.
+- Pokud první nebo poslední hodinový řádek zjevně neobsahuje celý údaj, jeho normu nepoužívej jako jediný zdroj.
 
 DALŠÍ PRAVIDLA:
 - Nikdy si nevymýšlej hodnoty. Co nelze spolehlivě přečíst, dej null a sniž confidence.
@@ -83,13 +101,9 @@ DALŠÍ PRAVIDLA:
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-
   let s = String(v).trim().replace(/\s/g, "").replace(/%/g, "");
-  if (s.includes(",")) {
-    s = s.replace(/\./g, "").replace(",", ".");
-  } else {
-    s = s.replace(/[^\d.\-]/g, "");
-  }
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else s = s.replace(/[^\d.\-]/g, "");
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
@@ -109,9 +123,7 @@ function normalizeWorkDate(value: unknown): string | null {
   const currentYear = now.getFullYear();
   const monthNum = Number(month);
   const dayNum = Number(day);
-  if (!Number.isInteger(monthNum) || !Number.isInteger(dayNum) || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
-    return null;
-  }
+  if (!Number.isInteger(monthNum) || !Number.isInteger(dayNum) || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return null;
   if (Number(year) !== currentYear && monthNum === now.getMonth() + 1 && dayNum === now.getDate()) {
     return `${currentYear}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
   }
@@ -133,10 +145,7 @@ function resolveAiProviders(): AiProvider[] {
       kind: "openrouter",
       url: "https://openrouter.ai/api/v1/chat/completions",
       model: process.env["OPENROUTER_MODEL"] ?? "qwen/qwen3-vl-8b-instruct",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openrouterKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openrouterKey}` },
     });
   }
   const lovableKey = process.env["LOVABLE_API_KEY"];
@@ -145,32 +154,22 @@ function resolveAiProviders(): AiProvider[] {
       kind: "lovable",
       url: "https://ai.gateway.lovable.dev/v1/chat/completions",
       model: "google/gemini-3.6-flash",
-      headers: {
-        "Content-Type": "application/json",
-        "Lovable-API-Key": lovableKey,
-      },
+      headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey },
     });
   }
-  if (providers.length === 0) {
-    throw new Error(
-      "Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY). Rozpoznávání ze screenshotu není dostupné, ruční zadání funguje beze změny.",
-    );
-  }
+  if (!providers.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY). Rozpoznávání ze screenshotu není dostupné, ruční zadání funguje beze změny.");
   return providers;
 }
 
 export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { imageDataUrl: string }) => {
-    if (!input?.imageDataUrl?.startsWith("data:image/")) {
-      throw new Error("Neplatný obrázek.");
-    }
+    if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek.");
     return input;
   })
   .handler(async ({ data }): Promise<OcrResult> => {
     const providers = resolveAiProviders();
     const attempts: string[] = [];
-
     let res: Response | undefined;
     for (const provider of providers) {
       try {
@@ -182,16 +181,10 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
             response_format: { type: "json_object" },
             messages: [
               { role: "system", content: SYSTEM },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky a vrať jejich Výkon, Dostupnost a hodinovou normu do hourly_metrics. Hodinovou normu určuj přednostně z libovolného řádku, kde je Dostupnost 100 %.",
-                  },
-                  { type: "image_url", image_url: { url: data.imageDataUrl } },
-                ],
-              },
+              { role: "user", content: [
+                { type: "text", text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky, všechny produkty, jejich Výkon, Dostupnost a hodinovou normu. Při přejezdu na jiný produkt zachovej product_code u každé hodiny." },
+                { type: "image_url", image_url: { url: data.imageDataUrl } },
+              ] },
             ],
           }),
         });
@@ -203,71 +196,75 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
         res = undefined;
       }
     }
-
-    if (!res) {
-      throw new Error(
-        `AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`,
-      );
-    }
-
+    if (!res) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
     if (!res.ok) {
       const body = await res.text();
-      if (res.status === 429) {
-        throw new Error("AI služba je dočasně přetížená, zkuste to prosím za chvíli.");
-      }
-      if (res.status === 402) {
-        throw new Error(
-          "Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.",
-        );
-      }
+      if (res.status === 429) throw new Error("AI služba je dočasně přetížená, zkuste to prosím za chvíli.");
+      if (res.status === 402) throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
       throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
     }
 
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = json.choices?.[0]?.message?.content ?? "";
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim());
     } catch {
-      throw new Error(
-        "AI vrátila neočekávanou odpověď. Zkuste jiný screenshot nebo zadejte ručně.",
-      );
+      throw new Error("AI vrátila neočekávanou odpověď. Zkuste jiný screenshot nebo zadejte ručně.");
     }
 
-    const hourlyRaw = Array.isArray(parsed["hourly_metrics"])
-      ? (parsed["hourly_metrics"] as Record<string, unknown>[])
-      : [];
-    const performanceValues = hourlyRaw
-      .map((h) => toNum(h["performance_pct"]))
-      .filter((v): v is number => v !== null);
-    const availabilityValues = hourlyRaw
-      .map((h) => toNum(h["availability_pct"]))
-      .filter((v): v is number => v !== null);
-
-    const shiftPerformance =
-      avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
-    const shiftAvailability =
-      avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
+    const hourlyRaw = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
+    const performanceValues = hourlyRaw.map((h) => toNum(h["performance_pct"])).filter((v): v is number => v !== null);
+    const availabilityValues = hourlyRaw.map((h) => toNum(h["availability_pct"])).filter((v): v is number => v !== null);
+    const shiftPerformance = avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
+    const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
 
-    const normFromFullAvailabilityRow = hourlyRaw
-      .filter((h) => toNum(h["availability_pct"]) === 100)
-      .map((h) => toNum(h["norm_per_hour"]))
-      .find((value): value is number => value !== null);
-    const normPerHour = normFromFullAvailabilityRow ?? toNum(parsed["norm_per_hour"]);
+    const productCodes = new Set<string>();
+    for (const h of hourlyRaw) {
+      const code = String(h["product_code"] ?? "").trim();
+      if (code) productCodes.add(code);
+    }
+    if (Array.isArray(parsed["products"])) {
+      for (const p of parsed["products"] as Record<string, unknown>[]) {
+        const code = String(p["product_code"] ?? "").trim();
+        if (code) productCodes.add(code);
+      }
+    }
+    const headerProduct = String(parsed["product_code"] ?? "").trim();
+    if (headerProduct) productCodes.add(headerProduct);
 
-    const rawRows = Array.isArray(parsed["rows"])
-      ? (parsed["rows"] as Record<string, unknown>[])
-      : [];
+    const rawProducts = Array.isArray(parsed["products"]) ? parsed["products"] as Record<string, unknown>[] : [];
+    const products: OcrProduct[] = Array.from(productCodes).map((code) => {
+      const aiProduct = rawProducts.find((p) => String(p["product_code"] ?? "").trim() === code);
+      const rowsForProduct = hourlyRaw.filter((h) => String(h["product_code"] ?? "").trim() === code);
+      const fullAvailabilityNorm = rowsForProduct
+        .filter((h) => toNum(h["availability_pct"]) === 100)
+        .map((h) => toNum(h["norm_per_hour"]))
+        .find((v): v is number => v !== null);
+      const fallback = rowsForProduct
+        .map((h) => {
+          const norm = toNum(h["norm_per_hour"]);
+          const availability = toNum(h["availability_pct"]);
+          if (norm === null || availability === null || availability <= 0) return null;
+          return (norm / availability) * 100;
+        })
+        .find((v): v is number => v !== null);
+      const aiNorm = aiProduct ? toNum(aiProduct["norm_per_hour"]) : null;
+      const norm = fullAvailabilityNorm ?? fallback ?? aiNorm;
+      return {
+        product_code: code,
+        norm_per_hour: norm,
+        confidence: toNum(aiProduct?.["confidence"]) ?? (norm !== null ? 0.85 : 0.5),
+      };
+    });
+
+    const primary = products[0] ?? null;
+    const rawRows = Array.isArray(parsed["rows"]) ? parsed["rows"] as Record<string, unknown>[] : [];
     const rows: OcrRow[] = rawRows
       .map((r) => ({
         employee_name: String(r["employee_name"] ?? "").trim(),
-        position:
-          r["position"] === "HA" || r["position"] === "TUP"
-            ? (r["position"] as "HA" | "TUP")
-            : null,
+        position: r["position"] === "HA" || r["position"] === "TUP" ? r["position"] as "HA" | "TUP" : null,
         oee: lineOee ?? toNum(r["oee"]),
         performance: shiftPerformance ?? toNum(r["performance"]),
         available_time: shiftAvailability ?? toNum(r["available_time"]),
@@ -276,15 +273,13 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       .filter((r) => r.employee_name.length > 0);
 
     const shiftRaw = parsed["shift"] ? String(parsed["shift"]) : null;
-    const shift =
-      shiftRaw && ["Ranní", "Odpolední", "Noční"].includes(shiftRaw) ? shiftRaw : shiftRaw;
-
     return {
       work_date: normalizeWorkDate(parsed["work_date"]),
-      shift,
+      shift: shiftRaw && ["Ranní", "Odpolední", "Noční"].includes(shiftRaw) ? shiftRaw : shiftRaw,
       line: parsed["line"] ? String(parsed["line"]) : null,
-      product_code: parsed["product_code"] ? String(parsed["product_code"]) : null,
-      norm_per_hour: normPerHour,
+      product_code: primary?.product_code ?? (headerProduct || null),
+      norm_per_hour: primary?.norm_per_hour ?? toNum(parsed["norm_per_hour"]),
+      products,
       header_confidence: toNum(parsed["header_confidence"]) ?? 0.5,
       rows,
     };
