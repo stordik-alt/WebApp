@@ -6,8 +6,18 @@ import { supabase } from './client'
 // the browser never attaches the bearer token to serverFn RPCs.
 export const attachSupabaseAuth = createMiddleware({ type: 'function' }).client(
   async ({ next }) => {
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
+    let { data } = await supabase.auth.getSession()
+    let session = data.session
+
+    // A serverFn must never receive an expired JWT. Supabase normally refreshes
+    // in the background, but a tab can sleep or miss the refresh timer. Refresh
+    // proactively when the token expires soon, then attach the fresh token.
+    if (session?.expires_at && session.expires_at <= Math.floor(Date.now() / 1000) + 60) {
+      const refreshed = await supabase.auth.refreshSession()
+      session = refreshed.data.session ?? null
+    }
+
+    const token = session?.access_token
     return next({
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
