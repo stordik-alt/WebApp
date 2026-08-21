@@ -103,7 +103,6 @@ type AiProvider = {
   headers: Record<string, string>;
 };
 
-/** Fallback řetěz AI providerů pro OCR obrázků. */
 function resolveAiProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
   const openrouterKey = process.env["OPENROUTER_API_KEY"];
@@ -191,10 +190,14 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const body = await res.text();
-      if (res.status === 429)
+      if (res.status === 429) {
         throw new Error("AI služba je dočasně přetížena, zkuste to prosím za chvíli.");
-      if (res.status === 402)
-        throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
+      }
+      if (res.status === 402) {
+        throw new Error(
+          "Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.",
+        );
+      }
       throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
     }
 
@@ -221,12 +224,8 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       .map((h) => toNum(h["availability_pct"]))
       .filter((v): v is number => v !== null);
 
-    // Primární zdroj jsou skutečné hodinové řádky. Pokud model z nějakého důvodu
-    // vrátí jen směnový průměr bez hourly_metrics, zachováme jeho hodnotu jako fallback.
-    const shiftPerformance =
-      avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
-    const shiftAvailability =
-      avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
+    const shiftPerformance = avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
+    const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
 
     const rawRows = Array.isArray(parsed["rows"])
@@ -239,8 +238,6 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
           r["position"] === "HA" || r["position"] === "TUP"
             ? (r["position"] as "HA" | "TUP")
             : null,
-        // OEE, Výkon a Dostupnost jsou linkové/směnové hodnoty, proto se stejná
-        // směnová hodnota přiřadí ke každému pracovníkovi dané linky.
         oee: lineOee ?? toNum(r["oee"]),
         performance: shiftPerformance ?? toNum(r["performance"]),
         available_time: shiftAvailability ?? toNum(r["available_time"]),
