@@ -71,7 +71,7 @@ PRAVIDLA PRO NORMU:
 DALŠÍ PRAVIDLA:
 - Nikdy si nevymýšlej hodnoty. Co nelze spolehlivě přečíst, dej null a sniž confidence.
 - Desetinnou čárku převeď na tečku. Procenta vracej bez znaku %.
-- Datum převeď do ISO (YYYY-MM-DD). Pokud chybí rok, použij aktuální.
+- Datum převeď do ISO (YYYY-MM-DD). Pokud screenshot obsahuje pouze den a měsíc bez roku, vrať datum s rokem aktuálního kalendářního roku. Nikdy neodhaduj historický rok.
 - Směnu normalizuj: ranní/R/1 -> "Ranní", odpolední/O/2 -> "Odpolední", noční/N/3 -> "Noční".
 - OEE z barevného/souhrnného pole v hlavičce je linkové OEE; pokud existuje, použij ho pro každého pracovníka.
 - Jména pracovníků čti přesně, včetně diakritiky.
@@ -94,6 +94,27 @@ function toNum(v: unknown): number | null {
 function avg(values: number[]): number | null {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function normalizeWorkDate(value: unknown): string | null {
+  if (!value) return null;
+  const raw = String(value).trim().slice(0, 10);
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const monthNum = Number(month);
+  const dayNum = Number(day);
+  if (!Number.isInteger(monthNum) || !Number.isInteger(dayNum) || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+    return null;
+  }
+  // The screenshot format does not need a historical year when the year is not visible.
+  // If the AI hallucinates a clearly implausible year for a current day/month, use the current year.
+  if (Number(year) !== currentYear && monthNum === now.getMonth() + 1 && dayNum === now.getDate()) {
+    return `${currentYear}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+  }
+  return `${year}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
 }
 
 type AiProvider = {
@@ -252,7 +273,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       shiftRaw && ["Ranní", "Odpolední", "Noční"].includes(shiftRaw) ? shiftRaw : shiftRaw;
 
     return {
-      work_date: parsed["work_date"] ? String(parsed["work_date"]).slice(0, 10) : null,
+      work_date: normalizeWorkDate(parsed["work_date"]),
       shift,
       line: parsed["line"] ? String(parsed["line"]) : null,
       product_code: parsed["product_code"] ? String(parsed["product_code"]) : null,
