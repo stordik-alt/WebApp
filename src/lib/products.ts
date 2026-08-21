@@ -32,7 +32,6 @@ export function findProductByCode(products: Product[], code: string | null | und
   return products.find((p) => normalizeCode(p.code) === normalizeCode(code));
 }
 
-/** Norma platná k danému datu – historická hodnocení musí používat normu platnou v období. */
 export function normValidAt(
   norms: ProductNorm[],
   productId: string,
@@ -54,9 +53,6 @@ export function currentNorm(norms: ProductNorm[], productId: string, operation: 
   return normValidAt(norms, productId, operation, new Date().toISOString().slice(0, 10));
 }
 
-/**
- * Získat historii norem pro produkt a operaci (seřazenou od nejstarší k nejnovější).
- */
 export function getNormHistory(
   norms: ProductNorm[],
   productId: string,
@@ -67,18 +63,7 @@ export function getNormHistory(
     .sort((a, b) => a.valid_from.localeCompare(b.valid_from));
 }
 
-/**
- * Přepočítat performance všech záznamů při změně normy.
- * Pokud se norma sníží: přepočítá všechny záznamy (performance * new_norm / old_norm_at_date).
- * Pokud se norma zvýší: zůstanou původní hodnoty (neměníme).
- * 
- * @param records Všechny denní záznamy
- * @param oldNorms Původní norma platná ke dni záznamu
- * @param newNorm Nová norma
- * @param productId ID produktu
- * @param operation Operace (HA/TUP)
- * @returns Pole { recordId, newPerformance } pro všechny změněné záznamy
- */
+/** Přepočet výkonu při změně hodinové normy. */
 export function recalculatePerformance(
   records: DailyRecord[],
   oldNorms: ProductNorm[],
@@ -87,58 +72,66 @@ export function recalculatePerformance(
   operation: "HA" | "TUP",
 ): { recordId: string; newPerformance: number }[] {
   const result: { recordId: string; newPerformance: number }[] = [];
-
   for (const record of records) {
-    // Zjistíme, jaká norma byla platná k datu záznamu
     const oldNormAtDate = normValidAt(oldNorms, productId, operation, record.work_date);
-    if (!oldNormAtDate) continue; // Když neznáme starou normu, nepočítáme
-
-    // Pokud se norma zvýšila nebo zůstala stejná, nepřepočítáváme
-    if (newNorm >= oldNormAtDate.norm_per_hour) continue;
-
-    // Pokud nemáme performance nebo available_time, nemůžeme přepočítávat
-    if (record.performance === null || record.available_time === null) continue;
-    if (record.performance === undefined || record.available_time === undefined) continue;
-    if (record.available_time <= 0) continue;
-
-    // Vzorec: new_performance = old_performance * (new_norm / old_norm_at_date)
+    if (!oldNormAtDate || newNorm >= oldNormAtDate.norm_per_hour) continue;
+    if (record.performance === null || record.performance === undefined) continue;
+    if (record.available_time === null || record.available_time === undefined || record.available_time <= 0) continue;
     const newPerformance = record.performance * (newNorm / oldNormAtDate.norm_per_hour);
     result.push({ recordId: record.id, newPerformance: Math.round(newPerformance * 100) / 100 });
   }
-
   return result;
 }
 
 /**
- * Přepočítat OEE při změně počtu zaměstnanců.
- * Pokud je v záznamu méně zaměstnanců než employees_per_product, upraví OEE.
- * Vzorec: new_oee = old_oee * (actual_employees / employees_per_product)
- * 
- * @param records Všechny denní záznamy
- * @param employeesPerProduct Počet zaměstnanců pro produkt
- * @returns Pole { recordId, newOee } pro všechny změněné záznamy
+ * Přepočítá výkon podle skutečného počtu operátorů.
+ * Příklad: norma 100 ks/h pro 2 operátory, skutečně 1 operátor => efektivní norma 50 ks/h.
+ */
+export function adjustedNormForOperators(
+  normPerHour: number,
+  operatorsRequired: number,
+  actualOperators: number,
+): number {
+  if (!Number.isFinite(normPerHour) || normPerHour <= 0) return normPerHour;
+  if (!Number.isFinite(operatorsRequired) || operatorsRequired <= 0) return normPerHour;
+  if (!Number.isFinite(actualOperators) || actualOperators <= 0) return 0;
+  return normPerHour / operatorsRequired * actualOperators;
+}
+
+/**
+ * Přepočítá výkon z původní normy na skutečný počet operátorů.
+ * oldPerformance je výkon proti normě pro plný počet operátorů.
+ */
+export function recalculatePerformanceForEmployees(
+  oldPerformance: number | null | undefined,
+  operatorsRequired: number,
+  actualOperators: number,
+): number | null {
+  if (oldPerformance === null || oldPerformance === undefined) return null;
+  if (operatorsRequired <= 0 || actualOperators <= 0) return oldPerformance;
+  const adjusted = oldPerformance * (operatorsRequired / actualOperators);
+  return Math.round(adjusted * 100) / 100;
+}
+
+/**
+ * Přepočítá OEE stejným poměrem jako výkon.
+ * Pokud je OEE založené na výkonu proti plné normě, korekce na skutečný počet
+ * operátorů je: OEE × (required / actual). Hodnota se neomezuje na 100 %.
  */
 export function recalculateOeeForEmployees(
   records: DailyRecord[],
   employeesPerProduct: number,
+  actualEmployeesByRecord?: Map<string, number>,
 ): { recordId: string; newOee: number }[] {
   const result: { recordId: string; newOee: number }[] = [];
-
   if (employeesPerProduct <= 0) return result;
 
   for (const record of records) {
-    // Pokud nemáme OEE, nepočítáme
     if (record.oee === null || record.oee === undefined) continue;
-
-    // Počet zaměstnanců z linky (počet unikátních employee_id pro daný záznam)
-    const actualEmployees = 1; // Každý daily_record je pro 1 zaměstnance
-
-    // Pokud je zaměstnanců méně nežEmployeesPerProduct, přepočítáme OEE
-    if (actualEmployees < employeesPerProduct) {
-      const newOee = record.oee * (actualEmployees / employeesPerProduct);
-      result.push({ recordId: record.id, newOee: Math.round(newOee * 100) / 100 });
-    }
+    const actualEmployees = actualEmployeesByRecord?.get(record.id) ?? 1;
+    if (actualEmployees <= 0 || actualEmployees >= employeesPerProduct) continue;
+    const newOee = record.oee * (employeesPerProduct / actualEmployees);
+    result.push({ recordId: record.id, newOee: Math.round(newOee * 100) / 100 });
   }
-
   return result;
 }
