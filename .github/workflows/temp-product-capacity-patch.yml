@@ -1,0 +1,53 @@
+name: Patch screenshot import product capacity
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch ScreenshotImport
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImport.tsx')
+          s = p.read_text()
+          s = s.replace(
+              'type DraftProduct = OcrProduct & { key: string };',
+              'type DraftProduct = OcrProduct & { key: string; employees_per_product: number | null };'
+          )
+          s = s.replace(
+              'setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}` })));',
+              'setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}`, employees_per_product: findProductByCode(products, p.product_code)?.employees_per_product ?? null })));'
+          )
+          s = s.replace(
+              'if (!product) {\n          const { data, error } = await supabase.from("products").insert({ code, first_seen_date: workDate, ...approval() }).select("id, code").single();',
+              'if (!product) {\n          const capacity = draft.employees_per_product;\n          if (capacity === null || !Number.isInteger(capacity) || capacity < 1) throw new Error(`U nového produktu ${code} zadejte Kapacitu / počet operátorů (min. 1).`);\n          const { data, error } = await supabase.from("products").insert({ code, first_seen_date: workDate, employees_per_product: capacity, ...approval() }).select("id, code").single();'
+          )
+          s = s.replace(
+              'drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5 });',
+              'drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null });'
+          )
+          old = '<div className="text-xs text-muted-foreground">{existingProductNorm ? `evidováno ${existingProductNorm.norm_per_hour} ks/h` : "nová norma"}</div>'
+          new = '<div className="text-xs text-muted-foreground">{existingProductNorm ? `evidováno ${existingProductNorm.norm_per_hour} ks/h` : "nová norma"}</div><div className="grid gap-1 sm:col-span-1"><Label className="text-xs">Kapacita / počet operátorů</Label><Input type="number" min="1" step="1" inputMode="numeric" value={p.employees_per_product ?? ""} onChange={(e) => setProductDrafts((prev) => prev.map((x) => x.key === p.key ? { ...x, employees_per_product: e.target.value === "" ? null : Number(e.target.value) } : x))} placeholder="např. 2" disabled={!!existing} /></div>'
+          if old not in s:
+              raise SystemExit('UI anchor not found')
+          s = s.replace(old, new)
+          p.write_text(s)
+          PY
+      - name: Commit patch and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/ScreenshotImport.tsx
+          git rm .github/workflows/temp-product-capacity-patch.yml
+          git commit -m "feat: request product capacity during screenshot import"
+          git push
