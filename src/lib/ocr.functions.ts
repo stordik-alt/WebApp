@@ -22,7 +22,11 @@ export type OcrResult = {
 };
 
 const SYSTEM = `Jsi extrakční nástroj pro výrobní data DPS (osazování plošných spojů).
-Ze screenshotu (tabulka, výkaz, foto obrazovky) přečti dostupné údaje a vrať POUZE JSON.
+Ze screenshotu výrobní tabulky vrať POUZE JSON podle schématu níže.
+
+DŮLEŽITÉ: Screenshoty mají typicky hlavičku s datem/časem, linkou, pracovníky, produktem a tabulku po hodinách. Sloupce mohou být:
+Produkt | Hodina | reálný | norma | Výkon | Kvalita | Dostupnost | Odstávky | důvod.
+Hodnoty Výkon a Dostupnost v jednotlivých hodinách jsou PROCENTA. OEE v hlavičce je celkové OEE linky/směny.
 
 Schéma:
 {
@@ -30,38 +34,66 @@ Schéma:
   "shift": "Ranní | Odpolední | Noční | null",
   "line": "označení linky nebo null",
   "product_code": "kód/název výrobku nebo null",
-  "norm_per_hour": číslo (hodinová norma ks/h, norma CELÉ HA linky) nebo null,
+  "norm_per_hour": číslo (ks/h, norma CELÉ HA linky) nebo null,
   "header_confidence": 0..1,
+  "hourly_metrics": [
+    {
+      "hour": číslo nebo null,
+      "performance_pct": číslo v % nebo null,
+      "availability_pct": číslo v % nebo null,
+      "norm_per_hour": číslo nebo null
+    }
+  ],
   "rows": [
     {
       "employee_name": "jméno pracovníka",
       "position": "HA | TUP | null",
-      "oee": číslo v % (může být >100) nebo null,
-      "performance": číslo (výkon, ks) nebo null,
-      "available_time": číslo (dostupný čas v minutách nebo hodinách, jak je uvedeno) nebo null,
+      "oee": číslo v % nebo null,
+      "performance": číslo v % – PRŮMĚR ZA CELOU SMĚNU nebo null,
+      "available_time": číslo v % – PRŮMĚR DOSTUPNOSTI ZA CELOU SMĚNU nebo null,
       "confidence": 0..1
     }
   ]
 }
 
-Pravidla:
+PRAVIDLA PRO SMĚNOVÉ PRŮMĚRY:
+- Z každého skutečného hodinového řádku přečti Výkon (%) a Dostupnost (%).
+- Do hourly_metrics vlož všechny skutečné hodinové řádky směny, které lze přečíst. Nezapisuj souhrnný řádek OEE jako hodinový řádek.
+- Server následně vypočítá aritmetický průměr všech platných hodnot Výkon a Dostupnost za celou směnu. Tento výsledek použij jako `performance` a `available_time` u KAŽDÉHO pracovníka z daného screenshotu.
+- Pokud je hodnota z některé hodiny nečitelná, dej ji null; průměr se počítá pouze z platných hodin.
+- `performance` NENÍ počet kusů a `available_time` NENÍ počet minut. Obě hodnoty jsou procenta.
+- Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá průměr ze všech těchto hodin, pokud jsou platné – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
+
+PRAVIDLA PRO NORMU:
+- Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
+- Pokud je první nebo poslední hodinový řádek zjevně neúplný, jeho normu nepoužívej jako jediný zdroj normy. Preferuj konzistentní normu z plných hodin uprostřed směny.
+
+DALŠÍ PRAVIDLA:
 - Nikdy si nevymýšlej hodnoty. Co nelze spolehlivě přečíst, dej null a sniž confidence.
-- Desetinnou čárku převeď na tečku. Procenta bez znaku %.
+- Desetinnou čárku převeď na tečku. Procenta vracej bez znaku %.
 - Datum převeď do ISO (YYYY-MM-DD). Pokud chybí rok, použij aktuální.
 - Směnu normalizuj: ranní/R/1 -> "Ranní", odpolední/O/2 -> "Odpolední", noční/N/3 -> "Noční".
+- OEE z barevného/souhrnného pole v hlavičce je linkové OEE; pokud existuje, použij ho pro každého pracovníka.
+- Jména pracovníků čti přesně, včetně diakritiky.
 - Vrať pouze JSON bez komentářů a bez markdown bloku.`;
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
-  const n =
-    typeof v === "number"
-      ? v
-      : Number(
-          String(v)
-            .replace(",", ".")
-            .replace(/[^\d.\-]/g, ""),
-        );
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+
+  let s = String(v).trim().replace(/\s/g, "").replace(/%/g, "");
+  if (s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    s = s.replace(/[^\d.\-]/g, "");
+  }
+  const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function avg(values: number[]): number | null {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 type AiProvider = {
@@ -71,9 +103,7 @@ type AiProvider = {
   headers: Record<string, string>;
 };
 
-/** Fallback řetěz AI providerů pro OCR obrázků — zkouší se v pořadí, při chybě
- * vyčerpání kreditů/rate-limitu (402/429) nebo síťové chybě se přejde na dalšího.
- * OpenRouter: qwen/qwen3-vl-8b-instruct (lze přepsat přes OPENROUTER_MODEL). */
+/** Fallback řetěz AI providerů pro OCR obrázků. */
 function resolveAiProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
   const openrouterKey = process.env["OPENROUTER_API_KEY"];
@@ -108,10 +138,6 @@ function resolveAiProviders(): AiProvider[] {
   return providers;
 }
 
-/**
- * Integrační vrstva pro OCR/vision. Používá Lovable AI Gateway (klíč je součástí projektu).
- * Vrací pouze NÁVRH – zápis do databáze provádí až uživatel po potvrzení v UI.
- */
 export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { imageDataUrl: string }) => {
@@ -138,19 +164,20 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Extrahuj data z tohoto screenshotu." },
+                  {
+                    type: "text",
+                    text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky a vrať jejich Výkon a Dostupnost do hourly_metrics.",
+                  },
                   { type: "image_url", image_url: { url: data.imageDataUrl } },
                 ],
               },
             ],
           }),
         });
-        // 402/429 = vyčerpané kredity / rate-limit → zkus dalšího providera
         if (res.ok || (res.status !== 402 && res.status !== 429)) break;
         attempts.push(`${provider.kind}:${res.status}`);
         res = undefined;
       } catch {
-        // síťová chyba / nedostupnost → zkus dalšího providera
         attempts.push(`${provider.kind}:network`);
         res = undefined;
       }
@@ -167,9 +194,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       if (res.status === 429)
         throw new Error("AI služba je dočasně přetížena, zkuste to prosím za chvíli.");
       if (res.status === 402)
-        throw new Error(
-          "Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.",
-        );
+        throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
       throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
     }
 
@@ -186,6 +211,24 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       );
     }
 
+    const hourlyRaw = Array.isArray(parsed["hourly_metrics"])
+      ? (parsed["hourly_metrics"] as Record<string, unknown>[])
+      : [];
+    const performanceValues = hourlyRaw
+      .map((h) => toNum(h["performance_pct"]))
+      .filter((v): v is number => v !== null);
+    const availabilityValues = hourlyRaw
+      .map((h) => toNum(h["availability_pct"]))
+      .filter((v): v is number => v !== null);
+
+    // Primární zdroj jsou skutečné hodinové řádky. Pokud model z nějakého důvodu
+    // vrátí jen směnový průměr bez hourly_metrics, zachováme jeho hodnotu jako fallback.
+    const shiftPerformance =
+      avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
+    const shiftAvailability =
+      avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
+    const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
+
     const rawRows = Array.isArray(parsed["rows"])
       ? (parsed["rows"] as Record<string, unknown>[])
       : [];
@@ -196,9 +239,11 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
           r["position"] === "HA" || r["position"] === "TUP"
             ? (r["position"] as "HA" | "TUP")
             : null,
-        oee: toNum(r["oee"]),
-        performance: toNum(r["performance"]),
-        available_time: toNum(r["available_time"]),
+        // OEE, Výkon a Dostupnost jsou linkové/směnové hodnoty, proto se stejná
+        // směnová hodnota přiřadí ke každému pracovníkovi dané linky.
+        oee: lineOee ?? toNum(r["oee"]),
+        performance: shiftPerformance ?? toNum(r["performance"]),
+        available_time: shiftAvailability ?? toNum(r["available_time"]),
         confidence: toNum(r["confidence"]) ?? 0.5,
       }))
       .filter((r) => r.employee_name.length > 0);
