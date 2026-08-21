@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ImageUp, Loader2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ImageUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractDailyFromScreenshot, type OcrResult } from "@/lib/ocr.functions";
 import { useProductNorms, useProducts, useShiftAggregates } from "@/lib/data";
@@ -20,6 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useApprovalFields } from "@/lib/auth";
 
 type DraftRow = {
@@ -82,7 +89,19 @@ export function ScreenshotImport({
   const [normValue, setNormValue] = useState("");
   const [rows, setRows] = useState<DraftRow[]>([]);
 
-  const activeEmployees = employees.filter((e) => e.active);
+  // Employees created directly from an unmatched OCR name are kept locally until
+  // the employees query refreshes, so the newly created employee can be selected
+  // immediately in the import preview.
+  const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]);
+  const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
+  const [addEmployeeRowKey, setAddEmployeeRowKey] = useState<string | null>(null);
+  const [addEmployeeName, setAddEmployeeName] = useState("");
+  const [addEmployeePersonalNo, setAddEmployeePersonalNo] = useState("");
+
+  const activeEmployees = useMemo(
+    () => [...employees, ...addedEmployees].filter((e) => e.active),
+    [employees, addedEmployees],
+  );
 
   const existingProduct: Product | undefined = useMemo(
     () => findProductByCode(products, productCode),
@@ -106,8 +125,56 @@ export function ScreenshotImport({
     setPreviewUrl(null);
     setProductCode("");
     setNormValue("");
+    setAddedEmployees([]);
+    setAddEmployeeOpen(false);
+    setAddEmployeeRowKey(null);
+    setAddEmployeeName("");
+    setAddEmployeePersonalNo("");
     if (fileRef.current) fileRef.current.value = "";
   };
+
+  const openAddEmployee = (row: DraftRow) => {
+    setAddEmployeeRowKey(row.key);
+    setAddEmployeeName(row.ocrName.trim());
+    setAddEmployeePersonalNo("");
+    setAddEmployeeOpen(true);
+  };
+
+  const createEmployee = useMutation({
+    mutationFn: async () => {
+      const fullName = addEmployeeName.trim();
+      if (!fullName) throw new Error("Zadejte jméno zaměstnance.");
+
+      const existing = matchEmployee(fullName, activeEmployees);
+      if (existing) return existing;
+
+      const { data, error } = await supabase
+        .from("employees")
+        .insert({
+          full_name: fullName,
+          personal_no: addEmployeePersonalNo.trim() || null,
+          qual_ha: false,
+          qual_tup: false,
+          active: true,
+          is_temporary: false,
+          position_type: "standard",
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data as Employee;
+    },
+    onSuccess: (employee) => {
+      setAddedEmployees((prev) =>
+        prev.some((e) => e.id === employee.id) ? prev : [...prev, employee],
+      );
+      if (addEmployeeRowKey) patch(addEmployeeRowKey, { employeeId: employee.id });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      setAddEmployeeOpen(false);
+      toast.success(`Zaměstnanec „${employee.full_name}" byl přidán.`);
+    },
+    onError: (e: Error) => toast.error(`Zaměstnance se nepodařilo přidat: ${e.message}`),
+  });
 
   const onFile = async (file: File) => {
     setBusy(true);
@@ -297,6 +364,7 @@ export function ScreenshotImport({
       qc.invalidateQueries({ queryKey: ["shift_evaluations"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_norms"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
       toast.success(`Importováno ${n} záznamů.`);
       reset();
       onImported?.();
@@ -340,8 +408,12 @@ export function ScreenshotImport({
               x.line.trim().toLowerCase() === l,
           ),
       )
-      .map((r) => employees.find((e) => e.id === r.employeeId)?.full_name ?? r.ocrName);
-  }, [rows, existingRecords, workDate, shift, line, employees]);
+      .map((r) =>
+        employees.find((e) => e.id === r.employeeId)?.full_name ??
+        addedEmployees.find((e) => e.id === r.employeeId)?.full_name ??
+        r.ocrName,
+      );
+  }, [rows, existingRecords, workDate, shift, line, employees, addedEmployees]);
 
   const lowConf = (c: number) => c < 0.7;
 
@@ -547,21 +619,51 @@ export function ScreenshotImport({
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="grid gap-1">
                     <Label className="text-xs">Zaměstnanec</Label>
-                    <Select
-                      value={r.employeeId ?? ""}
-                      onValueChange={(v) => patch(r.key, { employeeId: v })}
-                    >
-                      <SelectTrigger className={`h-11 ${r.employeeId ? "" : "border-destructive"}`}>
-                        <SelectValue placeholder="Přiřaďte pracovníka" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeEmployees.map((e) => (
-                          <SelectItem key={e.id} value={e.id}>
-                            {e.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {r.employeeId ? (
+                      <Select
+                        value={r.employeeId}
+                        onValueChange={(v) => patch(r.key, { employeeId: v })}
+                      >
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Přiřaďte pracovníka" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeEmployees.map((e) => (
+                            <SelectItem key={e.id} value={e.id}>
+                              {e.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="grid gap-2">
+                        <Select
+                          value=""
+                          onValueChange={(v) => patch(r.key, { employeeId: v })}
+                        >
+                          <SelectTrigger className="h-11 border-destructive">
+                            <SelectValue placeholder="Přiřaďte pracovníka" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activeEmployees.map((e) => (
+                              <SelectItem key={e.id} value={e.id}>
+                                {e.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="justify-start"
+                          onClick={() => openAddEmployee(r)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Přidat „{r.ocrName}“ jako zaměstnance
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-1">
                     <Label className="text-xs">Pozice</Label>
@@ -606,7 +708,7 @@ export function ScreenshotImport({
                       inputMode="decimal"
                       className="h-11"
                       value={r.availableTime}
-                      onChange={(e) => patch(r.key, { availableTime: e.target.value })}
+                      onChange={(e) => patch(r.key, { available_time: e.target.value })}
                     />
                   </div>
                   <div className="grid gap-1">
@@ -649,12 +751,64 @@ export function ScreenshotImport({
                   r.include &&
                   r.employeeId &&
                   !duplicateNames.includes(
-                    employees.find((e) => e.id === r.employeeId)?.full_name ?? r.ocrName,
+                    employees.find((e) => e.id === r.employeeId)?.full_name ??
+                    addedEmployees.find((e) => e.id === r.employeeId)?.full_name ??
+                    r.ocrName,
                   ),
               ).length
             }
             )
           </Button>
+
+          <Dialog open={addEmployeeOpen} onOpenChange={setAddEmployeeOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nový zaměstnanec z OCR</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                  OCR rozpoznalo jméno, které zatím není v evidenci. Zkontrolujte ho před uložením.
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ocr-new-employee-name">Jméno a příjmení</Label>
+                  <Input
+                    id="ocr-new-employee-name"
+                    value={addEmployeeName}
+                    onChange={(e) => setAddEmployeeName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ocr-new-employee-personal-no">Osobní číslo (volitelné)</Label>
+                  <Input
+                    id="ocr-new-employee-personal-no"
+                    value={addEmployeePersonalNo}
+                    onChange={(e) => setAddEmployeePersonalNo(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Zaměstnanec bude založen jako aktivní se standardní pozicí. Kvalifikaci HA/TUP lze
+                  doplnit později v evidenci zaměstnanců.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddEmployeeOpen(false)}>
+                  Zrušit
+                </Button>
+                <Button
+                  onClick={() => createEmployee.mutate()}
+                  disabled={!addEmployeeName.trim() || createEmployee.isPending}
+                >
+                  {createEmployee.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Přidat zaměstnance
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
     </Card>
