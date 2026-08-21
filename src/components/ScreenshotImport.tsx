@@ -30,7 +30,7 @@ type DraftRow = {
   include: boolean;
 };
 
-type DraftProduct = OcrProduct & { key: string };
+type DraftProduct = OcrProduct & { key: string; employees_per_product: number | null };
 
 const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 
@@ -159,7 +159,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       setProductCode(r.product_code ?? "");
       setNormValue(r.norm_per_hour !== null ? String(r.norm_per_hour) : "");
       const detectedProducts = r.products?.length ? r.products : (r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : []);
-      setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}` })));
+      setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}`, employees_per_product: findProductByCode(products, p.product_code)?.employees_per_product ?? null })));
       setRows(r.rows.map((row, i) => {
         const emp = matchEmployee(row.employee_name, activeEmployees);
         return {
@@ -194,7 +194,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       if (!selected.length) throw new Error("Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.");
 
       const drafts = productDrafts.filter((p) => p.product_code.trim());
-      if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5 });
+      if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null });
       if (!drafts.length) throw new Error("Screenshot neobsahuje žádný rozpoznaný produkt.");
 
       const savedProducts: { id: string; code: string }[] = [];
@@ -202,7 +202,9 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         const code = draft.product_code.trim();
         let product = findProductByCode(products, code);
         if (!product) {
-          const { data, error } = await supabase.from("products").insert({ code, first_seen_date: workDate, ...approval() }).select("id, code").single();
+          const capacity = draft.employees_per_product;
+          if (capacity === null || !Number.isInteger(capacity) || capacity < 1) throw new Error(`U nového produktu ${code} zadejte Kapacitu / počet operátorů (min. 1).`);
+          const { data, error } = await supabase.from("products").insert({ code, first_seen_date: workDate, employees_per_product: capacity, ...approval() }).select("id, code").single();
           if (error) throw error;
           product = data as Product;
         }
@@ -320,7 +322,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
                     <div key={p.key} className="grid grid-cols-1 gap-2 rounded border p-2 sm:grid-cols-[1fr_180px_auto] sm:items-center">
                       <div><div className="font-medium">{p.product_code}</div><div className="text-[11px] text-muted-foreground">jistota {Math.round(p.confidence * 100)} %</div></div>
                       <Input type="number" inputMode="decimal" step="0.1" value={p.norm_per_hour ?? ""} onChange={(e) => setDraftNorm(p.key, e.target.value)} placeholder="ks/h" />
-                      <div className="text-xs text-muted-foreground">{existingProductNorm ? `evidováno ${existingProductNorm.norm_per_hour} ks/h` : "nová norma"}</div>
+                      <div className="text-xs text-muted-foreground">{existingProductNorm ? `evidováno ${existingProductNorm.norm_per_hour} ks/h` : "nová norma"}</div><div className="grid gap-1 sm:col-span-1"><Label className="text-xs">Kapacita / počet operátorů</Label><Input type="number" min="1" step="1" inputMode="numeric" value={p.employees_per_product ?? ""} onChange={(e) => setProductDrafts((prev) => prev.map((x) => x.key === p.key ? { ...x, employees_per_product: e.target.value === "" ? null : Number(e.target.value) } : x))} placeholder="např. 2" disabled={!!existing} /></div>
                     </div>
                   );
                 })}
