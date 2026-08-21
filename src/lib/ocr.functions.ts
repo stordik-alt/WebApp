@@ -59,9 +59,9 @@ Schéma:
 PRAVIDLA PRO SMĚNOVÉ PRŮMĚRY:
 - Z každého skutečného hodinového řádku přečti Výkon (%) a Dostupnost (%).
 - Do hourly_metrics vlož všechny skutečné hodinové řádky směny, které lze přečíst. Nezapisuj souhrnný řádek OEE jako hodinový řádek.
-- Server následně vypočítá aritmetický průměr všech platných hodnot Výkon a Dostupnost za celou směnu. Tento výsledek použij jako `performance` a `available_time` u KAŽDÉHO pracovníka z daného screenshotu.
+- Server následně vypočítá aritmetický průměr všech platných hodnot Výkon a Dostupnost za celou směnu. Tento výsledek použij jako performance a available_time u KAŽDÉHO pracovníka z daného screenshotu.
 - Pokud je hodnota z některé hodiny nečitelná, dej ji null; průměr se počítá pouze z platných hodin.
-- `performance` NENÍ počet kusů a `available_time` NENÍ počet minut. Obě hodnoty jsou procenta.
+- performance NENÍ počet kusů a available_time NENÍ počet minut. Obě hodnoty jsou procenta.
 - Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá průměr ze všech těchto hodin, pokud jsou platné – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
 
 PRAVIDLA PRO NORMU:
@@ -191,7 +191,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     if (!res.ok) {
       const body = await res.text();
       if (res.status === 429) {
-        throw new Error("AI služba je dočasně přetížena, zkuste to prosím za chvíli.");
+        throw new Error("AI služba je dočasně přetížená, zkuste to prosím za chvíli.");
       }
       if (res.status === 402) {
         throw new Error(
@@ -224,8 +224,10 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       .map((h) => toNum(h["availability_pct"]))
       .filter((v): v is number => v !== null);
 
-    const shiftPerformance = avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
-    const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
+    const shiftPerformance =
+      avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
+    const shiftAvailability =
+      avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
 
     const rawRows = Array.isArray(parsed["rows"])
