@@ -66,6 +66,9 @@ PRAVIDLA PRO SMĚNOVÉ PRŮMĚRY:
 
 PRAVIDLA PRO NORMU:
 - Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
+- Po rozpoznání všech hodinových řádků vyber pro normu řádek, kde je Dostupnost přesně 100 %.
+- Hodinovou normu použij z libovolného takového řádku; pokud je takových řádků více, použij první platnou normu.
+- Pokud žádný řádek nemá Dostupnost 100 %, normu nech null, pokud není spolehlivě uvedena přímo v hlavičce.
 - Pokud je první nebo poslední hodinový řádek zjevně neúplný, jeho normu nepoužívej jako jediný zdroj normy. Preferuj konzistentní normu z plných hodin uprostřed směny.
 
 DALŠÍ PRAVIDLA:
@@ -109,8 +112,6 @@ function normalizeWorkDate(value: unknown): string | null {
   if (!Number.isInteger(monthNum) || !Number.isInteger(dayNum) || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
     return null;
   }
-  // The screenshot format does not need a historical year when the year is not visible.
-  // If the AI hallucinates a clearly implausible year for a current day/month, use the current year.
   if (Number(year) !== currentYear && monthNum === now.getMonth() + 1 && dayNum === now.getDate()) {
     return `${currentYear}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
   }
@@ -186,7 +187,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
                 content: [
                   {
                     type: "text",
-                    text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky a vrať jejich Výkon a Dostupnost do hourly_metrics.",
+                    text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky a vrať jejich Výkon, Dostupnost a hodinovou normu do hourly_metrics. Hodinovou normu určuj přednostně z libovolného řádku, kde je Dostupnost 100 %.",
                   },
                   { type: "image_url", image_url: { url: data.imageDataUrl } },
                 ],
@@ -251,6 +252,12 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
 
+    const normFromFullAvailabilityRow = hourlyRaw
+      .filter((h) => toNum(h["availability_pct"]) === 100)
+      .map((h) => toNum(h["norm_per_hour"]))
+      .find((value): value is number => value !== null);
+    const normPerHour = normFromFullAvailabilityRow ?? toNum(parsed["norm_per_hour"]);
+
     const rawRows = Array.isArray(parsed["rows"])
       ? (parsed["rows"] as Record<string, unknown>[])
       : [];
@@ -277,7 +284,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       shift,
       line: parsed["line"] ? String(parsed["line"]) : null,
       product_code: parsed["product_code"] ? String(parsed["product_code"]) : null,
-      norm_per_hour: toNum(parsed["norm_per_hour"]),
+      norm_per_hour: normPerHour,
       header_confidence: toNum(parsed["header_confidence"]) ?? 0.5,
       rows,
     };
