@@ -54,6 +54,37 @@ function formatMetric(value: number | null, suffix = "%") {
   return value === null ? "–" : `${value.toLocaleString("cs-CZ", { maximumFractionDigits: 1 })}${suffix}`;
 }
 
+function scaleColor(value: number | null, min: number, max: number) {
+  if (value === null) return undefined;
+  const ratio = max === min ? 1 : Math.max(0, Math.min(1, (value - min) / (max - min)));
+  const hue = ratio * 120;
+  return {
+    backgroundColor: `hsl(${hue} 72% 88%)`,
+    color: `hsl(${hue} 55% 25%)`,
+  };
+}
+
+function oeeColor(value: number | null) {
+  if (value === null) return undefined;
+  const ratio = Math.max(0, Math.min(1, (value - 80) / 20));
+  return scaleColor(ratio, 0, 1);
+}
+
+function helpColor(value: number | null) {
+  if (value === null) return undefined;
+  if (value === 0) return { backgroundColor: "hsl(210 75% 88%)", color: "hsl(210 55% 28%)" };
+  const ratio = Math.max(0, Math.min(1, Math.abs(value) / 100));
+  const hue = value > 0 ? 120 : 0;
+  return {
+    backgroundColor: `hsl(${hue} ${55 + ratio * 17}% ${92 - ratio * 14}%)`,
+    color: `hsl(${hue} 55% 25%)`,
+  };
+}
+
+function MetricCell({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <TableCell><span className="inline-flex min-w-[72px] justify-center rounded-md px-2 py-1 font-medium" style={style}>{children}</span></TableCell>;
+}
+
 function EmployeesPage() {
   const { data: employees = [], isLoading } = useEmployees();
   const { data: performance = [], isLoading: performanceLoading } = useEmployeePerformanceSummaries();
@@ -63,6 +94,9 @@ function EmployeesPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const qc = useQueryClient();
   const performanceMap = new Map(performance.map((p) => [p.employee_id, p]));
+  const qualityValues = performance.map((p) => p.avg_quality).filter((v): v is number => v !== null);
+  const qualityMin = qualityValues.length ? Math.min(...qualityValues) : 0;
+  const qualityMax = qualityValues.length ? Math.max(...qualityValues) : 0;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -202,9 +236,9 @@ function EmployeesPage() {
                   <TableCell className="font-medium"><Link to="/zamestnanec/$id" params={{ id: emp.id }} className="hover:underline">{emp.full_name}</Link>{emp.is_demo ? <Badge variant="outline" className="ml-2 text-[10px]">DEMO</Badge> : null}</TableCell>
                   <TableCell>{emp.personal_no ?? "–"}</TableCell>
                   <TableCell className="space-x-1">{emp.qual_ha ? <Badge variant="secondary">HA</Badge> : null}{emp.qual_tup ? <Badge variant="secondary">TUP</Badge> : null}{!emp.qual_ha && !emp.qual_tup ? "–" : null}</TableCell>
-                  <TableCell>{formatMetric(stats?.avg_oee ?? null)}</TableCell>
-                  <TableCell>{formatMetric(stats?.avg_quality ?? null)}</TableCell>
-                  <TableCell>{stats ? stats.help_points.toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) : "–"}</TableCell>
+                  <MetricCell style={oeeColor(stats?.avg_oee ?? null)}>{formatMetric(stats?.avg_oee ?? null)}</MetricCell>
+                  <MetricCell style={scaleColor(stats?.avg_quality ?? null, qualityMin, qualityMax)}>{formatMetric(stats?.avg_quality ?? null)}</MetricCell>
+                  <MetricCell style={helpColor(stats?.help_points ?? null)}>{stats ? stats.help_points.toLocaleString("cs-CZ", { maximumFractionDigits: 1 }) : "–"}</MetricCell>
                   <TableCell>{emp.active ? <Badge className="bg-success text-success-foreground">Aktivní</Badge> : <Badge variant="outline">Neaktivní</Badge>}</TableCell>
                   <TableCell>{emp.position_type === "standard" ? <Badge variant="outline" className="text-[10px]">Standard</Badge> : emp.position_type === "handler" ? <Badge className="bg-purple-500 text-white">Handler</Badge> : emp.position_type === "vlnař" ? <Badge className="bg-blue-500 text-white">Vlnař</Badge> : null}</TableCell>
                   <TableCell className="max-w-[240px] truncate text-muted-foreground">{emp.note ?? "–"}</TableCell>
