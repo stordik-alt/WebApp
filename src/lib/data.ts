@@ -10,10 +10,7 @@ export function useEmployees() {
   return useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("*")
-        .order("full_name");
+      const { data, error } = await supabase.from("employees").select("*").order("full_name");
       if (error) throw error;
       return (data ?? []) as unknown as Employee[];
     },
@@ -24,11 +21,7 @@ export function useDailyRecords(from?: string, to?: string) {
   return useQuery({
     queryKey: ["daily", from ?? null, to ?? null],
     queryFn: async () => {
-      let q = supabase
-        .from("daily_records")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("work_date", { ascending: false });
+      let q = supabase.from("daily_records").select("*").eq("approval_status", "approved").order("work_date", { ascending: false });
       if (from) q = q.gte("work_date", from);
       if (to) q = q.lte("work_date", to);
       const { data, error } = await q;
@@ -38,8 +31,7 @@ export function useDailyRecords(from?: string, to?: string) {
         oee: r.oee === null ? null : Number(r.oee),
         help_score: Number(r.help_score),
         performance: r.performance === null || r.performance === undefined ? null : Number(r.performance),
-        available_time:
-          r.available_time === null || r.available_time === undefined ? null : Number(r.available_time),
+        available_time: r.available_time === null || r.available_time === undefined ? null : Number(r.available_time),
       })) as unknown as DailyRecord[];
     },
   });
@@ -49,12 +41,7 @@ export function useWeeklyRecords() {
   return useQuery({
     queryKey: ["weekly"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weekly_records")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("iso_year", { ascending: false })
-        .order("iso_week", { ascending: false });
+      const { data, error } = await supabase.from("weekly_records").select("*").eq("approval_status", "approved").order("iso_year", { ascending: false }).order("iso_week", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((r) => ({
         ...r,
@@ -81,11 +68,7 @@ export function useProducts() {
   return useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("code");
+      const { data, error } = await supabase.from("products").select("*").eq("approval_status", "approved").order("code");
       if (error) throw error;
       return (data ?? []) as unknown as Product[];
     },
@@ -96,16 +79,9 @@ export function useProductNorms() {
   return useQuery({
     queryKey: ["product_norms"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("product_norms")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("valid_from", { ascending: false });
+      const { data, error } = await supabase.from("product_norms").select("*").eq("approval_status", "approved").order("valid_from", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((n) => ({
-        ...n,
-        norm_per_hour: Number(n.norm_per_hour),
-      })) as unknown as ProductNorm[];
+      return (data ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as unknown as ProductNorm[];
     },
   });
 }
@@ -114,38 +90,19 @@ export function useShiftEvaluations() {
   return useQuery({
     queryKey: ["shift_evaluations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shift_evaluations")
-        .select("*")
-        .eq("approval_status", "approved");
+      const { data, error } = await supabase.from("shift_evaluations").select("*").eq("approval_status", "approved");
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        help_score: Number(r.help_score),
-      })) as unknown as ShiftEvaluation[];
+      return (data ?? []).map((r) => ({ ...r, help_score: Number(r.help_score) })) as unknown as ShiftEvaluation[];
     },
   });
 }
 
-/**
- * Směnové agregáty (jednotka denního výkonu) – počítané dynamicky
- * z linkových záznamů, nikdy se neukládají zpět do databáze.
- */
 export function useShiftAggregates(from?: string, to?: string) {
   const daily = useDailyRecords(from, to);
   const evals = useShiftEvaluations();
   const links = useCoworkerLinks();
   const emp = useEmployees();
-  const shifts = useMemo(
-    () =>
-      aggregateShifts(
-        daily.data ?? [],
-        evals.data ?? [],
-        links.data ?? [],
-        emp.data ?? [],
-      ),
-    [daily.data, evals.data, links.data, emp.data],
-  );
+  const shifts = useMemo(() => aggregateShifts(daily.data ?? [], evals.data ?? [], links.data ?? [], emp.data ?? []), [daily.data, evals.data, links.data, emp.data]);
   return {
     shifts,
     records: daily.data ?? [],
@@ -155,14 +112,55 @@ export function useShiftAggregates(from?: string, to?: string) {
   };
 }
 
+/** Souhrn historických metrik zaměstnance pro přehled zaměstnanců. */
+export function useEmployeePerformanceSummaries() {
+  const employees = useEmployees();
+  const daily = useDailyRecords();
+  const weekly = useWeeklyRecords();
+  const evals = useShiftEvaluations();
+  const links = useCoworkerLinks();
+
+  const summaries = useMemo(() => {
+    const employeeIds = new Set((employees.data ?? []).map((e) => e.id));
+    const shifts = aggregateShifts(daily.data ?? [], evals.data ?? [], links.data ?? [], employees.data ?? []);
+    const byEmployee = new Map<string, typeof shifts>();
+    for (const shift of shifts) {
+      if (!employeeIds.has(shift.employee_id)) continue;
+      const current = byEmployee.get(shift.employee_id) ?? [];
+      current.push(shift);
+      byEmployee.set(shift.employee_id, current);
+    }
+    const qualityByEmployee = new Map<string, number[]>();
+    for (const record of weekly.data ?? []) {
+      const quality = record.final_quality_score ?? record.auto_quality_score;
+      if (quality === null || quality === undefined) continue;
+      const current = qualityByEmployee.get(record.employee_id) ?? [];
+      current.push(Number(quality));
+      qualityByEmployee.set(record.employee_id, current);
+    }
+    const avg = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    return (employees.data ?? []).map((employee) => {
+      const employeeShifts = byEmployee.get(employee.id) ?? [];
+      return {
+        employee_id: employee.id,
+        avg_oee: avg(employeeShifts.map((s) => s.oee).filter((v): v is number => v !== null)),
+        avg_quality: avg(qualityByEmployee.get(employee.id) ?? []),
+        help_points: employeeShifts.reduce((sum, s) => sum + (s.help ?? 0), 0),
+      };
+    });
+  }, [employees.data, daily.data, weekly.data, evals.data, links.data]);
+
+  return {
+    data: summaries,
+    isLoading: employees.isLoading || daily.isLoading || weekly.isLoading || evals.isLoading || links.isLoading,
+  };
+}
+
 export function useNormRemeasurements() {
   return useQuery({
     queryKey: ["norm_remeasurements"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("norm_remeasurements")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("norm_remeasurements").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((r) => ({
         ...r,
@@ -181,16 +179,9 @@ export function useHandlerEvaluations() {
   return useQuery({
     queryKey: ["handler_evaluations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("handler_evaluations")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("work_date", { ascending: false });
+      const { data, error } = await supabase.from("handler_evaluations").select("*").eq("approval_status", "approved").order("work_date", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        score: Number(r.score),
-      })) as unknown as import("@/lib/handler-eval").HandlerEvaluation[];
+      return (data ?? []).map((r) => ({ ...r, score: Number(r.score) })) as unknown as import("@/lib/handler-eval").HandlerEvaluation[];
     },
   });
 }
@@ -199,17 +190,9 @@ export function useWeeklyHandlerEvaluations() {
   return useQuery({
     queryKey: ["weekly_handler_evaluations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weekly_handler_evaluations")
-        .select("*")
-        .eq("approval_status", "approved")
-        .order("iso_year", { ascending: false })
-        .order("iso_week", { ascending: false });
+      const { data, error } = await supabase.from("weekly_handler_evaluations").select("*").eq("approval_status", "approved").order("iso_year", { ascending: false }).order("iso_week", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        avg_score: Number(r.avg_score),
-      })) as unknown as import("@/lib/handler-eval").WeeklyHandlerEvaluation[];
+      return (data ?? []).map((r) => ({ ...r, avg_score: Number(r.avg_score) })) as unknown as import("@/lib/handler-eval").WeeklyHandlerEvaluation[];
     },
   });
 }
@@ -231,18 +214,9 @@ export function useQualityAlertHistory(weeklyRecordId?: string) {
     queryKey: ["quality_alert_history", weeklyRecordId ?? null],
     enabled: !!weeklyRecordId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("quality_alert_history")
-        .select("*")
-        .eq("weekly_record_id", weeklyRecordId!)
-        .eq("approval_status", "approved")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("quality_alert_history").select("*").eq("weekly_record_id", weeklyRecordId!).eq("approval_status", "approved").order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((h) => ({
-        ...h,
-        final_quality_score:
-          h.final_quality_score === null ? null : Number(h.final_quality_score),
-      })) as unknown as QualityAlertHistoryEntry[];
+      return (data ?? []).map((h) => ({ ...h, final_quality_score: h.final_quality_score === null ? null : Number(h.final_quality_score) })) as unknown as QualityAlertHistoryEntry[];
     },
   });
 }
