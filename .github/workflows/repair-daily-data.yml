@@ -1,0 +1,37 @@
+name: Repair daily data page
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-daily-data.yml'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair malformed daily table wrapper
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/routes/denni-data.tsx')
+          s = p.read_text()
+          s = s.replace('              <div className="hidden">\n', '', 1)
+          s = s.replace('{recentShifts.length === 0 ?', '{filteredShifts.length === 0 ?')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/routes/denni-data.tsx
+          git commit -m 'fix: repair daily data page rendering' || true
+          git push
+      - name: Remove one-time workflow
+        run: |
+          rm .github/workflows/repair-daily-data.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/repair-daily-data.yml
+          git commit -m 'chore: remove one-time daily repair workflow'
+          git push
