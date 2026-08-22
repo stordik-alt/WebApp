@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Fix daily record editing
         shell: bash
         run: |
@@ -21,46 +20,10 @@ jobs:
           from pathlib import Path
           p = Path('src/routes/denni-data.tsx')
           s = p.read_text()
-
-          old = '''              <Button
-                className="h-12"
-                onClick={() => create.mutate("single")}
-                disabled={!canSaveOrUpdate || create.isPending}
-              >'''
-          new = '''              <Button
-                className="h-12"
-                onClick={() => {
-                  if (editingRecord) update.mutate(editingRecord.id);
-                  else create.mutate("single");
-                }}
-                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
-              >'''
-          if old not in s:
-              raise SystemExit('primary save button pattern not found')
-          s = s.replace(old, new, 1)
-
-          old = '''              <Button
-                variant="secondary"
-                className="h-12"
-                onClick={() => create.mutate("another")}
-                disabled={!canSaveOrUpdate || create.isPending}
-              >'''
-          new = '''              <Button
-                variant="secondary"
-                className="h-12"
-                onClick={() => {
-                  if (editingRecord) update.mutate(editingRecord.id);
-                  else create.mutate("another");
-                }}
-                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
-              >'''
-          if old not in s:
-              raise SystemExit('secondary save button pattern not found')
-          s = s.replace(old, new, 1)
-
+          s = s.replace('onClick={() => create.mutate("single")}\n                disabled={!canSaveOrUpdate || create.isPending}', 'onClick={() => {\n                  if (editingRecord) update.mutate(editingRecord.id);\n                  else create.mutate("single");\n                }}\n                disabled={!canSaveOrUpdate || create.isPending || update.isPending}', 1)
+          s = s.replace('onClick={() => create.mutate("another")}\n                disabled={!canSaveOrUpdate || create.isPending}', 'onClick={() => {\n                  if (editingRecord) update.mutate(editingRecord.id);\n                  else create.mutate("another");\n                }}\n                disabled={!canSaveOrUpdate || create.isPending || update.isPending}', 1)
           p.write_text(s)
           PY
-
       - name: Commit fix
         run: |
           git config user.name "github-actions[bot]"
@@ -69,7 +32,6 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "fix: edit existing daily records instead of duplicating [repair-daily-edit]"
           git push
-
       - name: Remove repair workflow
         if: success()
         run: |
