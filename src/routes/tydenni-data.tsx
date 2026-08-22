@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmployees, useWeeklyRecords } from "@/lib/data";
@@ -61,6 +61,10 @@ function WeeklyPage() {
   const [year, setYear] = useState(String(now.year));
   const [week, setWeek] = useState(String(now.week));
   const [yieldPct, setYieldPct] = useState("");
+  const [weeklyFilterText, setWeeklyFilterText] = useState("");
+  const [weeklyFilterStatus, setWeeklyFilterStatus] = useState("all");
+  const [weeklySort, setWeeklySort] = useState<"employee" | "week" | "yield" | "score">("week");
+  const [weeklySortDir, setWeeklySortDir] = useState<"asc" | "desc">("desc");
 
   const [alertRow, setAlertRow] = useState<WeeklyRecord | null>(null);
   const [cause, setCause] = useState("");
@@ -140,6 +144,18 @@ function WeeklyPage() {
   }
 
   const openAlerts = weekly.filter((w) => w.is_alert && !w.alert_resolved);
+  const filteredWeekly = useMemo(() => {
+    const text = weeklyFilterText.trim().toLowerCase();
+    const rows = weekly.filter((w) => {
+      if (weeklyFilterStatus === "alert" && !w.is_alert) return false;
+      if (weeklyFilterStatus === "ok" && w.is_alert) return false;
+      if (text && !empName(w.employee_id).toLowerCase().includes(text)) return false;
+      return true;
+    });
+    const value = (w: WeeklyRecord) => weeklySort === "employee" ? empName(w.employee_id).toLowerCase() : weeklySort === "week" ? `${w.iso_year}-${String(w.iso_week).padStart(2, "0")}` : Number(weeklySort === "yield" ? w.yield_pct : w.final_quality_score ?? w.auto_quality_score ?? -Infinity);
+    rows.sort((a, b) => { const av = value(a), bv = value(b); const cmp = av < bv ? -1 : av > bv ? 1 : 0; return weeklySortDir === "asc" ? cmp : -cmp; });
+    return rows;
+  }, [weekly, weeklyFilterText, weeklyFilterStatus, weeklySort, weeklySortDir, employees]);
   const min = operatorError === "yes" ? -100 : 0;
   const max = operatorError === "yes" ? 0 : 100;
 
@@ -251,8 +267,19 @@ function WeeklyPage() {
         </Card>
 
         <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
-          <div className="border-b border-border px-4 py-3 text-sm font-semibold">
-            Týdenní záznamy
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+            <Input className="h-9 w-[180px]" placeholder="Hledat zaměstnance" value={weeklyFilterText} onChange={(e) => setWeeklyFilterText(e.target.value)} />
+            <Select value={weeklyFilterStatus} onValueChange={setWeeklyFilterStatus}>
+              <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Všechny stavy</SelectItem><SelectItem value="ok">OK</SelectItem><SelectItem value="alert">Quality Alert</SelectItem></SelectContent>
+            </Select>
+            <Select value={weeklySort} onValueChange={(v) => setWeeklySort(v as typeof weeklySort)}>
+              <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="week">Týden</SelectItem><SelectItem value="employee">Zaměstnanec</SelectItem><SelectItem value="yield">Yield</SelectItem><SelectItem value="score">Quality skóre</SelectItem></SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setWeeklySortDir((d) => d === "asc" ? "desc" : "asc")}>{weeklySortDir === "asc" ? "↑" : "↓"}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setWeeklyFilterText(""); setWeeklyFilterStatus("all"); }}>Zrušit filtry</Button>
+            <span className="ml-auto text-xs text-muted-foreground">{filteredWeekly.length} záznamů</span>
           </div>
           <Table>
             <TableHeader>
@@ -275,7 +302,7 @@ function WeeklyPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                weekly.map((w) => (
+                filteredWeekly.map((w) => (
                   <TableRow key={w.id} className={w.is_alert && !w.alert_resolved ? "bg-destructive/5" : ""}>
                     <TableCell className="font-medium">{empName(w.employee_id)}</TableCell>
                     <TableCell>

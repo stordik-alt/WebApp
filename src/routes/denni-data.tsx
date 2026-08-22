@@ -71,6 +71,11 @@ function DailyPage() {
   const [note, setNote] = useState("");
   const [coworkers, setCoworkers] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<DailyRecord | null>(null);
+  const [dailyFilterText, setDailyFilterText] = useState("");
+  const [dailyFilterShift, setDailyFilterShift] = useState("all");
+  const [dailyFilterDate, setDailyFilterDate] = useState("");
+  const [dailySort, setDailySort] = useState<"date" | "employee" | "oee" | "performance" | "availableTime">("date");
+  const [dailySortDir, setDailySortDir] = useState<"asc" | "desc">("desc");
 
   const activeEmployees = employees.filter((e) => e.active);
 
@@ -218,7 +223,18 @@ function DailyPage() {
   const canSave = workDate && shift && line.trim() && employeeId;
   // Při úpravě záznamu ignorujeme duplicateLine (záznam se aktualizuje sám sebou)
   const canSaveOrUpdate = canSave && (!duplicateLine || !!editingRecord);
-  const recentShifts = shiftAggregates.slice(0, 25);
+  const filteredShifts = useMemo(() => {
+    const text = dailyFilterText.trim().toLowerCase();
+    const filtered = shiftAggregates.filter((a) => {
+      if (dailyFilterShift !== "all" && a.shift !== dailyFilterShift) return false;
+      if (dailyFilterDate && a.work_date !== dailyFilterDate) return false;
+      if (text && !empName(a.employee_id).toLowerCase().includes(text) && !a.lines.join(" ").toLowerCase().includes(text)) return false;
+      return true;
+    });
+    const value = (a: ShiftAggregate) => dailySort === "date" ? `${a.work_date} ${a.shift}` : dailySort === "employee" ? empName(a.employee_id).toLowerCase() : Number(dailySort === "oee" ? a.oee ?? -Infinity : dailySort === "performance" ? a.performance ?? -Infinity : a.availableTime ?? -Infinity);
+    filtered.sort((a, b) => { const av = value(a), bv = value(b); const cmp = av < bv ? -1 : av > bv ? 1 : 0; return dailySortDir === "asc" ? cmp : -cmp; });
+    return filtered.slice(0, 100);
+  }, [shiftAggregates, dailyFilterText, dailyFilterShift, dailyFilterDate, dailySort, dailySortDir, employees]);
 
   // Funkce pro načtení záznamu do editace
   const loadForEdit = (record: DailyRecord) => {
@@ -454,7 +470,7 @@ function DailyPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                recentShifts.flatMap((a) => [
+                filteredShifts.flatMap((a) => [
                   <TableRow key={a.key} className="bg-muted/40">
                     <TableCell>{a.work_date}</TableCell>
                     <TableCell>{a.shift}</TableCell>

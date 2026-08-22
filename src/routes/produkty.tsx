@@ -52,6 +52,9 @@ function ProductsPage() {
 
   const startEdit = (p: Product) => {
     setEditProduct(p);
+    window.requestAnimationFrame(() => {
+      document.getElementById("edit-product-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
     setEditCapacity(String(p.employees_per_product ?? 1));
     const ha = currentNorm(norms, p.id, "HA");
     const tup = currentNorm(norms, p.id, "TUP");
@@ -179,7 +182,7 @@ function ProductsPage() {
           <Button className="h-11" disabled={!selected || normValue === "" || saveNorm.isPending} onClick={() => saveNorm.mutate()}>Uložit verzi normy</Button>
         </Card>
 
-        {editProduct ? <Card className="min-w-0 gap-4 overflow-hidden p-4 sm:p-5">
+        {editProduct ? <Card id="edit-product-card" className="min-w-0 gap-4 overflow-hidden p-4 sm:p-5">
           <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Upravit produkt: {editProduct.code}</h2><Button variant="ghost" size="sm" onClick={() => setEditProduct(null)}>Zrušit</Button></div>
           <div className="grid gap-1.5"><Label>Kapacita / počet operátorů</Label><Input type="number" min="1" className="h-11" value={editCapacity} onChange={(e) => setEditCapacity(e.target.value)} /><p className="text-xs text-muted-foreground">Norma je vztažená k tomuto počtu operátorů.</p></div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
