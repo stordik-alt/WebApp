@@ -463,7 +463,7 @@ function DailyPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentShifts.length === 0 ? (
+              {filteredShifts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-muted-foreground">
                     Zatím žádné záznamy.
