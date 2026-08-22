@@ -54,21 +54,23 @@ function navFor(role: AppRole | null) {
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { role } = useAuth();
   return (
-    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+    <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4">
       {navFor(role).map(({ to, label, icon: Icon }) => (
         <Link
           key={to}
           to={to}
           onClick={onNavigate}
           activeOptions={{ exact: to === "/" }}
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-sidebar-foreground/65 transition-all duration-200 hover:bg-white/[0.06] hover:text-sidebar-foreground"
           activeProps={{
             className:
-              "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground font-medium shadow-[0_8px_20px_-12px_oklch(0.58_0.21_27_/_0.9)]",
+              "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-sidebar-primary-foreground bg-sidebar-primary/15 hover:bg-sidebar-primary/20 shadow-[inset_3px_0_0_hsl(var(--primary)),0_8px_24px_-18px_hsl(var(--primary))]",
           }}
         >
-          <Icon className="h-4 w-4" />
-          {label}
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/[0.035] transition-colors group-hover:bg-white/[0.07]">
+            <Icon className="h-4 w-4" />
+          </span>
+          <span className="truncate">{label}</span>
         </Link>
       ))}
     </nav>
@@ -77,10 +79,15 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="border-b border-sidebar-border px-4 py-5">
-      <ResideoLogo />
-      <div className="mt-3 text-[11px] text-sidebar-foreground/50">
-        Hodnocení pracovníků výroby
+    <div className="border-b border-sidebar-border/70 px-5 pb-4 pt-5">
+      <div className="flex items-center justify-between gap-3">
+        <ResideoLogo />
+        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/45">
+          Production OS
+        </span>
+      </div>
+      <div className="mt-3 text-[11px] leading-relaxed text-sidebar-foreground/45">
+        Výrobní monitoring a hodnocení pracovníků
       </div>
       <UserBadge />
     </div>
@@ -91,11 +98,16 @@ function UserBadge() {
   const { profile, role } = useAuth();
   const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
   return (
-    <div className="mt-3 rounded-xl bg-sidebar-accent/60 px-3 py-2">
-      <div className="truncate text-xs font-medium text-sidebar-foreground">
-        {name || profile?.email || "Uživatel"}
+    <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-2.5">
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-[0_0_24px_-10px_hsl(var(--primary))]">
+        {(name || profile?.email || "U").slice(0, 1).toUpperCase()}
       </div>
-      <div className="text-[11px] text-sidebar-foreground/60">{roleLabel(role)}</div>
+      <div className="min-w-0">
+        <div className="truncate text-xs font-semibold text-sidebar-foreground">
+          {name || profile?.email || "Uživatel"}
+        </div>
+        <div className="mt-0.5 text-[10px] text-sidebar-foreground/50">{roleLabel(role)}</div>
+      </div>
     </div>
   );
 }
@@ -105,7 +117,7 @@ function SignOutButton() {
     <Button
       variant="outline"
       size="sm"
-      className="w-full justify-start gap-2"
+      className="w-full justify-start gap-2 rounded-xl border-white/10 bg-white/[0.025] text-sidebar-foreground hover:bg-white/[0.07] hover:text-sidebar-foreground"
       onClick={() => void supabase.auth.signOut()}
     >
       <LogOut className="h-4 w-4" />
@@ -128,61 +140,60 @@ export function AppShell({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_75%_-10%,hsl(var(--primary)/0.10),transparent_30%),radial-gradient(circle_at_10%_20%,hsl(var(--primary)/0.04),transparent_28%)]" />
+
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[270px] flex-col border-r border-sidebar-border/70 bg-sidebar/95 text-sidebar-foreground shadow-[20px_0_60px_-48px_black] backdrop-blur-xl lg:flex">
         <Brand />
         <NavList />
-        <div className="grid gap-2 border-t border-sidebar-border p-3">
+        <div className="grid gap-2 border-t border-sidebar-border/70 p-4">
           <ThemeToggle />
           <SignOutButton />
         </div>
-        <div className="px-5 pb-4 text-[11px] leading-relaxed text-sidebar-foreground/50">
-          Interní nástroj. Data jsou uložena v cloudové databázi.
+        <div className="px-5 pb-5 text-[10px] leading-relaxed text-sidebar-foreground/35">
+          Interní výrobní systém · cloudová data
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative sticky top-0 z-40 border-b border-border bg-card/85 px-4 py-3 pr-14 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-20">
-          <ResideoLogo
-            variant="dark"
-            compact
-            className="absolute right-3 top-3 shrink-0 sm:right-6 sm:top-4"
-          />
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="min-w-0 lg:pl-[270px]">
+        <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4 lg:px-8">
+          <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <Sheet open={open} onOpenChange={setOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="rounded-xl lg:hidden" aria-label="Menu">
+                  <Button variant="outline" size="icon" className="rounded-xl border-border/80 bg-card/60 lg:hidden" aria-label="Menu">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
                 <SheetContent
                   side="left"
-                  className="w-64 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+                  className="w-[285px] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
                 >
                   <Brand />
                   <NavList onNavigate={() => setOpen(false)} />
-                  <div className="grid gap-2 border-t border-sidebar-border p-3">
+                  <div className="grid gap-2 border-t border-sidebar-border/70 p-4">
                     <ThemeToggle />
                     <SignOutButton />
                   </div>
                 </SheetContent>
               </Sheet>
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-lg">
-                  {title}
-                </h1>
+              <div className="min-w-0">
+                <div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">
+                  Production monitoring
+                </div>
+                <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
                 {subtitle ? (
-                  <p className="mt-0.5 hidden text-sm text-muted-foreground sm:block">{subtitle}</p>
+                  <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>
                 ) : null}
               </div>
             </div>
             {actions ? (
-              <div className="flex flex-wrap items-center gap-2">{actions}</div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>
             ) : null}
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-4 pb-24 sm:p-6 lg:pb-6">
+
+        <main className="mx-auto min-w-0 max-w-[1600px] flex-1 px-4 pb-28 pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-8">
           <RouteGuard>{children}</RouteGuard>
         </main>
       </div>
@@ -203,7 +214,8 @@ function RouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   return (
-    <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+    <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-border/70 bg-card/70 p-8 text-sm text-muted-foreground shadow-xl shadow-black/5 backdrop-blur">
+      <div className="mb-2 font-semibold text-foreground">Přístup není povolen</div>
       Pro tuto sekci nemáte oprávnění. Vaše úroveň přístupu: {roleLabel(role)}.
     </div>
   );
@@ -212,10 +224,10 @@ function RouteGuard({ children }: { children: ReactNode }) {
 const BOTTOM_NAV = [
   { to: "/denni-data", label: "Denní", icon: ClipboardList, roles: STAFF },
   { to: "/tydenni-data", label: "Týdenní", icon: CalendarRange, roles: STAFF },
-  { to: "/zamestnanci", label: "Zaměstnanci", icon: Users, roles: STAFF },
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: STAFF },
-  { to: "/moje-vysledky", label: "Moje výsledky", icon: BarChart3, roles: ["operator" as AppRole] },
-  { to: "/o-aplikaci", label: "O aplikaci", icon: Info, roles: ["operator" as AppRole] },
+  { to: "/zamestnanci", label: "Lidé", icon: Users, roles: STAFF },
+  { to: "/", label: "Domů", icon: LayoutDashboard, roles: STAFF },
+  { to: "/moje-vysledky", label: "Výsledky", icon: BarChart3, roles: ["operator" as AppRole] },
+  { to: "/o-aplikaci", label: "Více", icon: Info, roles: ["operator" as AppRole] },
 ] as const;
 
 function BottomNav() {
@@ -227,7 +239,7 @@ function BottomNav() {
   return (
     <nav
       aria-label="Rychlá navigace"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur lg:hidden"
+      className="fixed inset-x-3 bottom-3 z-50 overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
@@ -236,10 +248,12 @@ function BottomNav() {
             <Link
               to={to}
               activeOptions={{ exact: to === "/" }}
-              className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] text-muted-foreground transition-colors"
-              activeProps={{ className: "text-primary font-medium" }}
+              className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200"
+              activeProps={{ className: "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary" }}
             >
-              <Icon className="h-5 w-5" />
+              <span className="grid h-7 w-7 place-items-center rounded-lg">
+                <Icon className="h-[18px] w-[18px]" />
+              </span>
               <span className="truncate">{label}</span>
             </Link>
           </li>
