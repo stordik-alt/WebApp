@@ -52,7 +52,7 @@ export async function createProductFamily(input: {
 
   const { data: family, error: familyError } = await supabase
     .from("product_families")
-    .insert({ name, ...approval })
+    .insert({ name })
     .select("*")
     .single();
   if (familyError) throw familyError;
@@ -78,8 +78,9 @@ export async function createProductFamily(input: {
     if (familyUpdateError) throw familyUpdateError;
 
     const norms = [];
-    if (input.hNorm != null) norms.push({ product_id: h.id, operation: "HA", norm_per_hour: input.hNorm, valid_from: new Date().toISOString().slice(0, 10), source: "manual", confirmed: true, ...approval });
-    if (input.tNorm != null) norms.push({ product_id: t.id, operation: "TUP", norm_per_hour: input.tNorm, valid_from: new Date().toISOString().slice(0, 10), source: "manual", confirmed: true, ...approval });
+    const validFrom = new Date().toISOString().slice(0, 10);
+    if (input.hNorm != null) norms.push({ product_id: h.id, operation: "HA", norm_per_hour: input.hNorm, valid_from: validFrom, source: "manual", confirmed: true, ...approval });
+    if (input.tNorm != null) norms.push({ product_id: t.id, operation: "TUP", norm_per_hour: input.tNorm, valid_from: validFrom, source: "manual", confirmed: true, ...approval });
     if (norms.length) {
       const { error: normError } = await supabase.from("product_norms").insert(norms);
       if (normError) throw normError;
