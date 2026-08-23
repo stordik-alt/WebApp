@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Patch OCR prompt template literal
+      - name: Repair OCR prompt template literal
         shell: bash
         run: |
           python3 - <<'PY'
@@ -24,12 +24,17 @@ jobs:
           p = Path('src/lib/ocr.functions.ts')
           s = p.read_text(encoding='utf-8')
           start = s.index('const SYSTEM = `')
-          end = s.index('`;\n\nfunction toNum', start)
-          block = s[start:end]
+          marker = '`;\n\nfunction toNum'
+          end = s.index(marker, start)
           opening = 'const SYSTEM = `'
-          inner = block[len(opening):]
-          inner = inner.replace('\\`', '`').replace('`', '\\`')
-          p.write_text(s[:start] + opening + inner + s[end:], encoding='utf-8')
+          inner = s[start + len(opening):end]
+          # The prompt itself contains Markdown-style inline backticks. Escape
+          # every unescaped backtick inside the template literal, while first
+          # normalizing already escaped ones so this is idempotent.
+          inner = inner.replace('\\`', '`')
+          inner = inner.replace('`', '\\`')
+          fixed = s[:start] + opening + inner + s[end:]
+          p.write_text(fixed, encoding='utf-8')
           PY
       - name: Verify production build
         run: npm ci && npm run build
@@ -40,5 +45,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/lib/ocr.functions.ts .github/workflows/fix-ocr-build.yml
+          git diff --cached --quiet && exit 0
           git commit -m 'fix: OCR prompt syntax'
           git push
