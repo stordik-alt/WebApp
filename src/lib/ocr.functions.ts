@@ -92,14 +92,14 @@ PRAVIDLA PRO SMĚNU A PŘEDPOKLÁDANÝ VÝSTUP:
 - Norma při 100% dostupnosti pro hodinu = zobrazená norma / (dostupnost / 100).
 - Předpokládaný výstup směny = SUM(norma_100 × efektivní_délka_hodiny).
 - Předpokládaný výstup je vždy pro 100% dostupnost a nezávisí na skutečném výkonu.
-- `actual_output` je skutečný počet kusů ze sloupce reálný a musí být načten pro každý hodinový řádek, pokud je čitelný.
+- actual_output je skutečný počet kusů ze sloupce reálný a musí být načten pro každý hodinový řádek, pokud je čitelný.
 
 PRAVIDLA PRO VÝPOČET VÝKONU:
 - Z každého skutečného hodinového řádku přečti reálný výstup (ks), Výkon (%), Dostupnost (%) a normu (ks/h).
 - Norma uvedená ve screenshotu je hodinová norma po zohlednění dostupnosti. Pro výpočet normy při 100% dostupnosti ji přepočítej: norma_100 = norma / dostupnost * 100.
 - Směnový výkon při 100% dostupnosti počítej jako SUM(skutečný výstup) / předpokládaný výstup směny * 100.
 - Dostupnost se nepoužívá jako další penalizace výkonu – její vliv už je zahrnut v normě dané hodiny.
-- Pokud `actual_output` není čitelný, můžeš jako zálohu použít zobrazenou normu × Výkon / 100, ale preferuj vždy hodnotu ze sloupce reálný.
+- Pokud actual_output není čitelný, můžeš jako zálohu použít zobrazenou normu × Výkon / 100, ale preferuj vždy hodnotu ze sloupce reálný.
 - Pokud některá hodina nemá dost údajů pro výpočet, vynech ji. Nikdy nevymýšlej chybějící hodnotu.
 
 PRAVIDLA PRO DOSTUPNOST:
