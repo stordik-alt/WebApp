@@ -24,12 +24,11 @@ jobs:
           p = Path('src/lib/ocr.functions.ts')
           s = p.read_text(encoding='utf-8')
           start = s.index('const SYSTEM = `')
-          marker = '`;\n\nfunction toNum'
-          end = s.index(marker, start)
+          end = s.index('`;\n\nfunction toNum', start)
           block = s[start:end]
           opening = 'const SYSTEM = `'
           inner = block[len(opening):]
-          inner = inner.replace('`', '\\`')
+          inner = inner.replace('\\`', '`').replace('`', '\\`')
           p.write_text(s[:start] + opening + inner + s[end:], encoding='utf-8')
           PY
       - name: Verify production build
