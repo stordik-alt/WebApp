@@ -65,20 +65,27 @@ Schéma:
       "employee_name": "jméno pracovníka",
       "position": "HA | TUP | null",
       "oee": číslo v % nebo null,
-      "performance": číslo v % – PRŮMĚR ZA CELOU SMĚNU nebo null,
+      "performance": číslo v % – výkon přepočtený na 100% dostupnost za celou směnu nebo null,
       "available_time": číslo v % – PRŮMĚR DOSTUPNOSTI ZA CELOU SMĚNU nebo null,
       "confidence": 0..1
     }
   ]
 }
 
-PRAVIDLA PRO SMĚNOVÉ PRŮMĚRY:
-- Z každého skutečného hodinového řádku přečti Výkon (%) a Dostupnost (%).
+PRAVIDLA PRO VÝPOČET VÝKONU:
+- Z každého skutečného hodinového řádku přečti Výkon (%), Dostupnost (%) a normu (ks/h).
+- Norma uvedená ve screenshotu je hodinová norma po zohlednění dostupnosti. Pro výpočet výkonu při 100% dostupnosti ji nejprve přepočítej: norma_100 = norma / dostupnost * 100.
+- Skutečný výstup hodiny lze dopočítat jako reálná norma * Výkon / 100. Pokud reálný počet kusů není přímo dostupný ve vstupním JSON, použij normu ze screenshotu a Výkon.
+- Směnový výkon při 100% dostupnosti počítej jako SUM(skutečný výstup) / SUM(norma_100) * 100, nikoli jako prostý průměr hodinových procent Výkon.
+- Pokud je dostupnost 100 %, norma_100 se rovná zobrazené normě.
+- Tento přepočet platí stejně pro HA i TUP. Dostupnost se tedy nepoužívá jako další penalizace výkonu – její vliv už je zahrnut v hodinové normě.
+- Pokud některá hodina nemá dost údajů pro výpočet, vynech ji z čitatele i jmenovatele. Pokud nelze výkon při 100% dostupnosti spolehlivě spočítat, použij jako nouzovou zálohu aritmetický průměr (Výkon * Dostupnost / 100).
+
+PRAVIDLA PRO DOSTUPNOST:
 - Do hourly_metrics vlož všechny skutečné hodinové řádky směny, které lze přečíst. Nezapisuj souhrnný řádek OEE jako hodinový řádek.
-- Server následně vypočítá aritmetický průměr všech platných hodnot Výkon a Dostupnost za celou směnu. Tento výsledek použij jako performance a available_time u KAŽDÉHO pracovníka z daného screenshotu.
+- available_time u pracovníků je aritmetický průměr platných hodinových Dostupností, protože zde jde o reportovanou dostupnost, ne o výpočet normy.
 - Pokud je hodnota z některé hodiny nečitelná, dej ji null; průměr se počítá pouze z platných hodin.
-- performance NENÍ počet kusů a available_time NENÍ počet minut. Obě hodnoty jsou procenta.
-- Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá průměr ze všech těchto hodin, pokud jsou platné – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
+- Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá ze všech platných hodin – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
 
 PRAVIDLA PRO NORMU PRODUKTU:
 - Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
@@ -111,6 +118,51 @@ function toNum(v: unknown): number | null {
 function avg(values: number[]): number | null {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/**
+ * Přepočítá směnový výkon na normu při 100% dostupnosti.
+ *
+ * Screenshot uvádí normu už po zohlednění dostupnosti. Proto pro každou hodinu:
+ *   norma_100 = norma / (dostupnost / 100)
+ *   skutečný_výstup = norma * výkon / 100
+ * a směnový výkon = SUM(skutečný_výstup) / SUM(norma_100) * 100.
+ * Dostupnost se tímto výpočtem nepřičítá jako další penalizace výkonu.
+ */
+function normalizedPerformanceAtFullAvailability(hourly: Record<string, unknown>[]): number | null {
+  let actualTotal = 0;
+  let fullNormTotal = 0;
+  let fallbackSum = 0;
+  let fallbackCount = 0;
+
+  for (const hour of hourly) {
+    const performance = toNum(hour["performance_pct"]);
+    const availability = toNum(hour["availability_pct"]);
+    const displayedNorm = toNum(hour["norm_per_hour"]);
+
+    if (performance !== null && availability !== null) {
+      const fallback = performance * availability / 100;
+      fallbackSum += fallback;
+      fallbackCount += 1;
+    }
+
+    if (
+      performance === null ||
+      availability === null ||
+      displayedNorm === null ||
+      availability <= 0
+    ) continue;
+
+    const fullNorm = displayedNorm / (availability / 100);
+    const actualOutput = displayedNorm * (performance / 100);
+    if (!Number.isFinite(fullNorm) || !Number.isFinite(actualOutput) || fullNorm <= 0) continue;
+
+    fullNormTotal += fullNorm;
+    actualTotal += actualOutput;
+  }
+
+  if (fullNormTotal > 0) return (actualTotal / fullNormTotal) * 100;
+  return fallbackCount ? fallbackSum / fallbackCount : null;
 }
 
 function normalizeWorkDate(value: unknown): string | null {
@@ -216,7 +268,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     const hourlyRaw = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
     const performanceValues = hourlyRaw.map((h) => toNum(h["performance_pct"])).filter((v): v is number => v !== null);
     const availabilityValues = hourlyRaw.map((h) => toNum(h["availability_pct"])).filter((v): v is number => v !== null);
-    const shiftPerformance = avg(performanceValues) ?? toNum(parsed["shift_performance_avg"]);
+    const shiftPerformance = normalizedPerformanceAtFullAvailability(hourlyRaw) ?? avg(performanceValues.map((value, index) => value * (toNum(hourlyRaw[index]?.["availability_pct"]) ?? 100) / 100));
     const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
 
