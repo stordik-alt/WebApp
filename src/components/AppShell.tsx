@@ -18,6 +18,7 @@ import {
   LogOut,
   BarChart3,
   Award,
+  LineChart,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ResideoLogo } from "@/components/ResideoLogo";
@@ -39,6 +40,7 @@ const NAV = [
   { to: "/produkty", label: "Produkty / Normy", icon: Package, roles: STAFF },
   { to: "/premereni-norem", label: "Přeměření norem", icon: Ruler, roles: STAFF },
   { to: "/reporty", label: "Reporty", icon: FileBarChart, roles: STAFF },
+  { to: "/grafy", label: "Grafy", icon: LineChart, roles: STAFF },
   { to: "/analyza", label: "Analýza / IPI", icon: Activity, roles: STAFF },
   { to: "/hodnoceni", label: "Hodnocení handlerů", icon: Award, roles: STAFF },
   { to: "/zebricek", label: "Žebříček", icon: Trophy, roles: STAFF },
@@ -165,10 +167,7 @@ export function AppShell({
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent
-                  side="left"
-                  className="w-[285px] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
-                >
+                <SheetContent side="left" className="w-[285px] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
                   <Brand />
                   <NavList onNavigate={() => setOpen(false)} />
                   <div className="grid gap-2 border-t border-sidebar-border/70 p-4">
@@ -178,18 +177,12 @@ export function AppShell({
                 </SheetContent>
               </Sheet>
               <div className="min-w-0">
-                <div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">
-                  Production monitoring
-                </div>
+                <div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">Production monitoring</div>
                 <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
-                {subtitle ? (
-                  <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>
-                ) : null}
+                {subtitle ? <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p> : null}
               </div>
             </div>
-            {actions ? (
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>
-            ) : null}
+            {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
           </div>
         </header>
 
@@ -206,13 +199,9 @@ export function AppShell({
 function RouteGuard({ children }: { children: ReactNode }) {
   const { role } = useAuth();
   const pathname = useRouterState({ select: (st) => st.location.pathname });
-  const allowed = navFor(role).some(
-    (i) => i.to === pathname || (i.to !== "/" && pathname.startsWith(i.to)),
-  );
+  const allowed = navFor(role).some((i) => i.to === pathname || (i.to !== "/" && pathname.startsWith(i.to)));
   const employeeDetailOk = role !== "operator" && pathname.startsWith("/zamestnanec/");
-  if (allowed || employeeDetailOk || (role === "operator" && pathname.startsWith("/zamestnanec/"))) {
-    return <>{children}</>;
-  }
+  if (allowed || employeeDetailOk || (role === "operator" && pathname.startsWith("/zamestnanec/"))) return <>{children}</>;
   return (
     <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-border/70 bg-card/70 p-8 text-sm text-muted-foreground shadow-xl shadow-black/5 backdrop-blur">
       <div className="mb-2 font-semibold text-foreground">Přístup není povolen</div>
@@ -225,6 +214,7 @@ const BOTTOM_NAV = [
   { to: "/denni-data", label: "Denní", icon: ClipboardList, roles: STAFF },
   { to: "/tydenni-data", label: "Týdenní", icon: CalendarRange, roles: STAFF },
   { to: "/zamestnanci", label: "Lidé", icon: Users, roles: STAFF },
+  { to: "/grafy", label: "Grafy", icon: LineChart, roles: STAFF },
   { to: "/", label: "Domů", icon: LayoutDashboard, roles: STAFF },
   { to: "/moje-vysledky", label: "Výsledky", icon: BarChart3, roles: ["operator" as AppRole] },
   { to: "/o-aplikaci", label: "Více", icon: Info, roles: ["operator" as AppRole] },
@@ -232,28 +222,15 @@ const BOTTOM_NAV = [
 
 function BottomNav() {
   const { role } = useAuth();
-  const items = BOTTOM_NAV.filter((i) =>
-    role ? (i.roles as readonly AppRole[]).includes(role) : false,
-  );
+  const items = BOTTOM_NAV.filter((i) => role ? (i.roles as readonly AppRole[]).includes(role) : false);
   if (items.length === 0) return null;
   return (
-    <nav
-      aria-label="Rychlá navigace"
-      className="fixed inset-x-3 bottom-3 z-50 overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
+    <nav aria-label="Rychlá navigace" className="fixed inset-x-3 bottom-3 z-50 overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map(({ to, label, icon: Icon }) => (
           <li key={to}>
-            <Link
-              to={to}
-              activeOptions={{ exact: to === "/" }}
-              className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200"
-              activeProps={{ className: "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary" }}
-            >
-              <span className="grid h-7 w-7 place-items-center rounded-lg">
-                <Icon className="h-[18px] w-[18px]" />
-              </span>
+            <Link to={to} activeOptions={{ exact: to === "/" }} className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200" activeProps={{ className: "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary" }}>
+              <span className="grid h-7 w-7 place-items-center rounded-lg"><Icon className="h-[18px] w-[18px]" /></span>
               <span className="truncate">{label}</span>
             </Link>
           </li>
