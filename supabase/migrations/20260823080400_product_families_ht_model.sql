@@ -41,19 +41,22 @@ CREATE POLICY "Authenticated users can read product families"
   ON public.product_families FOR SELECT TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "Admins can insert product families" ON public.product_families;
-CREATE POLICY "Admins can insert product families"
+DROP POLICY IF EXISTS "Authenticated users can insert product families" ON public.product_families;
+CREATE POLICY "Authenticated users can insert product families"
   ON public.product_families FOR INSERT TO authenticated
-  WITH CHECK (has_role(auth.uid(), 'admin'));
+  WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Admins can update product families" ON public.product_families;
-CREATE POLICY "Admins can update product families"
+DROP POLICY IF EXISTS "Authenticated users can update product families" ON public.product_families;
+CREATE POLICY "Authenticated users can update product families"
   ON public.product_families FOR UPDATE TO authenticated
-  USING (has_role(auth.uid(), 'admin'))
-  WITH CHECK (has_role(auth.uid(), 'admin'));
+  USING (true)
+  WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Admins can delete product families" ON public.product_families;
-CREATE POLICY "Admins can delete product families"
+DROP POLICY IF EXISTS "Authenticated users can delete product families" ON public.product_families;
+CREATE POLICY "Authenticated users can delete product families"
   ON public.product_families FOR DELETE TO authenticated
-  USING (has_role(auth.uid(), 'admin'));
+  USING (true);
 
 COMMIT;
