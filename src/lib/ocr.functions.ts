@@ -25,8 +25,15 @@ export type OcrResult = {
   products: OcrProduct[];
   header_confidence: number;
   rows: OcrRow[];
+  predicted_shift_output: number | null;
+  productive_minutes: number | null;
   raw?: string;
 };
+
+const SHIFT_MINUTES = 8 * 60;
+const START_PREP_MINUTES = 10;
+const BREAK_MINUTES = 30;
+const END_CLEANUP_MINUTES = 5;
 
 const SYSTEM = `Jsi extrakční nástroj pro výrobní data DPS (osazování plošných spojů).
 Ze screenshotu výrobní tabulky vrať POUZE JSON podle schématu níže.
@@ -55,6 +62,7 @@ Schéma:
     {
       "hour": číslo nebo null,
       "product_code": "produkt platný v této hodině nebo null",
+      "actual_output": číslo z pole reálný (ks) nebo null,
       "performance_pct": číslo v % nebo null,
       "availability_pct": číslo v % nebo null,
       "norm_per_hour": číslo nebo null
@@ -72,20 +80,32 @@ Schéma:
   ]
 }
 
+PRAVIDLA PRO SMĚNU A PŘEDPOKLÁDANÝ VÝSTUP:
+- Jedna běžná směna má 8 hodin včetně 30minutové přestávky.
+- Reálně plánovaný výrobní čas při 100% dostupnosti je 7 hodin 30 minut.
+- Z první hodiny odečti 10 minut přípravy před zahájením výroby.
+- Z poslední hodiny odečti 5 minut na ukončení výroby a úklid linky.
+- Zbývá tedy 7 hodin 15 minut = 435 produktivních minut.
+- Přibližně v polovině směny je 30minutová přestávka. Pokud jsou k dispozici běžné 8 hodinové řádky, odečti ji z prostředního hodinového řádku.
+- Efektivní délky 8 hodinových řádků jsou tedy: 50, 60, 60, 60, 30, 60, 60, 55 minut.
+- Pokud se během směny mění produkt nebo norma, předpokládaný výstup počítej pro každý hodinový řádek s jeho vlastní normou.
+- Norma při 100% dostupnosti pro hodinu = zobrazená norma / (dostupnost / 100).
+- Předpokládaný výstup směny = SUM(norma_100 × efektivní_délka_hodiny).
+- Předpokládaný výstup je vždy pro 100% dostupnost a nezávisí na skutečném výkonu.
+- `actual_output` je skutečný počet kusů ze sloupce reálný a musí být načten pro každý hodinový řádek, pokud je čitelný.
+
 PRAVIDLA PRO VÝPOČET VÝKONU:
-- Z každého skutečného hodinového řádku přečti Výkon (%), Dostupnost (%) a normu (ks/h).
-- Norma uvedená ve screenshotu je hodinová norma po zohlednění dostupnosti. Pro výpočet výkonu při 100% dostupnosti ji nejprve přepočítej: norma_100 = norma / dostupnost * 100.
-- Skutečný výstup hodiny lze dopočítat jako reálná norma * Výkon / 100. Pokud reálný počet kusů není přímo dostupný ve vstupním JSON, použij normu ze screenshotu a Výkon.
-- Směnový výkon při 100% dostupnosti počítej jako SUM(skutečný výstup) / SUM(norma_100) * 100, nikoli jako prostý průměr hodinových procent Výkon.
-- Pokud je dostupnost 100 %, norma_100 se rovná zobrazené normě.
-- Tento přepočet platí stejně pro HA i TUP. Dostupnost se tedy nepoužívá jako další penalizace výkonu – její vliv už je zahrnut v hodinové normě.
-- Pokud některá hodina nemá dost údajů pro výpočet, vynech ji z čitatele i jmenovatele. Pokud nelze výkon při 100% dostupnosti spolehlivě spočítat, použij jako nouzovou zálohu aritmetický průměr (Výkon * Dostupnost / 100).
+- Z každého skutečného hodinového řádku přečti reálný výstup (ks), Výkon (%), Dostupnost (%) a normu (ks/h).
+- Norma uvedená ve screenshotu je hodinová norma po zohlednění dostupnosti. Pro výpočet normy při 100% dostupnosti ji přepočítej: norma_100 = norma / dostupnost * 100.
+- Směnový výkon při 100% dostupnosti počítej jako SUM(skutečný výstup) / předpokládaný výstup směny * 100.
+- Dostupnost se nepoužívá jako další penalizace výkonu – její vliv už je zahrnut v normě dané hodiny.
+- Pokud `actual_output` není čitelný, můžeš jako zálohu použít zobrazenou normu × Výkon / 100, ale preferuj vždy hodnotu ze sloupce reálný.
+- Pokud některá hodina nemá dost údajů pro výpočet, vynech ji. Nikdy nevymýšlej chybějící hodnotu.
 
 PRAVIDLA PRO DOSTUPNOST:
 - Do hourly_metrics vlož všechny skutečné hodinové řádky směny, které lze přečíst. Nezapisuj souhrnný řádek OEE jako hodinový řádek.
-- available_time u pracovníků je aritmetický průměr platných hodinových Dostupností, protože zde jde o reportovanou dostupnost, ne o výpočet normy.
+- available_time u pracovníků je aritmetický průměr platných hodinových Dostupností, protože zde jde o reportovanou dostupnost.
 - Pokud je hodnota z některé hodiny nečitelná, dej ji null; průměr se počítá pouze z platných hodin.
-- Pro screenshot s hodinami 22,23,0,1,2,3,4,5 se počítá ze všech platných hodin – první a poslední hodina se kvůli průměru NEVYNECHÁVAJÍ.
 
 PRAVIDLA PRO NORMU PRODUKTU:
 - Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
@@ -120,49 +140,60 @@ function avg(values: number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function effectiveHourWeights(hourlyCount: number): number[] {
+  if (hourlyCount <= 0) return [];
+  const weights = Array.from({ length: hourlyCount }, () => 1);
+  if (hourlyCount === 1) {
+    weights[0] = (SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES) / 60;
+    return weights;
+  }
+  weights[0] -= START_PREP_MINUTES / 60;
+  weights[hourlyCount - 1] -= END_CLEANUP_MINUTES / 60;
+  if (hourlyCount >= 3) {
+    const middle = Math.floor(hourlyCount / 2);
+    weights[middle] -= BREAK_MINUTES / 60;
+  }
+  return weights;
+}
+
 /**
- * Přepočítá směnový výkon na normu při 100% dostupnosti.
- *
- * Screenshot uvádí normu už po zohlednění dostupnosti. Proto pro každou hodinu:
- *   norma_100 = norma / (dostupnost / 100)
- *   skutečný_výstup = norma * výkon / 100
- * a směnový výkon = SUM(skutečný_výstup) / SUM(norma_100) * 100.
- * Dostupnost se tímto výpočtem nepřičítá jako další penalizace výkonu.
+ * Předpokládaný výstup při 100% dostupnosti a plánovaném výrobním čase.
+ * U běžné osmihodinové směny: 50 + 60 + 60 + 60 + 30 + 60 + 60 + 55 = 435 min.
  */
-function normalizedPerformanceAtFullAvailability(hourly: Record<string, unknown>[]): number | null {
-  let actualTotal = 0;
-  let fullNormTotal = 0;
-  let fallbackSum = 0;
-  let fallbackCount = 0;
+function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null {
+  if (!hourly.length) return null;
+  const weights = effectiveHourWeights(hourly.length);
+  let total = 0;
+  let used = 0;
 
-  for (const hour of hourly) {
-    const performance = toNum(hour["performance_pct"]);
-    const availability = toNum(hour["availability_pct"]);
+  for (let i = 0; i < hourly.length; i += 1) {
+    const hour = hourly[i];
     const displayedNorm = toNum(hour["norm_per_hour"]);
-
-    if (performance !== null && availability !== null) {
-      const fallback = performance * availability / 100;
-      fallbackSum += fallback;
-      fallbackCount += 1;
-    }
-
-    if (
-      performance === null ||
-      availability === null ||
-      displayedNorm === null ||
-      availability <= 0
-    ) continue;
-
+    const availability = toNum(hour["availability_pct"]);
+    if (displayedNorm === null || availability === null || availability <= 0) continue;
     const fullNorm = displayedNorm / (availability / 100);
-    const actualOutput = displayedNorm * (performance / 100);
-    if (!Number.isFinite(fullNorm) || !Number.isFinite(actualOutput) || fullNorm <= 0) continue;
-
-    fullNormTotal += fullNorm;
-    actualTotal += actualOutput;
+    if (!Number.isFinite(fullNorm) || fullNorm <= 0) continue;
+    total += fullNorm * weights[i];
+    used += weights[i];
   }
 
-  if (fullNormTotal > 0) return (actualTotal / fullNormTotal) * 100;
-  return fallbackCount ? fallbackSum / fallbackCount : null;
+  return used > 0 ? total : null;
+}
+
+function actualOutputForHour(hour: Record<string, unknown>): number | null {
+  const actual = toNum(hour["actual_output"]);
+  if (actual !== null) return actual;
+  const performance = toNum(hour["performance_pct"]);
+  const displayedNorm = toNum(hour["norm_per_hour"]);
+  if (performance === null || displayedNorm === null) return null;
+  return displayedNorm * (performance / 100);
+}
+
+function normalizedPerformanceAtFullAvailability(hourly: Record<string, unknown>[]): number | null {
+  const expected = predictedShiftOutput(hourly);
+  if (expected === null || expected <= 0) return null;
+  const actual = hourly.map(actualOutputForHour).filter((v): v is number => v !== null).reduce((sum, value) => sum + value, 0);
+  return (actual / expected) * 100;
 }
 
 function normalizeWorkDate(value: unknown): string | null {
@@ -234,7 +265,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
             messages: [
               { role: "system", content: SYSTEM },
               { role: "user", content: [
-                { type: "text", text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky, všechny produkty, jejich Výkon, Dostupnost a hodinovou normu. Při přejezdu na jiný produkt zachovej product_code u každé hodiny." },
+                { type: "text", text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky, skutečný výstup ze sloupce reálný, všechny produkty, jejich Výkon, Dostupnost a hodinovou normu. Při přejezdu na jiný produkt zachovej product_code u každé hodiny." },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
               ] },
             ],
@@ -268,9 +299,10 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     const hourlyRaw = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
     const performanceValues = hourlyRaw.map((h) => toNum(h["performance_pct"])).filter((v): v is number => v !== null);
     const availabilityValues = hourlyRaw.map((h) => toNum(h["availability_pct"])).filter((v): v is number => v !== null);
-    const shiftPerformance = normalizedPerformanceAtFullAvailability(hourlyRaw) ?? avg(performanceValues.map((value, index) => value * (toNum(hourlyRaw[index]?.["availability_pct"]) ?? 100) / 100));
+    const shiftPerformance = normalizedPerformanceAtFullAvailability(hourlyRaw) ?? avg(performanceValues);
     const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
     const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
+    const predictedOutput = predictedShiftOutput(hourlyRaw);
 
     const productCodes = new Set<string>();
     for (const h of hourlyRaw) {
@@ -334,5 +366,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       products,
       header_confidence: toNum(parsed["header_confidence"]) ?? 0.5,
       rows,
+      predicted_shift_output: predictedOutput,
+      productive_minutes: hourlyRaw.length >= 3 ? SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES : null,
     };
   });
