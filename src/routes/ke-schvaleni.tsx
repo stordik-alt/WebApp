@@ -98,24 +98,27 @@ function ApprovalPage() {
   const { data: rows = [], isLoading, error } = usePending();
   const { data: employees = [] } = useEmployees();
   const [selected, setSelected] = useState<PendingRow | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const empName = (id: unknown) => employees.find((e) => e.id === id)?.full_name ?? "?";
 
   const decide = useMutation({
-    mutationFn: async ({ row, approve }: { row: PendingRow; approve: boolean }) => {
+    mutationFn: async ({ row, approve, reason }: { row: PendingRow; approve: boolean; reason?: string }) => {
       if (!isAdmin) throw new Error("Schvalovat záznamy může pouze správce.");
+      if (!approve && !reason?.trim()) throw new Error("Při zamítnutí je nutné uvést důvod.");
 
-      const { error: updateError } = await supabase
-        .from(row.table)
-        .update({
-          approval_status: approve ? "approved" : "rejected",
-          approved_by: approve ? session?.user.id ?? null : null,
-          approved_at: new Date().toISOString(),
-        })
+      const updatePayload: Record<string, unknown> = {
+        approval_status: approve ? "approved" : "rejected",
+        approved_by: approve ? session?.user.id ?? null : null,
+        approved_at: new Date().toISOString(),
+      };
+      if (!approve) updatePayload.rejection_reason = reason!.trim();
+
+      const { error: updateError } = await (supabase.from(row.table) as any)
+        .update(updatePayload)
         .eq("id", row.id)
         .eq("approval_status", "pending");
       if (updateError) throw updateError;
 
-      // Schválené vyšetření alertu se propíše do týdenního záznamu.
       if (approve && row.table === "quality_alert_history") {
         const d = row.data;
         const { error: we } = await supabase
@@ -133,12 +136,20 @@ function ApprovalPage() {
     },
     onSuccess: (_, variables) => {
       setSelected(null);
+      setRejectionReason("");
       qc.invalidateQueries({ queryKey: ["pending"] });
       qc.invalidateQueries();
       toast.success(variables.approve ? "Záznam byl schválen a zařazen do statistik." : "Záznam byl zamítnut.");
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const reject = (row: PendingRow) => {
+    const reason = window.prompt("Uveďte důvod zamítnutí:", "");
+    if (!reason?.trim()) return;
+    setRejectionReason(reason.trim());
+    decide.mutate({ row, approve: false, reason: reason.trim() });
+  };
 
   return (
     <AppShell
@@ -207,11 +218,7 @@ function ApprovalPage() {
                     size="sm"
                     variant="destructive"
                     disabled={decide.isPending}
-                    onClick={() => {
-                      if (window.confirm("Opravdu chcete tento záznam zamítnout?")) {
-                        decide.mutate({ row, approve: false });
-                      }
-                    }}
+                    onClick={() => reject(row)}
                   >
                     Zamítnout
                   </Button>
@@ -251,11 +258,7 @@ function ApprovalPage() {
                 <Button
                   variant="destructive"
                   disabled={decide.isPending}
-                  onClick={() => {
-                    if (window.confirm("Opravdu chcete tento záznam zamítnout?")) {
-                      decide.mutate({ row: selected, approve: false });
-                    }
-                  }}
+                  onClick={() => reject(selected)}
                 >
                   Zamítnout
                 </Button>
