@@ -155,8 +155,8 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       }
       const product = productByCode.get(drafts[0].product_code);
       if (!product) throw new Error("Produkt se nepodařilo dohledat.");
-      const records = selected.map((r) => ({ employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }));
-      const { error } = await supabase.from("shift_records").insert(records);
+      const records = selected.map((r) => ({ employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, position: r.position, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }));
+      const { error } = await supabase.from("daily_records").insert(records);
       if (error) throw error;
       return selected.length;
     },
