@@ -418,16 +418,22 @@ function DailyPage() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button
                 className="h-12"
-                onClick={() => create.mutate("single")}
-                disabled={!canSaveOrUpdate || create.isPending}
+                onClick={() => {
+                  if (editingRecord) update.mutate(editingRecord.id);
+                  else create.mutate("single");
+                }}
+                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
               >
                 <Save className="h-4 w-4" /> {editingRecord ? "Uložit změny" : "Uložit záznam"}
               </Button>
               <Button
                 variant="secondary"
                 className="h-12"
-                onClick={() => create.mutate("another")}
-                disabled={!canSaveOrUpdate || create.isPending}
+                onClick={() => {
+                  if (editingRecord) update.mutate(editingRecord.id);
+                  else create.mutate("another");
+                }}
+                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
               >
                 <Plus className="h-4 w-4" />{" "}
                 {editingRecord ? "Uložit a pokračovat" : "Uložit a přidat další"}
