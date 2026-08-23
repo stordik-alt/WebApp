@@ -1,4 +1,4 @@
-name: One-time OCR build fix
+name: One-time screenshot import build fix
 
 on:
   push:
@@ -6,31 +6,37 @@ on:
 
 jobs:
   fix:
-    if: ${{ !contains(github.event.head_commit.message, 'fix: OCR prompt syntax') }}
+    if: ${{ !contains(github.event.head_commit.message, 'fix: screenshot import build') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Fix template literal syntax
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Patch ScreenshotImport syntax
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('src/lib/ocr.functions.ts')
+          p = Path('src/components/ScreenshotImport.tsx')
           s = p.read_text(encoding='utf-8')
-          start = s.index('const SYSTEM = `')
-          marker = '`;\n\nfunction toNum'
-          end = s.index(marker, start)
-          block = s[start:end]
-          opening = 'const SYSTEM = `'
-          inner = block[len(opening):]
-          inner = inner.replace('`', "'")
-          p.write_text(s[:start] + opening + inner + s[end:], encoding='utf-8')
+          old = '\n      }\n\n      const savedProducts: { id: string; code: string }[] = [];'
+          new = '\n      };\n\n      const savedProducts: { id: string; code: string }[] = [];'
+          if old not in s:
+              raise SystemExit('Expected ScreenshotImport syntax pattern not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
           PY
+      - name: Verify production build
+        run: npm ci && npm run build
+      - name: Commit verified fix and remove workflow
+        shell: bash
+        run: |
           rm .github/workflows/fix-ocr-build.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/lib/ocr.functions.ts .github/workflows/fix-ocr-build.yml
-          git commit -m 'fix: OCR prompt syntax'
+          git add src/components/ScreenshotImport.tsx .github/workflows/fix-ocr-build.yml
+          git commit -m 'fix: screenshot import build'
           git push
