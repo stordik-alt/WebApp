@@ -261,20 +261,30 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm"><strong>{stage === "products" ? "1/3 Produkty" : stage === "employees" ? "2/3 Zaměstnanci" : stage === "hourly" ? "3/3 Hodinová data" : "Import připraven"}</strong>{" – "}{stage === "products" ? "Nejprve se porovnávají Product ID s databází." : stage === "employees" ? "Po vyřešení zaměstnanců se načtou hodinová data." : stage === "hourly" ? "Probíhá načtení norem, dostupnosti, výkonu a hodinových hodnot." : "Zkontrolujte všechna rozpoznaná data před uložením."}</div>
       <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><strong>Zkontrolujte importovaná data.</strong> Zvýrazněné hodnoty jsou nejisté nebo chybí.</div>
       {productDrafts.length > 0 ? <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
-        <div className="mb-2 text-sm font-semibold">Rozpoznané Product ID a normy</div>
+        <div className="mb-2 text-sm font-semibold">Rozpoznané Product ID</div>
         <div className="grid gap-2">
           {productDrafts.map((p) => {
             const existing = findProductByCode(allProducts, p.product_code);
             const operation: "HA" | "TUP" = /^T_/i.test(p.product_code) ? "TUP" : "HA";
             const dbNorm = existing ? currentNorm(norms, existing.id, operation)?.norm_per_hour : null;
             const importNorm = dbNorm ?? p.norm_per_hour;
-            return <div key={p.key} className="grid grid-cols-[1fr_auto] gap-2 rounded border p-2 sm:grid-cols-[1fr_180px_auto] sm:items-center">
-              <div><div className="font-medium">{p.product_code}</div><div className="text-[11px] text-muted-foreground">jistota {Math.round(p.confidence * 100)} % · {existing ? "Product ID evidováno" : "čeká na založení"}</div></div>
-              <div className="text-sm font-medium">{importNorm != null ? `${importNorm} ks/h` : "norma chybí"}</div>
-              <div className="text-xs text-muted-foreground">{existing ? "norma z Product ID" : "norma z OCR bude použita při založení"}</div>
+            const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === p.product_code.trim().toLowerCase());
+            return <div key={p.key} className="rounded border p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div><div className="font-medium">{p.product_code}</div><div className="text-[11px] text-muted-foreground">jistota {Math.round(p.confidence * 100)} % · {existing ? "Product ID evidováno" : "nové Product ID"}</div></div>
+                {existing ? <span className="text-xs text-muted-foreground">norma z Product ID</span> : <span className="text-xs text-warning">nutno založit</span>}
+              </div>
+              {existing ? <div className="text-sm font-medium">{importNorm != null ? `${importNorm} ks/h` : "norma chybí"}</div> : setup ? <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5"><Label>Norma (ks/h) *</Label><Input type="number" min="0.1" step="0.1" inputMode="decimal" value={setup.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div>
+                <div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={setup.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, capacity: e.target.value } : x))} /></div>
+              </div> : null}
             </div>;
           })}
         </div>
+        {missingProductCodes.length > 0 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 p-3">
+          <span className="text-sm">Nové Product ID vyžadují potvrzení normy a kapacity.</span>
+          <Button type="button" disabled={productSetupSaving || !productSetupDrafts.length} onClick={() => void createProductIds()}><Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit ${missingProductCodes.length} Product ID a pokračovat`}</Button>
+        </div> : null}
       </div> : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4"><div className="grid gap-1"><Label>Datum</Label><Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} /></div><div className="grid gap-1"><Label>Směna</Label><Select value={shift} onValueChange={setShift}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SHIFTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1"><Label>Linka</Label><Input value={line} onChange={(e) => setLine(e.target.value)} placeholder="např. L1" /></div><div className="grid gap-1"><Label>Kód produktu</Label><Input value={productCode} onChange={(e) => setProductCode(e.target.value)} /></div></div>
       {(duplicateNames.length || otherLineNotices.length) ? <div className="grid gap-2">{duplicateNames.length ? <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm"><strong>Duplicitní řádky:</strong> {duplicateNames.join(", ")}</div> : null}{otherLineNotices.length ? <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><strong>Upozornění:</strong> {otherLineNotices.map((x) => `${x.name}: ${x.lines.join(", ")}`).join("; ")}</div> : null}</div> : null}
