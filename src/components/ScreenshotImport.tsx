@@ -34,6 +34,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const [busy, setBusy] = useState(false); const [stage, setStage] = useState<ImportStage>("products"); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [workDate, setWorkDate] = useState(""); const [shift, setShift] = useState<string>(SHIFTS[0]); const [line, setLine] = useState(""); const [productCode, setProductCode] = useState(""); const [normValue, setNormValue] = useState(""); const [productDrafts, setProductDrafts] = useState<DraftProduct[]>([]); const [rows, setRows] = useState<DraftRow[]>([]);
   const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]); const [employeeSetupOpen, setEmployeeSetupOpen] = useState(false); const [addEmployeeOpen, setAddEmployeeOpen] = useState(false); const [addEmployeeRowKey, setAddEmployeeRowKey] = useState<string | null>(null); const [addEmployeeName, setAddEmployeeName] = useState(""); const [addEmployeePersonalNo, setAddEmployeePersonalNo] = useState("");
   const [newProductModalOpen, setNewProductModalOpen] = useState(false); const [productSetupSaving, setProductSetupSaving] = useState(false); const [productSetupDrafts, setProductSetupDrafts] = useState<ProductSetupDraft[]>([]); const [createdProducts, setCreatedProducts] = useState<Product[]>([]);
+  const [productIdName, setProductIdName] = useState("");
   const [hourlyMetrics, setHourlyMetrics] = useState<OcrHourlyMetric[]>([]);
   const activeEmployees = useMemo(() => [...employees, ...addedEmployees].filter((e) => e.active), [employees, addedEmployees]);
   const allProducts = useMemo(() => {
@@ -79,6 +80,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   });
 
   const openProductSetup = (detected: DraftProduct[]) => {
+    setProductIdName("");
     // Product ID se zakládá po dvojicích H_/T_. Pokud OCR přečte pouze jednu
     // variantu, nabídneme automaticky i chybějící protějšek. Díky tomu lze
     // při prvním založení vždy zadat normu a kapacitu i pro TUP.
@@ -177,7 +179,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
                 .or("h_product_id.eq." + hProduct.id + ",t_product_id.eq." + tProduct.id).maybeSingle();
               if (familyLookupError && !/does not exist|relation/i.test(familyLookupError.message)) throw familyLookupError;
               if (!existingFamily) {
-                const familyName = draft.name.trim();
+                const familyName = productIdName.trim();
                 const { data: family, error: familyError } = await (supabase.from("product_families") as any)
                   .insert({ name: familyName, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("*").single();
                 if (familyError) throw familyError;
@@ -400,6 +402,11 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
             <div className="font-semibold">OCR našel nové Product ID / varianty</div>
             <div className="mt-1 text-muted-foreground">H_ a T_ jsou dvě varianty jednoho Product ID. Kódy se mohou lišit, např. H_32346264-005 a T_S4962V3538. Každá varianta může mít vlastní název, normu i kapacitu.</div>
           </div>
+          <div className="grid gap-1.5">
+            <Label>Název Product ID *</Label>
+            <Input value={productIdName} onChange={(e) => setProductIdName(e.target.value)} placeholder="Zadejte vlastní název Product ID" autoFocus />
+            <p className="text-xs text-muted-foreground">Název patří celé produktové rodině. H_ a T_ mohou mít vlastní názvy variant.</p>
+          </div>
           <div className="grid gap-3">
             {productSetupDrafts.map((draft) => (
               <div key={draft.key} className="rounded-lg border p-4">
@@ -418,7 +425,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={productSetupSaving} onClick={() => setNewProductModalOpen(false)}>Zrušit</Button>
-          <Button disabled={productSetupSaving || !productSetupDrafts.length} onClick={async () => { try { await createProductIds(); } catch (e) { toast.error((e as Error).message); } }}>
+          <Button disabled={productSetupSaving || !productSetupDrafts.length || !productIdName.trim()} onClick={async () => { try { await createProductIds(); } catch (e) { toast.error((e as Error).message); } }}>
             <Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit položky a pokračovat`}
           </Button>
         </DialogFooter>
