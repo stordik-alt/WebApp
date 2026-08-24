@@ -68,7 +68,10 @@ export function useProducts() {
   return useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("products").select("*").eq("approval_status", "approved").order("code");
+      // Import musí znát i Product ID, které je právě založené jako návrh
+      // (approval_status = pending). Jinak OCR mylně vyhodnotí existující
+      // Product ID jako nový produkt a nabídne jeho založení znovu.
+      const { data, error } = await supabase.from("products").select("*").order("code");
       if (error) throw error;
       return (data ?? []) as unknown as Product[];
     },
