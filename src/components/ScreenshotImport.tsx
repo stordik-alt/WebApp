@@ -18,7 +18,7 @@ import { useApprovalFields } from "@/lib/auth";
 
 type DraftRow = { key: string; ocrName: string; employeeId: string | null; position: "HA" | "TUP"; oee: string; performance: string; availableTime: string; helpScore: string; confidence: number; include: boolean };
 type DraftProduct = OcrProduct & { key: string; employees_per_product: number | null };
-type ProductSetupDraft = { key: string; code: string; norm: string; capacity: string; confidence: number };
+type ProductSetupDraft = { key: string; code: string; name: string; norm: string; capacity: string; confidence: number };
 type ImportStage = "products" | "employees" | "hourly" | "ready";
 const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 function matchEmployee(name: string, employees: Employee[]): Employee | undefined { const n = strip(name); if (!n) return undefined; const exact = employees.find((e) => strip(e.full_name) === n); if (exact) return exact; const parts = n.split(/\s+/).filter(Boolean); return employees.find((e) => { const en = strip(e.full_name); return parts.length > 1 && parts.every((p) => en.includes(p)); }); }
@@ -103,6 +103,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       return {
         key: i + "-" + code,
         code,
+        name: "",
         norm: detectedProduct?.norm_per_hour != null ? String(detectedProduct.norm_per_hour) : "",
         capacity: "1",
         confidence: detectedProduct?.confidence ?? 0.5,
@@ -117,41 +118,80 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     try {
       const date = workDate || new Date().toISOString().slice(0, 10);
       const created: Product[] = [];
+      const processedFamilyKeys = new Set<string>();
+
+      // H_ a T_ jsou dvě varianty JEDNOHO Product ID (jedné produktové rodiny).
+      // Jejich kódy mohou být zcela odlišné, např. H_32346264-005 / T_S4962V3538.
+      const draftByCode = new Map(productSetupDrafts.map((d) => [d.code.trim().toLowerCase(), d]));
       for (const draft of productSetupDrafts) {
         const code = draft.code.trim();
         const norm = Number(draft.norm);
         const capacity = Number(draft.capacity);
+        const name = draft.name.trim();
         if (!code) throw new Error("Každý Product ID musí mít kód.");
-        if (!Number.isFinite(norm) || norm <= 0) throw new Error(`Zadejte platnou normu pro ${code}.`);
-        if (!Number.isInteger(capacity) || capacity < 1) throw new Error(`Zadejte platnou kapacitu operátorů pro ${code}.`);
-        const already = findProductByCode(allProducts, code) ?? created.find((p) => p.code.trim().toLowerCase() === code.toLowerCase());
-        const product = already ?? (await (async () => {
-          const base = code.replace(/^[HT]_?/i, "");
+        if (!name) throw new Error("Zadejte název pro " + code + ".");
+        if (!Number.isFinite(norm) || norm <= 0) throw new Error("Zadejte platnou normu pro " + code + ".");
+        if (!Number.isInteger(capacity) || capacity < 1) throw new Error("Zadejte platnou kapacitu operátorů pro " + code + ".");
+
+        const isH = /^H_/i.test(code);
+        const isT = /^T_/i.test(code);
+        let product = findProductByCode(allProducts, code) ?? created.find((p) => p.code.trim().toLowerCase() === code.toLowerCase());
+        if (!product) {
           const { data, error } = await supabase.from("products").insert({
-            code,
-            name: base ? `Produkt ${base}` : code,
-            employees_per_product: capacity,
-            first_seen_date: date,
-            ...approval(),
+            code, name, employees_per_product: capacity, first_seen_date: date, ...approval(),
           }).select("*").single();
           if (error) throw error;
-          return data as Product;
-        })());
-        if (!already) {
-          const operation: "HA" | "TUP" = /^T_/i.test(code) ? "TUP" : "HA";
+          product = data as Product;
+        } else {
+          const { data, error } = await supabase.from("products").update({
+            name, employees_per_product: capacity,
+          }).eq("id", product.id).select("*").single();
+          if (error) throw error;
+          product = data as Product;
+        }
+
+        if (!findProductByCode(allProducts, code)) {
+          const operation: "HA" | "TUP" = isT ? "TUP" : "HA";
           const { error: normError } = await supabase.from("product_norms").insert({
-            product_id: product.id,
-            operation,
-            norm_per_hour: norm,
-            valid_from: date,
-            source: "screenshot",
-            confirmed: true,
-            note: "Norma vytvořená při importu screenshotu",
-            ...approval(),
+            product_id: product.id, operation, norm_per_hour: norm,
+            valid_from: date, source: "screenshot", confirmed: true,
+            note: "Norma vytvořená při importu screenshotu", ...approval(),
           });
           if (normError) throw normError;
         }
         created.push(product);
+
+        if (isH || isT) {
+          const otherDraft = productSetupDrafts.find((d) => d.key !== draft.key && (isH ? /^T_/i.test(d.code.trim()) : /^H_/i.test(d.code.trim())));
+          const otherCode = otherDraft?.code.trim();
+          const otherProduct = otherCode
+            ? (findProductByCode(allProducts, otherCode) ?? created.find((p) => p.code.trim().toLowerCase() === otherCode.toLowerCase()))
+            : undefined;
+          if (otherProduct && otherProduct.id !== product.id) {
+            const hProduct = isH ? product : otherProduct;
+            const tProduct = isH ? otherProduct : product;
+            const familyKey = [hProduct.id, tProduct.id].sort().join(":");
+            if (!processedFamilyKeys.has(familyKey)) {
+              const { data: existingFamily, error: familyLookupError } = await (supabase.from("product_families") as any)
+                .select("id,h_product_id,t_product_id,name")
+                .or("h_product_id.eq." + hProduct.id + ",t_product_id.eq." + tProduct.id).maybeSingle();
+              if (familyLookupError && !/does not exist|relation/i.test(familyLookupError.message)) throw familyLookupError;
+              if (!existingFamily) {
+                const familyName = draft.name.trim();
+                const { data: family, error: familyError } = await (supabase.from("product_families") as any)
+                  .insert({ name: familyName, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("*").single();
+                if (familyError) throw familyError;
+                const { error: linkError } = await (supabase.from("products") as any)
+                  .update({ family_id: family.id, variant_type: "H" }).eq("id", hProduct.id);
+                if (linkError) throw linkError;
+                const { error: tLinkError } = await (supabase.from("products") as any)
+                  .update({ family_id: family.id, variant_type: "T" }).eq("id", tProduct.id);
+                if (tLinkError) throw tLinkError;
+              }
+              processedFamilyKeys.add(familyKey);
+            }
+          }
+        }
       }
       setCreatedProducts((prev) => {
         const byCode = new Map(prev.map((p) => [p.code.trim().toLowerCase(), p]));
@@ -357,8 +397,8 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         <DialogHeader><DialogTitle>1/3 – Kontrola / založení Product ID</DialogTitle></DialogHeader>
         <div className="grid gap-4">
           <div className="rounded-xl border bg-muted/20 p-4 text-sm">
-            <div className="font-semibold">OCR našel více Product ID</div>
-            <div className="mt-1 text-muted-foreground">Každý rozpoznaný kód musí být v databázi. Existující kódy se pouze zkontrolují, nové založíme všechny najednou. Norma se uloží přímo k Product ID.</div>
+            <div className="font-semibold">OCR našel nové Product ID / varianty</div>
+            <div className="mt-1 text-muted-foreground">H_ a T_ jsou dvě varianty jednoho Product ID. Kódy se mohou lišit, např. H_32346264-005 a T_S4962V3538. Každá varianta může mít vlastní název, normu i kapacitu.</div>
           </div>
           <div className="grid gap-3">
             {productSetupDrafts.map((draft) => (
@@ -368,7 +408,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
                   <span className="text-xs text-warning">nový Product ID</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="grid gap-1.5 sm:col-span-2"><Label>Název / popis</Label><Input value={draft.code.replace(/^[HT]_?/i, "")} disabled /></div>
+                  <div className="grid gap-1.5 sm:col-span-2"><Label>Název varianty / produktu *</Label><Input value={draft.name} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, name: e.target.value } : x))} placeholder={/^H_/i.test(draft.code) ? "Např. 32346264-005" : "Např. S4962V3538"} /></div>
                   <div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={draft.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, capacity: e.target.value } : x))} /></div>
                   <div className="grid gap-1.5 sm:col-span-3"><Label>Norma (ks/h) *</Label><Input type="number" inputMode="decimal" min="0.1" step="0.1" value={draft.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div>
                 </div>
@@ -379,7 +419,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         <DialogFooter>
           <Button variant="outline" disabled={productSetupSaving} onClick={() => setNewProductModalOpen(false)}>Zrušit</Button>
           <Button disabled={productSetupSaving || !productSetupDrafts.length} onClick={async () => { try { await createProductIds(); } catch (e) { toast.error((e as Error).message); } }}>
-            <Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit ${productSetupDrafts.length} Product ID a pokračovat`}
+            <Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit položky a pokračovat`}
           </Button>
         </DialogFooter>
       </DialogContent>
