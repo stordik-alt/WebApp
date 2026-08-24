@@ -153,15 +153,25 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     setBusy(true); setStage("employees");
     try {
       const r = await extractStage({ data: { imageDataUrl, stage: "employees" } });
+      // Načti čerstvý seznam zaměstnanců přímo z DB. Props mohou být po předchozím
+      // importu ještě chvíli zastaralé a pak by OCR jméno zůstalo nepřiřazené.
+      const { data: dbEmployees, error: employeeLoadError } = await supabase.from("employees").select("*").eq("active", true);
+      if (employeeLoadError) throw employeeLoadError;
+      const freshEmployees = (dbEmployees ?? []) as Employee[];
+      const employeePool = [...freshEmployees, ...addedEmployees];
       setResult((prev) => ({ ...(prev ?? r), work_date: prev?.work_date ?? r.work_date, shift: prev?.shift ?? r.shift, line: prev?.line ?? r.line, product_code: prev?.product_code ?? r.product_code, norm_per_hour: prev?.norm_per_hour ?? r.norm_per_hour, products: prev?.products?.length ? prev.products : r.products, header_confidence: Math.max(prev?.header_confidence ?? 0, r.header_confidence), rows: r.rows, hourly_metrics: prev?.hourly_metrics ?? [], predicted_shift_output: prev?.predicted_shift_output ?? null, productive_minutes: prev?.productive_minutes ?? null }));
       const fallbackPosition: "HA" | "TUP" = productDrafts.some((p) => /^T_/i.test(p.product_code)) ? "TUP" : "HA";
       const nextRows: DraftRow[] = r.rows.map((row, i) => {
-        const emp = matchEmployee(row.employee_name, activeEmployees);
+        const emp = matchEmployee(row.employee_name, employeePool);
         return { key: i + "-" + (row.employee_name || "manual"), ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? fallbackPosition, oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true };
       });
       setRows(nextRows);
-      if (!nextRows.length || nextRows.some((r) => r.include && !r.employeeId)) { setEmployeeSetupOpen(true); if (!nextRows.length) toast.warning("OCR zaměstnanců nevrátil žádný čitelný řádek. Hodinová data se zatím nespustí."); }
-      else await runHourlyStage(imageDataUrl, nextRows);
+      if (!nextRows.length || nextRows.some((r) => r.include && !r.employeeId)) {
+        setEmployeeSetupOpen(true);
+        if (!nextRows.length) toast.warning("OCR zaměstnanců nevrátil žádný čitelný řádek. Hodinová data se zatím nespustí.");
+      } else {
+        await runHourlyStage(imageDataUrl, nextRows);
+      }
     } catch (e) { toast.error("OCR zaměstnanců se nepodařilo dokončit: " + (e as Error).message); setStage("employees"); }
     finally { setBusy(false); }
   };
@@ -228,7 +238,14 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const confirmImport = useMutation({
     mutationFn: async () => {
       if (!line.trim()) throw new Error("Doplňte linku."); const l = line.trim().toLowerCase();
-      const selected = rows.filter((r) => r.include && r.employeeId && !existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)); if (!selected.length) throw new Error("Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.");
+      const includedRows = rows.filter((r) => r.include);
+      const unresolved = includedRows.filter((r) => !r.employeeId);
+      if (unresolved.length) throw new Error(`Nelze importovat: ${unresolved.length} ${unresolved.length === 1 ? "řádek nemá přiřazeného zaměstnance" : "řádky nemají přiřazeného zaměstnance"}. Přiřaďte nebo vytvořte zaměstnance.`);
+      const selected = includedRows.filter((r) => r.employeeId && !existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l));
+      if (!selected.length) {
+        const duplicateCount = includedRows.filter((r) => r.employeeId && existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)).length;
+        throw new Error(`Všechny vybrané řádky už jsou pro datum ${workDate}, směnu ${shift} a linku ${line.trim()} uložené (duplicitních řádků: ${duplicateCount}).`);
+      }
       const drafts = productDrafts.filter((p) => p.product_code.trim()); if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null }); if (!drafts.length) throw new Error("Screenshot neobsahuje žádný rozpoznaný produkt.");
       const productByCode = new Map<string, Product>();
       for (const d of drafts) {
