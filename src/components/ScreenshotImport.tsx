@@ -42,10 +42,8 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     return Array.from(byCode.values());
   }, [products, createdProducts]);
   const primaryProductCode = productDrafts[0]?.product_code || productCode.trim();
-  const existingProduct: Product | undefined = useMemo(() => findProductByCode(allProducts, primaryProductCode), [products, primaryProductCode]);
-  const haNorm: ProductNorm | undefined = existingProduct ? currentNorm(norms, existingProduct.id, "HA") : undefined;
   const normNum = normValue === "" ? null : Number(normValue);
-  const missingProductCodes = useMemo(() => productDrafts.filter((p) => !findProductByCode(allProducts, p.product_code)).map((p) => p.product_code), [productDrafts, products]);
+  const missingProductCodes = useMemo(() => productDrafts.filter((p) => !findProductByCode(allProducts, p.product_code)).map((p) => p.product_code), [productDrafts, allProducts]);
   const patch = (key: string, p: Partial<DraftRow>) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...p } : r)));
   const reset = () => { setStage("products"); setResult(null); setHourlyMetrics([]); setEmployeeSetupOpen(false); setRows([]); setProductDrafts([]); setScreenshotPath(null); setPreviewUrl(null); setProductCode(""); setNormValue(""); setAddedEmployees([]); setAddEmployeeOpen(false); setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); setNewProductModalOpen(false); setProductSetupSaving(false); setProductSetupDrafts([]); setCreatedProducts([]); if (fileRef.current) fileRef.current.value = ""; };
   const openAddEmployee = (row: DraftRow) => { setAddEmployeeRowKey(row.key); setAddEmployeeName(row.ocrName.trim()); setAddEmployeePersonalNo(""); setAddEmployeeOpen(true); };
@@ -233,12 +231,14 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       const selected = rows.filter((r) => r.include && r.employeeId && !existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)); if (!selected.length) throw new Error("Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.");
       const drafts = productDrafts.filter((p) => p.product_code.trim()); if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null }); if (!drafts.length) throw new Error("Screenshot neobsahuje žádný rozpoznaný produkt.");
       const productByCode = new Map<string, Product>();
-      for (const d of drafts) { const existing = findProductByCode(allProducts, d.product_code); if (existing) productByCode.set(d.product_code.toLowerCase(), existing); }
-      if (productFamily) { productByCode.set(productFamily.hProduct.code.toLowerCase(), productFamily.hProduct); productByCode.set(productFamily.tProduct.code.toLowerCase(), productFamily.tProduct); }
-      if (missingProductCodes.length && !productFamily) throw new Error("Nejprve dokončete založení Product ID v okně pro nový produkt.");
-      const primary = productByCode.get(drafts[0].product_code.toLowerCase());
-      const hProduct = productFamily?.hProduct || productByCode.get((drafts.find((d) => /^H_/i.test(d.product_code))?.product_code || "").toLowerCase());
-      const tProduct = productFamily?.tProduct || productByCode.get((drafts.find((d) => /^T_/i.test(d.product_code))?.product_code || "").toLowerCase());
+      for (const d of drafts) {
+        const existing = findProductByCode(allProducts, d.product_code);
+        if (existing) productByCode.set(d.product_code.trim().toLowerCase(), existing);
+      }
+      if (missingProductCodes.length) throw new Error("Nejprve dokončete kontrolu/založení všech Product ID v prvním kroku.");
+      const primary = productByCode.get(drafts[0].product_code.trim().toLowerCase());
+      const hProduct = productByCode.get((drafts.find((d) => /^H_/i.test(d.product_code))?.product_code || "").trim().toLowerCase());
+      const tProduct = productByCode.get((drafts.find((d) => /^T_/i.test(d.product_code))?.product_code || "").trim().toLowerCase());
       if (!primary && !hProduct && !tProduct) throw new Error("Produkt se nepodařilo dohledat.");
       const records = selected.map((r) => { const positionProduct = r.position === "TUP" ? tProduct : hProduct; const product = positionProduct || primary; if (!product) throw new Error(`Pro pozici ${r.position} nebyl nalezen Product ID.`); return { employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, position: r.position, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }; });
       const { error } = await supabase.from("daily_records").insert(records);
