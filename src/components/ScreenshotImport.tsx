@@ -131,7 +131,6 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         const capacity = Number(draft.capacity);
         const name = draft.name.trim();
         if (!code) throw new Error("Každý Product ID musí mít kód.");
-        if (!name) throw new Error("Zadejte název pro " + code + ".");
         if (!Number.isFinite(norm) || norm <= 0) throw new Error("Zadejte platnou normu pro " + code + ".");
         if (!Number.isInteger(capacity) || capacity < 1) throw new Error("Zadejte platnou kapacitu operátorů pro " + code + ".");
 
@@ -140,13 +139,13 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         let product = findProductByCode(allProducts, code) ?? created.find((p) => p.code.trim().toLowerCase() === code.toLowerCase());
         if (!product) {
           const { data, error } = await supabase.from("products").insert({
-            code, name, employees_per_product: capacity, first_seen_date: date, ...approval(),
+            code, name: name || productIdName.trim(), employees_per_product: capacity, first_seen_date: date, ...approval(),
           }).select("*").single();
           if (error) throw error;
           product = data as Product;
         } else {
           const { data, error } = await supabase.from("products").update({
-            name, employees_per_product: capacity,
+            name: name || productIdName.trim(), employees_per_product: capacity,
           }).eq("id", product.id).select("*").single();
           if (error) throw error;
           product = data as Product;
@@ -165,7 +164,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
 
         if (isH || isT) {
           const otherDraft = productSetupDrafts.find((d) => d.key !== draft.key && (isH ? /^T_/i.test(d.code.trim()) : /^H_/i.test(d.code.trim())));
-          const otherCode = otherDraft?.code.trim();
+          const otherCode = otherDraft?.code.trim() || (isH ? "T_" + code.replace(/^H_/i, "") : "H_" + code.replace(/^T_/i, ""));
           const otherProduct = otherCode
             ? (findProductByCode(allProducts, otherCode) ?? created.find((p) => p.code.trim().toLowerCase() === otherCode.toLowerCase()))
             : undefined;
@@ -399,7 +398,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         <DialogHeader><DialogTitle>1/3 – Kontrola / založení Product ID</DialogTitle></DialogHeader>
         <div className="grid gap-4">
           <div className="rounded-xl border bg-muted/20 p-4 text-sm">
-            <div className="font-semibold">OCR našel nové Product ID / varianty</div>
+            <div className="font-semibold">OCR našel novou produktovou rodinu / varianty</div>
             <div className="mt-1 text-muted-foreground">H_ a T_ jsou dvě varianty jednoho Product ID. Kódy se mohou lišit, např. H_32346264-005 a T_S4962V3538. Každá varianta může mít vlastní název, normu i kapacitu.</div>
           </div>
           <div className="grid gap-1.5">
@@ -412,10 +411,10 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
               <div key={draft.key} className="rounded-lg border p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div><div className="font-semibold">{draft.code}</div><div className="text-xs text-muted-foreground">jistota OCR {Math.round(draft.confidence * 100)} %</div></div>
-                  <span className="text-xs text-warning">nový Product ID</span>
+                  <span className="text-xs text-warning">nová varianta</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="grid gap-1.5 sm:col-span-2"><Label>Název varianty / produktu *</Label><Input value={draft.name} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, name: e.target.value } : x))} placeholder={/^H_/i.test(draft.code) ? "Např. 32346264-005" : "Např. S4962V3538"} /></div>
+                  <div className="grid gap-1.5 sm:col-span-2"><Label>Název varianty *</Label><Input value={draft.name} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, name: e.target.value } : x))} placeholder={/^H_/i.test(draft.code) ? "Volitelný název H_ varianty" : "Volitelný název T_ varianty"} /></div>
                   <div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={draft.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, capacity: e.target.value } : x))} /></div>
                   <div className="grid gap-1.5 sm:col-span-3"><Label>Norma (ks/h) *</Label><Input type="number" inputMode="decimal" min="0.1" step="0.1" value={draft.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div>
                 </div>
