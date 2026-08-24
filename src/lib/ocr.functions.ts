@@ -10,6 +10,16 @@ export type OcrRow = {
   available_time: number | null;
   confidence: number;
 };
+export type OcrHourlyMetric = {
+  hour: number | null;
+  product_code: string | null;
+  actual_output: number | null;
+  performance_pct: number | null;
+  availability_pct: number | null;
+  norm_per_hour: number | null;
+};
+export type OcrStage = "products" | "employees" | "hourly";
+
 export type OcrResult = {
   work_date: string | null;
   shift: string | null;
@@ -19,6 +29,7 @@ export type OcrResult = {
   products: OcrProduct[];
   header_confidence: number;
   rows: OcrRow[];
+  hourly_metrics: OcrHourlyMetric[];
   predicted_shift_output: number | null;
   productive_minutes: number | null;
   raw?: string;
@@ -301,7 +312,7 @@ function resolveAiProviders(): AiProvider[] {
   if (!providers.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY). Rozpoznávání ze screenshotu není dostupné, ruční zadání funguje beze změny.");
   return providers;
 }
-async function callAi(provider: AiProvider, imageDataUrl: string, instruction: string): Promise<Record<string, unknown>> {
+async function callAi(provider: AiProvider, imageDataUrl: string, instruction: string, system = SYSTEM): Promise<Record<string, unknown>> {
   const res = await fetch(provider.url, {
     method: "POST",
     headers: provider.headers,
@@ -311,7 +322,7 @@ async function callAi(provider: AiProvider, imageDataUrl: string, instruction: s
       max_tokens: 7000,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: system },
         { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] },
       ],
     }),
@@ -327,6 +338,151 @@ async function callAi(provider: AiProvider, imageDataUrl: string, instruction: s
   try { return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>; }
   catch { throw new Error("AI vrátila neočekávanou JSON odpověď."); }
 }
+
+const PRODUCT_STAGE_SYSTEM = `${SYSTEM}
+
+TENTO PRŮCHOD JE VÝHRADNĚ PRO PRODUKTY.
+Nečti zaměstnance ani jejich metriky jako podmínku výsledku.
+1) Nejprve přečti všechny Product ID viditelné na screenshotu, zejména hlavní produkt a produkty v hodinové tabulce.
+2) Pro každý produkt vrať jeho normu ks/h, pokud je čitelná nebo ji lze bezpečně určit z hodinových hodnot.
+3) Vrať také datum, směnu a linku, pokud jsou čitelné.
+4) I když Product ID vypadá jako již známé, vrať ho stejně. Databáze se porovnává až v aplikaci.
+Vrať JSON podle společného schématu; rows musí být prázdné a hourly_metrics může být prázdné.
+`;
+
+const EMPLOYEE_STAGE_SYSTEM = `${SYSTEM}
+
+TENTO PRŮCHOD JE VÝHRADNĚ PRO PRACOVNÍKY.
+Product ID je pouze kontext. Existence produktu NESMÍ měnit výsledek.
+1) Najdi tabulku pracovníků a vrať KAŽDÝ skutečně viditelný řádek.
+2) Pro každý řádek vrať přesné employee_name, position, OEE, Výkon a Dostupnost.
+3) Pokud je jméno čitelné, vrať pracovníka i když některá metrika není čitelná; jednotlivá čísla mohou být null.
+4) Neber čísla z hodinové tabulky místo čísel z řádku pracovníka.
+5) Vrať také datum, směnu, linku a hlavní Product ID, pokud jsou čitelné.
+Vrať JSON podle společného schématu; products a hourly_metrics mohou být prázdné.
+`;
+
+const HOURLY_STAGE_SYSTEM = `${SYSTEM}
+
+TENTO PRŮCHOD JE VÝHRADNĚ PRO HODINOVÁ DATA.
+1) Najdi hodinovou výrobní tabulku.
+2) Pro KAŽDOU skutečně viditelnou hodinu vrať product_code, actual_output (reálný výstup), norm_per_hour, performance_pct a availability_pct.
+3) Nezaměňuj hodinovou tabulku s tabulkou pracovníků.
+4) Vrať také produkty a jejich normy, pokud jsou v hodinové tabulce viditelné.
+5) Datum, směnu a linku vrať, pokud jsou čitelné.
+Vrať JSON podle společného schématu; rows musí být prázdné.
+`;
+
+const stageInstruction = (stage: OcrStage): string => {
+  if (stage === "products") return "Proveď první průchod: pouze Product ID, jejich normy a hlavičku (datum, směna, linka). Neřeš zaměstnance ani hodinová data.";
+  if (stage === "employees") return "Proveď druhý průchod: pouze zaměstnanci a hodnoty z jejich řádků (OEE, Výkon, Dostupnost). Product ID ber jen jako kontext.";
+  return "Proveď třetí průchod: pouze hodinová výrobní data, normy, reálný výstup, Výkon a Dostupnost.";
+};
+
+async function runStage(stage: OcrStage, imageDataUrl: string): Promise<OcrResult> {
+  const providers = resolveAiProviders();
+  const attempts: string[] = [];
+  const parsedResults: Record<string, unknown>[] = [];
+  let primary: Record<string, unknown> | null = null;
+  let primaryProvider: AiProvider | null = null;
+  const system = stage === "products" ? PRODUCT_STAGE_SYSTEM : stage === "employees" ? EMPLOYEE_STAGE_SYSTEM : HOURLY_STAGE_SYSTEM;
+
+  for (const provider of providers) {
+    try {
+      primary = await callAi(provider, imageDataUrl, stageInstruction(stage), system);
+      primaryProvider = provider;
+      parsedResults.push(primary);
+      break;
+    } catch (e) {
+      const error = e as Error & { status?: number };
+      attempts.push(`${provider.kind}:${error.status ?? "error"}`);
+      if (error.status !== 402 && error.status !== 429) break;
+    }
+  }
+  if (!primary || !primaryProvider) {
+    throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
+  }
+
+  if (stage === "employees") {
+    const workerProviders = [primaryProvider, ...providers.filter((p) => p !== primaryProvider)];
+    for (const provider of workerProviders) {
+      try {
+        const worker = await callAi(provider, imageDataUrl, WORKER_RETRY, EMPLOYEE_STAGE_SYSTEM);
+        parsedResults.push(worker);
+        if (rawRowsFrom(worker).some((r) => workerName(r))) break;
+      } catch (e) {
+        const error = e as Error & { status?: number };
+        attempts.push(`worker-${provider.kind}:${error.status ?? "error"}`);
+        if (error.status !== 402 && error.status !== 429) break;
+      }
+    }
+  } else if (stage === "products" && !normalizeProducts(primary).length && providers.length > 1) {
+    const fallbackProvider = providers.find((p) => p !== primaryProvider);
+    if (fallbackProvider) {
+      try {
+        const retry = await callAi(fallbackProvider, imageDataUrl, stageInstruction(stage), system);
+        parsedResults.push(retry);
+      } catch (e) {
+        const error = e as Error & { status?: number };
+        attempts.push(`retry-${fallbackProvider.kind}:${error.status ?? "error"}`);
+      }
+    }
+  }
+
+  const base = parsedResults.reduce((best, current) => {
+    const score = stage === "employees" ? workerScore(current) : stage === "products" ? normalizeProducts(current).length * 10 : (Array.isArray(current.hourly_metrics) ? current.hourly_metrics.length : 0);
+    const bestScore = stage === "employees" ? workerScore(best) : stage === "products" ? normalizeProducts(best).length * 10 : (Array.isArray(best.hourly_metrics) ? best.hourly_metrics.length : 0);
+    return score > bestScore ? current : best;
+  }, primary);
+
+  const mergedRows = stage === "employees" ? mergeWorkerRows(...parsedResults.map(rawRowsFrom)) : [];
+  const hourly = stage === "hourly"
+    ? (parsedResults.map((p) => Array.isArray(p.hourly_metrics) ? p.hourly_metrics as Record<string, unknown>[] : []).sort((a,b) => b.length-a.length)[0] ?? [])
+    : [];
+  const mergedParsed: Record<string, unknown> = {
+    ...base,
+    rows: mergedRows,
+    hourly_metrics: hourly,
+    product_code: firstText(base, ["product_code", "product", "main_product"]) || parsedResults.map((p) => firstText(p, ["product_code", "product", "main_product"])).find(Boolean) || null,
+    line: firstText(base, ["line", "line_code"]) || parsedResults.map((p) => firstText(p, ["line", "line_code"])).find(Boolean) || null,
+    work_date: firstText(base, ["work_date", "date"]) || parsedResults.map((p) => firstText(p, ["work_date", "date"])).find(Boolean) || null,
+    shift: base.shift ?? parsedResults.map((p) => p.shift).find(Boolean) ?? null,
+  };
+  const rows = normalizeRows(mergedParsed);
+  const products = normalizeProducts(mergedParsed);
+  const hourlyMetrics: OcrHourlyMetric[] = hourly.map((h) => ({
+    hour: firstNum(h, ["hour", "hodina"]),
+    product_code: firstText(h, ["product_code", "product"]) || null,
+    actual_output: actualOutputForHour(h),
+    performance_pct: firstNum(h, ["performance_pct", "performance", "vykon", "výkon"]),
+    availability_pct: firstNum(h, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]),
+    norm_per_hour: firstNum(h, ["norm_per_hour", "norm", "hourly_norm"]),
+  }));
+
+  return {
+    work_date: normalizeWorkDate(firstText(mergedParsed, ["work_date", "date"])),
+    shift: normalizeShift(mergedParsed.shift),
+    line: firstText(mergedParsed, ["line", "line_code"]) || null,
+    product_code: products[0]?.product_code ?? (firstText(mergedParsed, ["product_code", "product", "main_product"]) || null),
+    norm_per_hour: products[0]?.norm_per_hour ?? firstNum(mergedParsed, ["norm_per_hour", "norm"]),
+    products,
+    header_confidence: Math.max(0, Math.min(1, firstNum(mergedParsed, ["header_confidence", "confidence"]) ?? 0.7)),
+    rows,
+    hourly_metrics: hourlyMetrics,
+    predicted_shift_output: predictedShiftOutput(hourly),
+    productive_minutes: hourly.length >= 3 ? SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES : null,
+    raw: JSON.stringify({ ...mergedParsed, ocr_stage: stage, ocr_passes: parsedResults.length, ocr_attempts: attempts }),
+  };
+}
+
+export const extractScreenshotStage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: { imageDataUrl: string; stage: OcrStage }) => {
+    if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek.");
+    if (!["products", "employees", "hourly"].includes(input.stage)) throw new Error("Neplatná OCR fáze.");
+    return input;
+  })
+  .handler(async ({ data }) => runStage(data.stage, data.imageDataUrl));
 
 export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -400,6 +556,14 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       products,
       header_confidence: Math.max(0, Math.min(1, firstNum(mergedParsed, ["header_confidence", "confidence"]) ?? 0.7)),
       rows,
+      hourly_metrics: hourly.map((h) => ({
+        hour: firstNum(h, ["hour", "hodina"]),
+        product_code: firstText(h, ["product_code", "product"]) || null,
+        actual_output: actualOutputForHour(h),
+        performance_pct: firstNum(h, ["performance_pct", "performance", "vykon", "výkon"]),
+        availability_pct: firstNum(h, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]),
+        norm_per_hour: firstNum(h, ["norm_per_hour", "norm", "hourly_norm"]),
+      })),
       predicted_shift_output: predictedShiftOutput(hourly),
       productive_minutes: hourly.length >= 3 ? SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES : null,
       raw: JSON.stringify({ ...mergedParsed, ocr_passes: parsedResults.length, ocr_attempts: attempts, hourly_performance_fallback: hourlyPerformance, hourly_availability_fallback: hourlyAvailability }),
