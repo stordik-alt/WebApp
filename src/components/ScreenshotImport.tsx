@@ -114,23 +114,67 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     } finally { setProductSetupSaving(false); }
   };
 
-  const onFile = async (file: File) => {
-    setBusy(true); setResult(null);
+  const runEmployeeStage = async (imageDataUrl: string) => {
+    setBusy(true); setStage("employees");
     try {
-      const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error("Soubor se nepodařilo načíst.")); fr.readAsDataURL(file); });
-      setPreviewUrl(dataUrl); const ext = (file.name.split(".").pop() || "png").toLowerCase(); const path = `daily/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`; const { error: upErr } = await supabase.storage.from("screenshots").upload(path, file, { contentType: file.type || "image/png" }); if (upErr) toast.warning("Screenshot se nepodařilo uložit do archivu, rozpoznávání pokračuje."); else setScreenshotPath(path);
-      const r = await extract({ data: { imageDataUrl: dataUrl } }); setResult(r); setWorkDate(r.work_date ?? new Date().toISOString().slice(0, 10)); setShift(r.shift && SHIFTS.includes(r.shift as never) ? r.shift : SHIFTS[0]); setLine(r.line ?? ""); setProductCode(r.product_code ?? ""); setNormValue(r.norm_per_hour !== null ? String(r.norm_per_hour) : "");
-      const detectedProducts = r.products?.length ? r.products : (r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : []);
-      setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}`, employees_per_product: findProductByCode(products, p.product_code)?.employees_per_product ?? null })));
-      const fallbackPosition: "HA" | "TUP" = detectedProducts.some((p) => /^T_/i.test(p.product_code)) ? "TUP" : "HA";
-      const sourceRows = r.rows.length > 0 ? r.rows : [{ employee_name: "", position: fallbackPosition, oee: null, performance: null, available_time: null, confidence: r.header_confidence ?? 0.5 }];
-      setRows(sourceRows.map((row, i) => { const emp = matchEmployee(row.employee_name, activeEmployees); return { key: `${i}-${row.employee_name || "manual"}`, ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? fallbackPosition, oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true }; }));
-      const newProducts = detectedProducts.filter(p => !findProductByCode(products, p.product_code));
-      if (newProducts.length > 0) openProductSetup(detectedProducts);
-      if (!r.rows.length) toast.warning("Zaměstnanec nebyl ze screenshotu rozpoznán. Vyberte ho v novém řádku, nebo použijte + pro vytvoření zaměstnance."); else toast.success(`Rozpoznáno ${detectedProducts.length || 0} produktů. Zkontrolujte data před uložením.`);
-    } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+      const r = await extractStage({ data: { imageDataUrl, stage: "employees" } });
+      setResult((prev) => ({ ...(prev ?? r), work_date: prev?.work_date ?? r.work_date, shift: prev?.shift ?? r.shift, line: prev?.line ?? r.line, product_code: prev?.product_code ?? r.product_code, norm_per_hour: prev?.norm_per_hour ?? r.norm_per_hour, products: prev?.products?.length ? prev.products : r.products, header_confidence: Math.max(prev?.header_confidence ?? 0, r.header_confidence), rows: r.rows, hourly_metrics: prev?.hourly_metrics ?? [], predicted_shift_output: prev?.predicted_shift_output ?? null, productive_minutes: prev?.productive_minutes ?? null }));
+      const fallbackPosition: "HA" | "TUP" = productDrafts.some((p) => /^T_/i.test(p.product_code)) ? "TUP" : "HA";
+      const nextRows: DraftRow[] = r.rows.map((row, i) => {
+        const emp = matchEmployee(row.employee_name, activeEmployees);
+        return { key: i + "-" + (row.employee_name || "manual"), ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? fallbackPosition, oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true };
+      });
+      setRows(nextRows);
+      if (nextRows.some((r) => r.include && !r.employeeId)) setEmployeeSetupOpen(true);
+      else await runHourlyStage(imageDataUrl, nextRows);
+    } catch (e) { toast.error("OCR zaměstnanců se nepodařilo dokončit: " + (e as Error).message); setStage("employees"); }
+    finally { setBusy(false); }
   };
 
+  const runHourlyStage = async (imageDataUrl: string, employeeRows: DraftRow[] = rows) => {
+    setBusy(true); setStage("hourly");
+    try {
+      const r = await extractStage({ data: { imageDataUrl, stage: "hourly" } });
+      const hourly = r.hourly_metrics ?? [];
+      setHourlyMetrics(hourly);
+      const avgPerformanceValues = hourly.map((x) => x.performance_pct).filter((x): x is number => x !== null);
+      const avgAvailabilityValues = hourly.map((x) => x.availability_pct).filter((x): x is number => x !== null);
+      const performanceFallback = avgPerformanceValues.length ? avgPerformanceValues.reduce((a, b) => a + b, 0) / avgPerformanceValues.length : null;
+      const availabilityFallback = avgAvailabilityValues.length ? avgAvailabilityValues.reduce((a, b) => a + b, 0) / avgAvailabilityValues.length : null;
+      const completedRows = employeeRows.map((row) => ({ ...row, performance: row.performance === "" && performanceFallback !== null ? String(performanceFallback) : row.performance, availableTime: row.availableTime === "" && availabilityFallback !== null ? String(availabilityFallback) : row.availableTime }));
+      setRows(completedRows);
+      setProductDrafts((prev) => prev.map((p) => {
+        if (p.norm_per_hour != null) return p;
+        const h = hourly.find((x) => x.product_code?.trim().toLowerCase() === p.product_code.trim().toLowerCase());
+        return h?.norm_per_hour != null ? { ...p, norm_per_hour: h.norm_per_hour } : p;
+      }));
+      setResult((prev) => ({ ...(prev ?? r), work_date: prev?.work_date ?? r.work_date, shift: prev?.shift ?? r.shift, line: prev?.line ?? r.line, product_code: prev?.product_code ?? r.product_code, norm_per_hour: prev?.norm_per_hour ?? r.norm_per_hour, products: prev?.products?.length ? prev.products : r.products, header_confidence: Math.max(prev?.header_confidence ?? 0, r.header_confidence), rows: completedRows, hourly_metrics: hourly, predicted_shift_output: r.predicted_shift_output, productive_minutes: r.productive_minutes }));
+      setStage("ready");
+      toast.success("OCR dokončen: produkty, zaměstnanci i hodinová data jsou připravena k importu.");
+    } catch (e) { toast.error("OCR hodinových dat se nepodařilo dokončit: " + (e as Error).message); setStage("hourly"); }
+    finally { setBusy(false); }
+  };
+
+  const onFile = async (file: File) => {
+    setBusy(true); setStage("products"); setResult(null); setRows([]); setProductDrafts([]); setHourlyMetrics([]);
+    try {
+      const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error("Soubor se nepodařilo načíst.")); fr.readAsDataURL(file); });
+      setPreviewUrl(dataUrl);
+      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const path = "daily/" + new Date().toISOString().slice(0, 10) + "/" + crypto.randomUUID() + "." + ext;
+      const { error: upErr } = await supabase.storage.from("screenshots").upload(path, file, { contentType: file.type || "image/png" });
+      if (upErr) toast.warning("Screenshot se nepodařilo uložit do archivu, rozpoznávání pokračuje."); else setScreenshotPath(path);
+      // FÁZE 1: pouze produkty a hlavička.
+      const r = await extractStage({ data: { imageDataUrl: dataUrl, stage: "products" } });
+      setResult(r); setWorkDate(r.work_date ?? new Date().toISOString().slice(0, 10)); setShift(r.shift && SHIFTS.includes(r.shift as never) ? r.shift : SHIFTS[0]); setLine(r.line ?? ""); setProductCode(r.product_code ?? ""); setNormValue(r.norm_per_hour !== null ? String(r.norm_per_hour) : "");
+      const detectedProducts = r.products?.length ? r.products : (r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : []);
+      setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: i + "-" + p.product_code, employees_per_product: findProductByCode(products, p.product_code)?.employees_per_product ?? null })));
+      const newProducts = detectedProducts.filter((p) => !findProductByCode(products, p.product_code));
+      if (newProducts.length > 0) { setStage("products"); openProductSetup(detectedProducts); toast.warning("Nalezeno " + newProducts.length + " nové Product ID. Nejprve je založte."); }
+      else await runEmployeeStage(dataUrl);
+    } catch (e) { toast.error((e as Error).message); setStage("products"); }
+    finally { setBusy(false); }
+  };
   const setDraftNorm = (key: string, value: string) => setProductDrafts((prev) => prev.map((p) => p.key === key ? { ...p, norm_per_hour: value === "" ? null : Number(value) } : p));
 
   const confirmImport = useMutation({
