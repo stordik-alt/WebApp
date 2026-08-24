@@ -35,95 +35,73 @@ const START_PREP_MINUTES = 10;
 const BREAK_MINUTES = 30;
 const END_CLEANUP_MINUTES = 5;
 
-const SYSTEM = `Jsi extrakční nástroj pro výrobní data DPS (osazování plošných spojů).
-Ze screenshotu výrobní tabulky vrať POUZE JSON podle schématu níže.
+const SYSTEM = `Jsi OCR/extrakční nástroj pro výrobní screenshoty z výroby DPS.
+Musíš přečíst celý screenshot, nejen hlavičku. Nejvyšší priorita jsou ŘÁDKY PRACOVNÍKŮ a jejich hodnoty.
 
-DŮLEŽITÉ: Screenshoty mají typicky hlavičku s datem/časem, linkou, pracovníky, produktem a tabulku po hodinách. Sloupce mohou být:
-Produkt | Hodina | reálný | norma | Výkon | Kvalita | Dostupnost | Odstávky | důvod.
-Hodnoty Výkon a Dostupnost v jednotlivých hodinách jsou PROCENTA. OEE v hlavičce je celkové OEE linky/směny.
-Screenshot může obsahovat více produktů během jedné směny. Při výrobním přejezdu musíš zachytit KAŽDÝ produkt a jeho hodinovou normu.
+Vrať pouze JSON. Screenshot typicky obsahuje:
+- hlavičku: datum, směna, linka, produkt, OEE,
+- tabulku pracovníků: jméno, případně pozice HA/TUP, OEE, Výkon, Dostupnost,
+- hodinovou výrobní tabulku: produkt, hodina, reálný výstup, norma, Výkon, Dostupnost.
 
-Schéma:
+KRITICKÉ PRAVIDLO PRO PRACOVNÍKY:
+- Pro KAŽDÉHO viditelného pracovníka vytvoř jeden objekt v rows.
+- Jméno čti přesně tak, jak je na screenshotu, včetně diakritiky.
+- Nikdy nevracej rows=[] jen proto, že některá hodnota chybí. Pokud je jméno čitelné, řádek vrať a nečitelné hodnoty dej null.
+- OEE, Výkon a Dostupnost pracovníka ber přednostně přímo z jeho řádku. Pokud je OEE zobrazené jen jako společné OEE linky/směny, můžeš ho použít pro každého pracovníka.
+- Pokud pozice není explicitně čitelná, odvoď ji z produktu: T_ = TUP, H_ = HA. Jinak null.
+- Rozlišuj desetinnou čárku a procenta. Procenta vracej jako číslo bez znaku %.
+
+KRITICKÉ PRAVIDLO PRO PRODUKTY:
+- Přečti hlavní produkt z hlavičky i všechny produkty z hodinové tabulky.
+- Při změně produktu během směny zachovej každý product_code.
+- Pro každý produkt urč normu ks/h. Preferuj hodinový řádek s Dostupností 100 %. Pokud není, lze normu přepočítat na 100 % dostupnost.
+
+JSON SCHÉMA:
 {
   "work_date": "YYYY-MM-DD nebo null",
   "shift": "Ranní | Odpolední | Noční | null",
   "line": "označení linky nebo null",
-  "product_code": "první/hlavní produkt nebo null",
-  "norm_per_hour": číslo (ks/h, norma CELÉ HA linky) nebo null,
-  "products": [
-    {
-      "product_code": "kód/název výrobku",
-      "norm_per_hour": číslo v ks/h nebo null,
-      "confidence": 0..1
-    }
-  ],
+  "product_code": "hlavní produkt nebo null",
+  "norm_per_hour":  číslo ks/h nebo null,
+  "products": [{"product_code":"kód","norm_per_hour":číslo,"confidence":0..1}],
   "header_confidence": 0..1,
-  "hourly_metrics": [
-    {
-      "hour": číslo nebo null,
-      "product_code": "produkt platný v této hodině nebo null",
-      "actual_output": číslo z pole reálný (ks) nebo null,
-      "performance_pct": číslo v % nebo null,
-      "availability_pct": číslo v % nebo null,
-      "norm_per_hour": číslo nebo null
-    }
-  ],
-  "rows": [
-    {
-      "employee_name": "jméno pracovníka",
-      "position": "HA | TUP | null",
-      "oee": číslo v % nebo null,
-      "performance": číslo v % – výkon přepočtený na 100% dostupnost za celou směnu nebo null,
-      "available_time": číslo v % – PRŮMĚR DOSTUPNOSTI ZA CELOU SMĚNU nebo null,
-      "confidence": 0..1
-    }
-  ]
+  "rows": [{
+    "employee_name":"jméno",
+    "position":"HA | TUP | null",
+    "oee": číslo v % nebo null,
+    "performance": číslo v % nebo null,
+    "available_time": číslo v % nebo null,
+    "confidence":0..1
+  }],
+  "hourly_metrics": [{
+    "hour": číslo nebo null,
+    "product_code":"produkt nebo null",
+    "actual_output":číslo nebo null,
+    "performance_pct":číslo nebo null,
+    "availability_pct":číslo nebo null,
+    "norm_per_hour":číslo nebo null
+  }]
 }
 
-PRAVIDLA PRO SMĚNU A PŘEDPOKLÁDANÝ VÝSTUP:
-- Jedna běžná směna má 8 hodin včetně 30minutové přestávky.
-- Reálně plánovaný výrobní čas při 100% dostupnosti je 7 hodin 30 minut.
-- Z první hodiny odečti 10 minut přípravy před zahájením výroby.
-- Z poslední hodiny odečti 5 minut na ukončení výroby a úklid linky.
-- Zbývá tedy 7 hodin 15 minut = 435 produktivních minut.
-- Přibližně v polovině směny je 30minutová přestávka. Pokud jsou k dispozici běžné 8 hodinové řádky, odečti ji z prostředního hodinového řádku.
-- Efektivní délky 8 hodinových řádků jsou tedy: 50, 60, 60, 60, 30, 60, 60, 55 minut.
-- Pokud se během směny mění produkt nebo norma, předpokládaný výstup počítej pro každý hodinový řádek s jeho vlastní normou.
-- Norma při 100% dostupnosti pro hodinu = zobrazená norma / (dostupnost / 100).
-- Předpokládaný výstup směny = SUM(norma_100 × efektivní_délka_hodiny).
-- Předpokládaný výstup je vždy pro 100% dostupnost a nezávisí na skutečném výkonu.
-- actual_output je skutečný počet kusů ze sloupce reálný a musí být načten pro každý hodinový řádek, pokud je čitelný.
-
-PRAVIDLA PRO VÝPOČET VÝKONU:
-- Z každého skutečného hodinového řádku přečti reálný výstup (ks), Výkon (%), Dostupnost (%) a normu (ks/h).
-- Norma uvedená ve screenshotu je hodinová norma po zohlednění dostupnosti. Pro výpočet normy při 100% dostupnosti ji přepočítej: norma_100 = norma / dostupnost * 100.
-- Směnový výkon při 100% dostupnosti počítej jako SUM(skutečný výstup) / předpokládaný výstup směny * 100.
-- Dostupnost se nepoužívá jako další penalizace výkonu – její vliv už je zahrnut v normě dané hodiny.
-- Pokud actual_output není čitelný, můžeš jako zálohu použít zobrazenou normu × Výkon / 100, ale preferuj vždy hodnotu ze sloupce reálný.
-- Pokud některá hodina nemá dost údajů pro výpočet, vynech ji. Nikdy nevymýšlej chybějící hodnotu.
-
-PRAVIDLA PRO DOSTUPNOST:
-- Do hourly_metrics vlož všechny skutečné hodinové řádky směny, které lze přečíst. Nezapisuj souhrnný řádek OEE jako hodinový řádek.
-- available_time u pracovníků je aritmetický průměr platných hodinových Dostupností, protože zde jde o reportovanou dostupnost.
-- Pokud je hodnota z některé hodiny nečitelná, dej ji null; průměr se počítá pouze z platných hodin.
-
-PRAVIDLA PRO NORMU PRODUKTU:
-- Norma je norma CELÉ HA linky v ks/h, ne norma jednoho pracovníka.
-- Každý hodinový řádek musí mít pokud možno product_code odpovídající výrobě v dané hodině.
-- Pro KAŽDÝ produkt samostatně hledej libovolný hodinový řádek, kde je Dostupnost přesně 100 %. Z tohoto řádku vezmi norm_per_hour.
-- Pokud pro daný produkt žádná hodina s Dostupností 100 % neexistuje, server přepočítá použitelnou normu z dostupnosti na 100 % jako norm / dostupnost * 100.
-- Pokud je pro produkt více 100% řádků, použij první platnou normu.
-- Nezaměňuj normu jednoho produktu za normu jiného produktu při výrobním přejezdu.
-- Pokud první nebo poslední hodinový řádek zjevně neobsahuje celý údaj, jeho normu nepoužívej jako jediný zdroj.
+PRAVIDLA PRO HODINOVOU TABULKU:
+- Přečti všechny skutečně viditelné hodinové řádky.
+- actual_output je hodnota ze sloupce reálný.
+- Výkon a Dostupnost jsou procenta.
+- Norma je hodinová norma linky.
+- Pokud je dostupnost 100 %, je to přímý zdroj normy produktu.
+- Pokud dostupnost není 100 %, norma_100 = norma / dostupnost * 100.
+- Nezaměňuj normu mezi H_ a T_ produktem.
 
 DALŠÍ PRAVIDLA:
-- Nikdy si nevymýšlej hodnoty. Co nelze spolehlivě přečíst, dej null a sniž confidence.
-- Desetinnou čárku převeď na tečku. Procenta vracej bez znaku %.
-- Datum převeď do ISO (YYYY-MM-DD). Pokud screenshot obsahuje pouze den a měsíc bez roku, vrať datum s rokem aktuálního kalendářního roku. Nikdy neodhaduj historický rok.
-- Směnu normalizuj: ranní/R/1 -> "Ranní", odpolední/O/2 -> "Odpolední", noční/N/3 -> "Noční".
-- OEE z barevného/souhrnného pole v hlavičce je linkové OEE; pokud existuje, použij ho pro každého pracovníka.
-- Jména pracovníků čti přesně, včetně diakritiky.
-- Vrať pouze JSON bez komentářů a bez markdown bloku.`;
+- Nevymýšlej hodnoty. Nečitelná hodnota = null.
+- Datum převeď na YYYY-MM-DD; pokud screenshot obsahuje jen den/měsíc, použij aktuální rok.
+- Směnu normalizuj na Ranní, Odpolední nebo Noční.
+- Vrať pouze JSON bez markdownu.`;
+
+const WORKER_RETRY = `Zopakuj OCR tohoto screenshotu, tentokrát se zaměř pouze na tabulku PRACOVNÍKŮ.
+Najdi všechny viditelné řádky zaměstnanců a pro každý vrať employee_name, position (TUP pokud jde o T_ produkt, HA pokud H_), OEE, performance a available_time.
+Nezastavuj se u hlavičky. Pokud je některé číslo nečitelné, vrať null, ale jméno pracovníka vrať vždy, pokud je čitelné.
+Současně vrať product_code, line, work_date a shift. Vrať pouze JSON ve stejném schématu.`;
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -133,6 +111,26 @@ function toNum(v: unknown): number | null {
   else s = s.replace(/[^\d.\-]/g, "");
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function text(v: unknown): string {
+  return String(v ?? "").trim();
+}
+
+function firstNum(obj: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = toNum(obj[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function firstText(obj: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = text(obj[key]);
+    if (value) return value;
+  }
+  return "";
 }
 
 function avg(values: number[]): number | null {
@@ -149,44 +147,34 @@ function effectiveHourWeights(hourlyCount: number): number[] {
   }
   weights[0] -= START_PREP_MINUTES / 60;
   weights[hourlyCount - 1] -= END_CLEANUP_MINUTES / 60;
-  if (hourlyCount >= 3) {
-    const middle = Math.floor(hourlyCount / 2);
-    weights[middle] -= BREAK_MINUTES / 60;
-  }
+  if (hourlyCount >= 3) weights[Math.floor(hourlyCount / 2)] -= BREAK_MINUTES / 60;
   return weights;
 }
 
-/**
- * Předpokládaný výstup při 100% dostupnosti a plánovaném výrobním čase.
- * U běžné osmihodinové směny: 50 + 60 + 60 + 60 + 30 + 60 + 60 + 55 = 435 min.
- */
 function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null {
   if (!hourly.length) return null;
   const weights = effectiveHourWeights(hourly.length);
   let total = 0;
   let used = 0;
-
   for (let i = 0; i < hourly.length; i += 1) {
-    const hour = hourly[i];
-    const displayedNorm = toNum(hour["norm_per_hour"]);
-    const availability = toNum(hour["availability_pct"]);
-    if (displayedNorm === null || availability === null || availability <= 0) continue;
-    const fullNorm = displayedNorm / (availability / 100);
+    const norm = firstNum(hourly[i], ["norm_per_hour", "norm", "hourly_norm"]);
+    const availability = firstNum(hourly[i], ["availability_pct", "availability", "dostupnost"]);
+    if (norm === null || availability === null || availability <= 0) continue;
+    const fullNorm = norm / (availability / 100);
     if (!Number.isFinite(fullNorm) || fullNorm <= 0) continue;
     total += fullNorm * weights[i];
     used += weights[i];
   }
-
   return used > 0 ? total : null;
 }
 
 function actualOutputForHour(hour: Record<string, unknown>): number | null {
-  const actual = toNum(hour["actual_output"]);
+  const actual = firstNum(hour, ["actual_output", "actual", "realny", "real"]);
   if (actual !== null) return actual;
-  const performance = toNum(hour["performance_pct"]);
-  const displayedNorm = toNum(hour["norm_per_hour"]);
-  if (performance === null || displayedNorm === null) return null;
-  return displayedNorm * (performance / 100);
+  const performance = firstNum(hour, ["performance_pct", "performance", "vykon"]);
+  const norm = firstNum(hour, ["norm_per_hour", "norm", "hourly_norm"]);
+  if (performance === null || norm === null) return null;
+  return norm * (performance / 100);
 }
 
 function normalizedPerformanceAtFullAvailability(hourly: Record<string, unknown>[]): number | null {
@@ -197,20 +185,16 @@ function normalizedPerformanceAtFullAvailability(hourly: Record<string, unknown>
 }
 
 function normalizeWorkDate(value: unknown): string | null {
-  if (!value) return null;
-  const raw = String(value).trim().slice(0, 10);
-  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
-  if (!match) return null;
-  const [, year, month, day] = match;
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const monthNum = Number(month);
-  const dayNum = Number(day);
-  if (!Number.isInteger(monthNum) || !Number.isInteger(dayNum) || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return null;
-  if (Number(year) !== currentYear && monthNum === now.getMonth() + 1 && dayNum === now.getDate()) {
-    return `${currentYear}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+  const raw = text(value);
+  if (!raw) return null;
+  const match = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(raw.slice(0, 10));
+  if (match) return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
+  const dm = /^(\d{1,2})[.\-/](\d{1,2})/.exec(raw);
+  if (dm) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(Number(dm[2])).padStart(2, "0")}-${String(Number(dm[1])).padStart(2, "0")}`;
   }
-  return `${year}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+  return null;
 }
 
 type AiProvider = {
@@ -244,6 +228,121 @@ function resolveAiProviders(): AiProvider[] {
   return providers;
 }
 
+async function callAi(provider: AiProvider, imageDataUrl: string, instruction: string): Promise<Record<string, unknown>> {
+  const res = await fetch(provider.url, {
+    method: "POST",
+    headers: provider.headers,
+    body: JSON.stringify({
+      model: provider.model,
+      temperature: 0,
+      max_tokens: 7000,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: instruction },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    const error = new Error(`AI:${res.status}:${body.slice(0, 300)}`);
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
+  }
+  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const content = json.choices?.[0]?.message?.content ?? "";
+  try {
+    return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>;
+  } catch {
+    throw new Error("AI vrátila neočekávanou JSON odpověď.");
+  }
+}
+
+function rawRowsFrom(parsed: Record<string, unknown>): Record<string, unknown>[] {
+  const candidates = [parsed["rows"], parsed["employees"], parsed["workers"], parsed["employee_rows"]];
+  for (const candidate of candidates) if (Array.isArray(candidate)) return candidate as Record<string, unknown>[];
+  return [];
+}
+
+function hasWorkerData(parsed: Record<string, unknown>): boolean {
+  const rows = rawRowsFrom(parsed);
+  return rows.some((row) => firstText(row, ["employee_name", "name", "employee", "worker_name", "worker"]).length > 0);
+}
+
+function normalizeShift(value: unknown): string | null {
+  const s = text(value).toLowerCase();
+  if (!s) return null;
+  if (s.includes("rann") || s === "r" || s === "1") return "Ranní";
+  if (s.includes("odpo") || s === "o" || s === "2") return "Odpolední";
+  if (s.includes("noč") || s === "n" || s === "3") return "Noční";
+  return text(value) || null;
+}
+
+function normalizeRows(parsed: Record<string, unknown>, fallback: Record<string, unknown>): OcrRow[] {
+  const rawRows = rawRowsFrom(parsed);
+  const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
+  const performanceFallback = normalizedPerformanceAtFullAvailability(hourly) ?? avg(hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon"])).filter((v): v is number => v !== null));
+  const availabilityFallback = avg(hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"])).filter((v): v is number => v !== null));
+  const globalOee = firstNum(parsed, ["line_oee", "oee", "shift_oee", "oee_pct"]) ?? firstNum(fallback, ["line_oee", "oee", "shift_oee", "oee_pct"]);
+  const productCode = firstText(parsed, ["product_code", "product", "main_product"]);
+  const inferredPosition: "HA" | "TUP" | null = /^T_/i.test(productCode) ? "TUP" : /^H_/i.test(productCode) ? "HA" : null;
+
+  return rawRows.map((row) => {
+    const name = firstText(row, ["employee_name", "name", "employee", "worker_name", "worker"]);
+    const rowProduct = firstText(row, ["product_code", "product"]);
+    const positionValue = firstText(row, ["position", "operation", "role"]);
+    const position: "HA" | "TUP" | null = positionValue === "HA" || positionValue === "TUP"
+      ? positionValue
+      : (/^T_/i.test(rowProduct || productCode) ? "TUP" : /^H_/i.test(rowProduct || productCode) ? "HA" : null);
+    const oee = firstNum(row, ["oee", "oee_pct", "OEE"]) ?? globalOee;
+    const performance = firstNum(row, ["performance", "performance_pct", "vykon", "výkon"]) ?? performanceFallback;
+    const available = firstNum(row, ["available_time", "availability", "availability_pct", "dostupnost"]) ?? availabilityFallback;
+    return {
+      employee_name: name,
+      position: position ?? inferredPosition,
+      oee,
+      performance,
+      available_time: available,
+      confidence: firstNum(row, ["confidence", "certainty"]) ?? (name ? 0.8 : 0.5),
+    };
+  }).filter((row) => row.employee_name.length > 0);
+}
+
+function normalizeProducts(parsed: Record<string, unknown>): OcrProduct[] {
+  const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
+  const rawProducts = Array.isArray(parsed["products"]) ? parsed["products"] as Record<string, unknown>[] : [];
+  const codes = new Set<string>();
+  const add = (value: unknown) => { const code = text(value); if (code) codes.add(code); };
+  add(parsed["product_code"]); add(parsed["product"]); add(parsed["main_product"]);
+  for (const row of hourly) add(firstText(row, ["product_code", "product"]));
+  for (const product of rawProducts) add(firstText(product, ["product_code", "product", "code"]));
+
+  return Array.from(codes).map((code) => {
+    const ai = rawProducts.find((p) => firstText(p, ["product_code", "product", "code"]) === code);
+    const rows = hourly.filter((h) => firstText(h, ["product_code", "product"]) === code);
+    const fullNorm = rows.filter((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"]) === 100)
+      .map((h) => firstNum(h, ["norm_per_hour", "norm", "hourly_norm"]))
+      .find((v): v is number => v !== null);
+    const fallbackNorm = rows.map((h) => {
+      const norm = firstNum(h, ["norm_per_hour", "norm", "hourly_norm"]);
+      const availability = firstNum(h, ["availability_pct", "availability", "dostupnost"]);
+      return norm !== null && availability !== null && availability > 0 ? (norm / availability) * 100 : null;
+    }).find((v): v is number => v !== null);
+    const aiNorm = ai ? firstNum(ai, ["norm_per_hour", "norm", "hourly_norm"]) : null;
+    return {
+      product_code: code,
+      norm_per_hour: fullNorm ?? fallbackNorm ?? aiNorm,
+      confidence: ai ? (firstNum(ai, ["confidence", "certainty"]) ?? 0.85) : 0.7,
+    };
+  });
+}
+
 export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: { imageDataUrl: string }) => {
@@ -253,120 +352,53 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<OcrResult> => {
     const providers = resolveAiProviders();
     const attempts: string[] = [];
-    let res: Response | undefined;
+    let parsed: Record<string, unknown> | null = null;
+    let providerUsed: AiProvider | null = null;
+
     for (const provider of providers) {
       try {
-        res = await fetch(provider.url, {
-          method: "POST",
-          headers: provider.headers,
-          body: JSON.stringify({
-            model: provider.model,
-            response_format: { type: "json_object" },
-            messages: [
-              { role: "system", content: SYSTEM },
-              { role: "user", content: [
-                { type: "text", text: "Extrahuj všechny údaje z tohoto výrobního screenshotu. Zvlášť pečlivě přečti všechny hodinové řádky, skutečný výstup ze sloupce reálný, všechny produkty, jejich Výkon, Dostupnost a hodinovou normu. Při přejezdu na jiný produkt zachovej product_code u každé hodiny." },
-                { type: "image_url", image_url: { url: data.imageDataUrl } },
-              ] },
-            ],
-          }),
-        });
-        if (res.ok || (res.status !== 402 && res.status !== 429)) break;
-        attempts.push(`${provider.kind}:${res.status}`);
-        res = undefined;
+        parsed = await callAi(provider, data.imageDataUrl, "Extrahuj kompletní výrobní screenshot. Nejprve přečti všechny pracovníky a jejich OEE, Výkon a Dostupnost, potom produkt a všechny hodinové údaje. Zachovej každý čitelný řádek pracovníka i když některé číslo chybí.");
+        providerUsed = provider;
+        break;
+      } catch (e) {
+        const error = e as Error & { status?: number };
+        attempts.push(`${provider.kind}:${error.status ?? "error"}`);
+        if (error.status !== 402 && error.status !== 429) break;
+      }
+    }
+
+    if (!parsed || !providerUsed) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
+
+    if (!hasWorkerData(parsed)) {
+      try {
+        const retry = await callAi(providerUsed, data.imageDataUrl, WORKER_RETRY);
+        if (hasWorkerData(retry)) {
+          parsed = { ...parsed, ...retry, rows: rawRowsFrom(retry) };
+        }
       } catch {
-        attempts.push(`${provider.kind}:network`);
-        res = undefined;
+        // První výsledek je stále použitelný pro hlavičku/produkt; pracovní řádky zůstanou prázdné.
       }
     }
-    if (!res) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
-    if (!res.ok) {
-      const body = await res.text();
-      if (res.status === 429) throw new Error("AI služba je dočasně přetížená, zkuste to prosím za chvíli.");
-      if (res.status === 402) throw new Error("Vyčerpané AI kredity. Doplňte kredity (OpenRouter/Lovable) a zkuste znovu.");
-      throw new Error(`Rozpoznávání selhalo (${res.status}): ${body.slice(0, 300)}`);
-    }
 
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = json.choices?.[0]?.message?.content ?? "";
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim());
-    } catch {
-      throw new Error("AI vrátila neočekávanou odpověď. Zkuste jiný screenshot nebo zadejte ručně.");
-    }
-
-    const hourlyRaw = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
-    const performanceValues = hourlyRaw.map((h) => toNum(h["performance_pct"])).filter((v): v is number => v !== null);
-    const availabilityValues = hourlyRaw.map((h) => toNum(h["availability_pct"])).filter((v): v is number => v !== null);
-    const shiftPerformance = normalizedPerformanceAtFullAvailability(hourlyRaw) ?? avg(performanceValues);
-    const shiftAvailability = avg(availabilityValues) ?? toNum(parsed["shift_availability_avg"]);
-    const lineOee = toNum(parsed["line_oee"]) ?? toNum(parsed["oee"]);
-    const predictedOutput = predictedShiftOutput(hourlyRaw);
-
-    const productCodes = new Set<string>();
-    for (const h of hourlyRaw) {
-      const code = String(h["product_code"] ?? "").trim();
-      if (code) productCodes.add(code);
-    }
-    if (Array.isArray(parsed["products"])) {
-      for (const p of parsed["products"] as Record<string, unknown>[]) {
-        const code = String(p["product_code"] ?? "").trim();
-        if (code) productCodes.add(code);
-      }
-    }
-    const headerProduct = String(parsed["product_code"] ?? "").trim();
-    if (headerProduct) productCodes.add(headerProduct);
-
-    const rawProducts = Array.isArray(parsed["products"]) ? parsed["products"] as Record<string, unknown>[] : [];
-    const products: OcrProduct[] = Array.from(productCodes).map((code) => {
-      const aiProduct = rawProducts.find((p) => String(p["product_code"] ?? "").trim() === code);
-      const rowsForProduct = hourlyRaw.filter((h) => String(h["product_code"] ?? "").trim() === code);
-      const fullAvailabilityNorm = rowsForProduct
-        .filter((h) => toNum(h["availability_pct"]) === 100)
-        .map((h) => toNum(h["norm_per_hour"]))
-        .find((v): v is number => v !== null);
-      const fallback = rowsForProduct
-        .map((h) => {
-          const norm = toNum(h["norm_per_hour"]);
-          const availability = toNum(h["availability_pct"]);
-          if (norm === null || availability === null || availability <= 0) return null;
-          return (norm / availability) * 100;
-        })
-        .find((v): v is number => v !== null);
-      const aiNorm = aiProduct ? toNum(aiProduct["norm_per_hour"]) : null;
-      const norm = fullAvailabilityNorm ?? fallback ?? aiNorm;
-      return {
-        product_code: code,
-        norm_per_hour: norm,
-        confidence: toNum(aiProduct?.["confidence"]) ?? (norm !== null ? 0.85 : 0.5),
-      };
-    });
-
+    const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
+    const products = normalizeProducts(parsed);
+    const rows = normalizeRows(parsed, parsed);
+    const performanceValues = hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon"])).filter((v): v is number => v !== null);
+    const availabilityValues = hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"])).filter((v): v is number => v !== null);
     const primary = products[0] ?? null;
-    const rawRows = Array.isArray(parsed["rows"]) ? parsed["rows"] as Record<string, unknown>[] : [];
-    const rows: OcrRow[] = rawRows
-      .map((r) => ({
-        employee_name: String(r["employee_name"] ?? "").trim(),
-        position: r["position"] === "HA" || r["position"] === "TUP" ? r["position"] as "HA" | "TUP" : null,
-        oee: lineOee ?? toNum(r["oee"]),
-        performance: shiftPerformance ?? toNum(r["performance"]),
-        available_time: shiftAvailability ?? toNum(r["available_time"]),
-        confidence: toNum(r["confidence"]) ?? 0.5,
-      }))
-      .filter((r) => r.employee_name.length > 0);
+    const headerProduct = firstText(parsed, ["product_code", "product", "main_product"]);
 
-    const shiftRaw = parsed["shift"] ? String(parsed["shift"]) : null;
     return {
-      work_date: normalizeWorkDate(parsed["work_date"]),
-      shift: shiftRaw && ["Ranní", "Odpolední", "Noční"].includes(shiftRaw) ? shiftRaw : shiftRaw,
-      line: parsed["line"] ? String(parsed["line"]) : null,
-      product_code: primary?.product_code ?? (headerProduct || null),
-      norm_per_hour: primary?.norm_per_hour ?? toNum(parsed["norm_per_hour"]),
+      work_date: normalizeWorkDate(firstText(parsed, ["work_date", "date"])),
+      shift: normalizeShift(parsed["shift"]),
+      line: firstText(parsed, ["line", "line_code"] ) || null,
+      product_code: primary?.product_code ?? headerProduct || null,
+      norm_per_hour: primary?.norm_per_hour ?? firstNum(parsed, ["norm_per_hour", "norm"]),
       products,
-      header_confidence: toNum(parsed["header_confidence"]) ?? 0.5,
+      header_confidence: firstNum(parsed, ["header_confidence", "confidence"]) ?? 0.7,
       rows,
-      predicted_shift_output: predictedOutput,
-      productive_minutes: hourlyRaw.length >= 3 ? SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES : null,
+      predicted_shift_output: predictedShiftOutput(hourly),
+      productive_minutes: hourly.length >= 3 ? SHIFT_MINUTES - START_PREP_MINUTES - BREAK_MINUTES - END_CLEANUP_MINUTES : null,
+      raw: JSON.stringify(parsed),
     };
   });
