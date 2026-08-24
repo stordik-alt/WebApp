@@ -98,10 +98,25 @@ DALŠÍ PRAVIDLA:
 - Směnu normalizuj na Ranní, Odpolední nebo Noční.
 - Vrať pouze JSON bez markdownu.`;
 
-const WORKER_RETRY = `Zopakuj OCR tohoto screenshotu, tentokrát se zaměř pouze na tabulku PRACOVNÍKŮ.
-Najdi všechny viditelné řádky zaměstnanců a pro každý vrať employee_name, position (TUP pokud jde o T_ produkt, HA pokud H_), OEE, performance a available_time.
-Nezastavuj se u hlavičky. Pokud je některé číslo nečitelné, vrať null, ale jméno pracovníka vrať vždy, pokud je čitelné.
-Současně vrať product_code, line, work_date a shift. Vrať pouze JSON ve stejném schématu.`;
+const WORKER_RETRY = `Zopakuj OCR tohoto screenshotu jako DRUHÝ, SAMOSTATNÝ PRŮCHOD. Zaměř se výhradně na TABULKU PRACOVNÍKŮ, ne na souhrn hlavičky.
+
+Pro KAŽDÝ viditelný řádek pracovníka vrať jeden objekt v rows. Musíš přečíst a zachovat čtyři sloupce:
+1) jméno zaměstnance,
+2) OEE,
+3) Výkon,
+4) Dostupný čas / Dostupnost.
+Pokud je na řádku také pozice, vrať ji; jinak odvoď T_ => TUP a H_ => HA.
+
+DŮLEŽITÉ:
+- Nevracej prázdný řádek.
+- Pokud je jméno čitelné a některé číslo není čitelné, vrať pracovníka a pro dané číslo null.
+- Pokud první průchod přečetl pracovníka, ale některou metriku ne, zkus metriku znovu přímo podle sloupce stejného řádku.
+- Nepoužívej hodinové výrobní metriky jako náhradu za hodnoty pracovníka, pokud nejsou na řádku pracovníka.
+- Zachovej desetinná čísla a procenta jako čísla bez znaku %.
+- Česky pojmenované sloupce mohou být „Jméno“, „Zaměstnanec“, „OEE“, „Výkon“, „Dostupný čas“, „Dostupnost“.
+- Pokud je vidět více pracovníků, vrať všechny, ne pouze prvního.
+
+Současně vrať product_code, line, work_date a shift, pokud jsou čitelné. Vrať pouze JSON ve stejném schématu.`;
 
 function toNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -158,7 +173,7 @@ function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null 
   let used = 0;
   for (let i = 0; i < hourly.length; i += 1) {
     const norm = firstNum(hourly[i], ["norm_per_hour", "norm", "hourly_norm"]);
-    const availability = firstNum(hourly[i], ["availability_pct", "availability", "dostupnost"]);
+    const availability = firstNum(hourly[i], ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]);
     if (norm === null || availability === null || availability <= 0) continue;
     const fullNorm = norm / (availability / 100);
     if (!Number.isFinite(fullNorm) || fullNorm <= 0) continue;
@@ -171,7 +186,7 @@ function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null 
 function actualOutputForHour(hour: Record<string, unknown>): number | null {
   const actual = firstNum(hour, ["actual_output", "actual", "realny", "real"]);
   if (actual !== null) return actual;
-  const performance = firstNum(hour, ["performance_pct", "performance", "vykon"]);
+  const performance = firstNum(hour, ["performance_pct", "performance", "vykon", "výkon"]);
   const norm = firstNum(hour, ["norm_per_hour", "norm", "hourly_norm"]);
   if (performance === null || norm === null) return null;
   return norm * (performance / 100);
@@ -265,14 +280,52 @@ async function callAi(provider: AiProvider, imageDataUrl: string, instruction: s
 }
 
 function rawRowsFrom(parsed: Record<string, unknown>): Record<string, unknown>[] {
-  const candidates = [parsed["rows"], parsed["employees"], parsed["workers"], parsed["employee_rows"]];
+  const candidates = [parsed["rows"], parsed["employees"], parsed["workers"], parsed["employee_rows"], parsed["employeeRows"], parsed["worker_rows"]];
   for (const candidate of candidates) if (Array.isArray(candidate)) return candidate as Record<string, unknown>[];
   return [];
 }
 
 function hasWorkerData(parsed: Record<string, unknown>): boolean {
   const rows = rawRowsFrom(parsed);
-  return rows.some((row) => firstText(row, ["employee_name", "name", "employee", "worker_name", "worker"]).length > 0);
+  return rows.some((row) => firstText(row, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]).length > 0);
+}
+
+function workerMetricsComplete(parsed: Record<string, unknown>): boolean {
+  const rows = rawRowsFrom(parsed).filter((row) => firstText(row, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]).length > 0);
+  if (!rows.length) return false;
+  return rows.every((row) =>
+    firstNum(row, ["oee", "oee_pct", "OEE"]) !== null &&
+    firstNum(row, ["performance", "performance_pct", "vykon", "výkon", "výkon"]) !== null &&
+    firstNum(row, ["available_time", "availability", "availability_pct", "dostupnost", "dostupny_cas", "dostupný čas"]) !== null,
+  );
+}
+
+function normalizeWorkerKey(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function mergeWorkerRows(primary: Record<string, unknown>[], retry: Record<string, unknown>[]): Record<string, unknown>[] {
+  if (!primary.length) return retry;
+  const retryByName = new Map<string, Record<string, unknown>>();
+  for (const row of retry) {
+    const name = firstText(row, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]);
+    if (name) retryByName.set(normalizeWorkerKey(name), row);
+  }
+  return primary.map((row, index) => {
+    const name = firstText(row, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]);
+    const fallback = retry[index];
+    const extra = (name && retryByName.get(normalizeWorkerKey(name))) || fallback;
+    if (!extra) return row;
+    return {
+      ...extra,
+      ...row,
+      employee_name: name || firstText(extra, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]),
+      oee: firstNum(row, ["oee", "oee_pct", "OEE"]) ?? firstNum(extra, ["oee", "oee_pct", "OEE"]),
+      performance: firstNum(row, ["performance", "performance_pct", "vykon", "výkon", "výkon"]) ?? firstNum(extra, ["performance", "performance_pct", "vykon", "výkon", "výkon"]),
+      available_time: firstNum(row, ["available_time", "availability", "availability_pct", "dostupnost", "dostupny_cas", "dostupný čas"]) ?? firstNum(extra, ["available_time", "availability", "availability_pct", "dostupnost", "dostupny_cas", "dostupný čas"]),
+      confidence: firstNum(row, ["confidence", "certainty"]) ?? firstNum(extra, ["confidence", "certainty"]),
+    };
+  });
 }
 
 function normalizeShift(value: unknown): string | null {
@@ -287,29 +340,29 @@ function normalizeShift(value: unknown): string | null {
 function normalizeRows(parsed: Record<string, unknown>): OcrRow[] {
   const rawRows = rawRowsFrom(parsed);
   const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
-  const performanceFallback = normalizedPerformanceAtFullAvailability(hourly) ?? avg(hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon"])).filter((v): v is number => v !== null));
-  const availabilityFallback = avg(hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"])).filter((v): v is number => v !== null));
+  const performanceFallback = normalizedPerformanceAtFullAvailability(hourly) ?? avg(hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon", "výkon"])).filter((v): v is number => v !== null));
+  const availabilityFallback = avg(hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost", "dostupny_cas", "dostupný čas"])).filter((v): v is number => v !== null));
   const globalOee = firstNum(parsed, ["line_oee", "oee", "shift_oee", "oee_pct"]);
   const productCode = firstText(parsed, ["product_code", "product", "main_product"]);
   const inferredPosition: "HA" | "TUP" | null = /^T_/i.test(productCode) ? "TUP" : /^H_/i.test(productCode) ? "HA" : null;
 
   return rawRows.map((row) => {
-    const name = firstText(row, ["employee_name", "name", "employee", "worker_name", "worker"]);
+    const name = firstText(row, ["employee_name", "name", "employee", "worker_name", "worker", "jmeno", "jméno", "zamestnanec", "zaměstnanec", "pracovnik", "pracovník"]);
     const rowProduct = firstText(row, ["product_code", "product"]);
-    const positionValue = firstText(row, ["position", "operation", "role"]);
+    const positionValue = firstText(row, ["position", "operation", "role", "pozice"]);
     const position: "HA" | "TUP" | null = positionValue === "HA" || positionValue === "TUP"
       ? positionValue
       : (/^T_/i.test(rowProduct || productCode) ? "TUP" : /^H_/i.test(rowProduct || productCode) ? "HA" : null);
     const oee = firstNum(row, ["oee", "oee_pct", "OEE"]) ?? globalOee;
-    const performance = firstNum(row, ["performance", "performance_pct", "vykon", "výkon"]) ?? performanceFallback;
-    const available = firstNum(row, ["available_time", "availability", "availability_pct", "dostupnost"]) ?? availabilityFallback;
+    const performance = firstNum(row, ["performance", "performance_pct", "vykon", "výkon", "výkon"]) ?? performanceFallback;
+    const available = firstNum(row, ["available_time", "availability", "availability_pct", "dostupnost", "dostupny_cas", "dostupný čas"]) ?? availabilityFallback;
     return {
       employee_name: name,
       position: position ?? inferredPosition,
       oee,
       performance,
       available_time: available,
-      confidence: firstNum(row, ["confidence", "certainty"]) ?? (name ? 0.8 : 0.5),
+      confidence: firstNum(row, ["confidence", "certainty", "jistota"]) ?? (name ? 0.8 : 0.5),
     };
   }).filter((row) => row.employee_name.length > 0);
 }
@@ -369,12 +422,23 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
 
     if (!parsed || !providerUsed) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
 
-    if (!hasWorkerData(parsed)) {
+    if (!workerMetricsComplete(parsed)) {
       try {
         const retry = await callAi(providerUsed, data.imageDataUrl, WORKER_RETRY);
-        if (hasWorkerData(retry)) parsed = { ...parsed, ...retry, rows: rawRowsFrom(retry) };
+        const retryRows = rawRowsFrom(retry);
+        if (retryRows.length) {
+          const primaryRows = rawRowsFrom(parsed);
+          parsed = {
+            ...parsed,
+            rows: mergeWorkerRows(primaryRows, retryRows),
+            product_code: firstText(parsed, ["product_code", "product", "main_product"]) || firstText(retry, ["product_code", "product", "main_product"]),
+            line: firstText(parsed, ["line", "line_code"]) || firstText(retry, ["line", "line_code"]),
+            work_date: firstText(parsed, ["work_date", "date"]) || firstText(retry, ["work_date", "date"]),
+            shift: parsed["shift"] ?? retry["shift"],
+          };
+        }
       } catch {
-        // Hlavička/produkt z prvního průchodu zůstává použitelný.
+        // První průchod zůstává použitelný, pokud druhý průchod selže.
       }
     }
 
