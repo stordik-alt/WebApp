@@ -26,8 +26,25 @@ export function useDailyRecords(from?: string, to?: string) {
       if (to) q = q.lte("work_date", to);
       const { data, error } = await q;
       if (error) throw error;
+
+      // Import ze screenshotu ukládá kanonický Product ID do product_id.
+      // Denní data ale historicky zobrazovala pouze textové pole product,
+      // které může obsahovat staré OCR označení. Vždy proto doplň product
+      // z aktuálního Product ID; starý text použij jen jako fallback.
+      const productIds = Array.from(new Set((data ?? []).map((r) => r.product_id).filter((id): id is string => !!id)));
+      const productsById = new Map<string, string>();
+      if (productIds.length) {
+        const { data: productRows, error: productError } = await supabase
+          .from("products")
+          .select("id,code")
+          .in("id", productIds);
+        if (productError) throw productError;
+        (productRows ?? []).forEach((p) => productsById.set(p.id, p.code));
+      }
+
       return (data ?? []).map((r) => ({
         ...r,
+        product: r.product_id ? (productsById.get(r.product_id) ?? r.product ?? null) : (r.product ?? null),
         oee: r.oee === null ? null : Number(r.oee),
         help_score: Number(r.help_score),
         performance: r.performance === null || r.performance === undefined ? null : Number(r.performance),
