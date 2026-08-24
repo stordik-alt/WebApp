@@ -62,7 +62,7 @@ JSON SCHÉMA:
   "shift": "Ranní | Odpolední | Noční | null",
   "line": "označení linky nebo null",
   "product_code": "hlavní produkt nebo null",
-  "norm_per_hour":  číslo ks/h nebo null,
+  "norm_per_hour": číslo ks/h nebo null,
   "products": [{"product_code":"kód","norm_per_hour":číslo,"confidence":0..1}],
   "header_confidence": 0..1,
   "rows": [{
@@ -284,12 +284,12 @@ function normalizeShift(value: unknown): string | null {
   return text(value) || null;
 }
 
-function normalizeRows(parsed: Record<string, unknown>, fallback: Record<string, unknown>): OcrRow[] {
+function normalizeRows(parsed: Record<string, unknown>): OcrRow[] {
   const rawRows = rawRowsFrom(parsed);
   const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
   const performanceFallback = normalizedPerformanceAtFullAvailability(hourly) ?? avg(hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon"])).filter((v): v is number => v !== null));
   const availabilityFallback = avg(hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"])).filter((v): v is number => v !== null));
-  const globalOee = firstNum(parsed, ["line_oee", "oee", "shift_oee", "oee_pct"]) ?? firstNum(fallback, ["line_oee", "oee", "shift_oee", "oee_pct"]);
+  const globalOee = firstNum(parsed, ["line_oee", "oee", "shift_oee", "oee_pct"]);
   const productCode = firstText(parsed, ["product_code", "product", "main_product"]);
   const inferredPosition: "HA" | "TUP" | null = /^T_/i.test(productCode) ? "TUP" : /^H_/i.test(productCode) ? "HA" : null;
 
@@ -372,27 +372,24 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     if (!hasWorkerData(parsed)) {
       try {
         const retry = await callAi(providerUsed, data.imageDataUrl, WORKER_RETRY);
-        if (hasWorkerData(retry)) {
-          parsed = { ...parsed, ...retry, rows: rawRowsFrom(retry) };
-        }
+        if (hasWorkerData(retry)) parsed = { ...parsed, ...retry, rows: rawRowsFrom(retry) };
       } catch {
-        // První výsledek je stále použitelný pro hlavičku/produkt; pracovní řádky zůstanou prázdné.
+        // Hlavička/produkt z prvního průchodu zůstává použitelný.
       }
     }
 
     const hourly = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
     const products = normalizeProducts(parsed);
-    const rows = normalizeRows(parsed, parsed);
-    const performanceValues = hourly.map((h) => firstNum(h, ["performance_pct", "performance", "vykon"])).filter((v): v is number => v !== null);
-    const availabilityValues = hourly.map((h) => firstNum(h, ["availability_pct", "availability", "dostupnost"])).filter((v): v is number => v !== null);
+    const rows = normalizeRows(parsed);
     const primary = products[0] ?? null;
     const headerProduct = firstText(parsed, ["product_code", "product", "main_product"]);
+    const productCode = primary?.product_code ?? (headerProduct || null);
 
     return {
       work_date: normalizeWorkDate(firstText(parsed, ["work_date", "date"])),
       shift: normalizeShift(parsed["shift"]),
-      line: firstText(parsed, ["line", "line_code"] ) || null,
-      product_code: primary?.product_code ?? headerProduct || null,
+      line: firstText(parsed, ["line", "line_code"]) || null,
+      product_code: productCode,
       norm_per_hour: primary?.norm_per_hour ?? firstNum(parsed, ["norm_per_hour", "norm"]),
       products,
       header_confidence: firstNum(parsed, ["header_confidence", "confidence"]) ?? 0.7,
