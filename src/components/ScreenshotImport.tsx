@@ -18,7 +18,18 @@ import { useApprovalFields } from "@/lib/auth";
 
 type DraftRow = { key: string; ocrName: string; employeeId: string | null; position: "HA" | "TUP"; oee: string; performance: string; availableTime: string; helpScore: string; confidence: number; include: boolean };
 type DraftProduct = OcrProduct & { key: string; employees_per_product: number | null };
-type ProductSetupDraft = { key: string; code: string; name: string; norm: string; capacity: string; confidence: number };
+type ProductSetupDraft = {
+  key: string;
+  code: string;
+  name: string;
+  norm: string;
+  capacity: string;
+  confidence: number;
+  counterpartCode: string;
+  counterpartName: string;
+  counterpartNorm: string;
+  counterpartCapacity: string;
+};
 type ImportStage = "products" | "employees" | "hourly" | "ready";
 const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 function matchEmployee(name: string, employees: Employee[]): Employee | undefined { const n = strip(name); if (!n) return undefined; const exact = employees.find((e) => strip(e.full_name) === n); if (exact) return exact; const parts = n.split(/\s+/).filter(Boolean); return employees.find((e) => { const en = strip(e.full_name); return parts.length > 1 && parts.every((p) => en.includes(p)); }); }
@@ -81,27 +92,15 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
 
   const openProductSetup = (detected: DraftProduct[]) => {
     setProductIdName("");
-    // Product ID se zakládá po dvojicích H_/T_. Pokud OCR přečte pouze jednu
-    // variantu, nabídneme automaticky i chybějící protějšek. Díky tomu lze
-    // při prvním založení vždy zadat normu a kapacitu i pro TUP.
-    const detectedByCode = new Map(detected.map((p) => [p.product_code.trim().toLowerCase(), p]));
-    const codes = new Set(detected.map((p) => p.product_code.trim()));
-    for (const p of detected) {
-      const code = p.product_code.trim();
-      if (/^H_/i.test(code)) {
-        const tCode = "T_" + code.replace(/^H_/i, "");
-        if (!findProductByCode(allProducts, tCode)) codes.add(tCode);
-      } else if (/^T_/i.test(code)) {
-        const hCode = "H_" + code.replace(/^T_/i, "");
-        if (!findProductByCode(allProducts, hCode)) codes.add(hCode);
-      }
-    }
-    const missing = Array.from(codes).filter((code) => !findProductByCode(allProducts, code));
+    const detectedCodes = new Set(detected.map((p) => p.product_code.trim().toLowerCase()));
+    const missing = Array.from(new Set(detected.map((p) => p.product_code.trim()).filter(Boolean))).filter((code) => !findProductByCode(allProducts, code));
     if (!missing.length) return;
+    const detectedByCode = new Map(detected.map((p) => [p.product_code.trim().toLowerCase(), p]));
     setProductSetupDrafts(missing.map((code, i) => {
       const detectedProduct = detectedByCode.get(code.toLowerCase());
-      // Název ani normu variant nepřebíráme z protějšku.
-      // Každá H_/T_ varianta je samostatný Product ID a uživatel ji vyplní sám.
+      const isH = /^H_/i.test(code);
+      const isT = /^T_/i.test(code);
+      const oppositeDetected = isH ? Array.from(detectedCodes).some((x) => /^T_/i.test(x)) : isT ? Array.from(detectedCodes).some((x) => /^H_/i.test(x)) : false;
       return {
         key: i + "-" + code,
         code,
@@ -109,6 +108,10 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         norm: detectedProduct?.norm_per_hour != null ? String(detectedProduct.norm_per_hour) : "",
         capacity: "1",
         confidence: detectedProduct?.confidence ?? 0.5,
+        counterpartCode: oppositeDetected ? "" : "",
+        counterpartName: "",
+        counterpartNorm: "",
+        counterpartCapacity: "1",
       };
     }));
     setNewProductModalOpen(true);
@@ -120,97 +123,82 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     try {
       const date = workDate || new Date().toISOString().slice(0, 10);
       const created: Product[] = [];
-      const processedFamilyKeys = new Set<string>();
-
-      // H_ a T_ jsou dvě varianty JEDNOHO Product ID (jedné produktové rodiny).
-      // Jejich kódy mohou být zcela odlišné, např. H_32346264-005 / T_S4962V3538.
-      const draftByCode = new Map(productSetupDrafts.map((d) => [d.code.trim().toLowerCase(), d]));
+      const items: Array<{ code: string; name: string; norm: string; capacity: string; confidence: number; primary: boolean; sourceKey: string }> = [];
+      const seen = new Set<string>();
       for (const draft of productSetupDrafts) {
-        const code = draft.code.trim();
-        const norm = Number(draft.norm);
-        const capacity = Number(draft.capacity);
-        const name = draft.name.trim();
+        const add = (code: string, name: string, norm: string, capacity: string, primary: boolean) => {
+          const normalized = code.trim().toLowerCase();
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          items.push({ code: code.trim(), name: name.trim(), norm, capacity, confidence: draft.confidence, primary, sourceKey: draft.key });
+        };
+        add(draft.code, draft.name, draft.norm, draft.capacity, true);
+        if (draft.counterpartCode.trim()) add(draft.counterpartCode, draft.counterpartName, draft.counterpartNorm, draft.counterpartCapacity, false);
+      }
+
+      for (const item of items) {
+        const code = item.code;
+        const norm = Number(item.norm);
+        const capacity = Number(item.capacity);
         if (!code) throw new Error("Každý Product ID musí mít kód.");
-        if (!Number.isFinite(norm) || norm <= 0) throw new Error("Zadejte platnou normu pro " + code + ".");
-        if (!Number.isInteger(capacity) || capacity < 1) throw new Error("Zadejte platnou kapacitu operátorů pro " + code + ".");
-
-        const isH = /^H_/i.test(code);
-        const isT = /^T_/i.test(code);
         let product = findProductByCode(allProducts, code) ?? created.find((p) => p.code.trim().toLowerCase() === code.toLowerCase());
+        const existedBefore = Boolean(product);
         if (!product) {
-          const { data, error } = await supabase.from("products").insert({
-            code, name: name || productIdName.trim(), employees_per_product: capacity, first_seen_date: date, ...approval(),
-          }).select("*").single();
+          if (!Number.isFinite(norm) || norm <= 0) throw new Error("Zadejte platnou normu pro " + code + ".");
+          if (!Number.isInteger(capacity) || capacity < 1) throw new Error("Zadejte platnou kapacitu operátorů pro " + code + ".");
+          const { data, error } = await supabase.from("products").insert({ code, name: item.name || productIdName.trim(), employees_per_product: capacity, first_seen_date: date, ...approval() }).select("*").single();
           if (error) throw error;
           product = data as Product;
-        } else {
-          const { data, error } = await supabase.from("products").update({
-            name: name || productIdName.trim(), employees_per_product: capacity,
-          }).eq("id", product.id).select("*").single();
-          if (error) throw error;
-          product = data as Product;
-        }
-
-        if (!findProductByCode(allProducts, code)) {
-          const operation: "HA" | "TUP" = isT ? "TUP" : "HA";
-          const { error: normError } = await supabase.from("product_norms").insert({
-            product_id: product.id, operation, norm_per_hour: norm,
-            valid_from: date, source: "screenshot", confirmed: true,
-            note: "Norma vytvořená při importu screenshotu", ...approval(),
-          });
+          const operation: "HA" | "TUP" = /^T_/i.test(code) ? "TUP" : "HA";
+          const { error: normError } = await supabase.from("product_norms").insert({ product_id: product.id, operation, norm_per_hour: norm, valid_from: date, source: "screenshot", confirmed: true, note: "Norma vytvořená při importu screenshotu", ...approval() });
           if (normError) throw normError;
+        } else if (item.primary && item.name) {
+          const { data, error } = await supabase.from("products").update({ name: item.name, employees_per_product: Number.isInteger(capacity) && capacity >= 1 ? capacity : product.employees_per_product }).eq("id", product.id).select("*").single();
+          if (error) throw error;
+          product = data as Product;
         }
-        created.push(product);
+        if (!existedBefore || item.primary) created.push(product);
+      }
 
-        if (isH || isT) {
-          const otherDraft = productSetupDrafts.find((d) => d.key !== draft.key && (isH ? /^T_/i.test(d.code.trim()) : /^H_/i.test(d.code.trim())));
-          const otherCode = otherDraft?.code.trim() || (isH ? "T_" + code.replace(/^H_/i, "") : "H_" + code.replace(/^T_/i, ""));
-          const otherProduct = otherCode
-            ? (findProductByCode(allProducts, otherCode) ?? created.find((p) => p.code.trim().toLowerCase() === otherCode.toLowerCase()))
-            : undefined;
-          if (otherProduct && otherProduct.id !== product.id) {
-            const hProduct = isH ? product : otherProduct;
-            const tProduct = isH ? otherProduct : product;
-            const familyKey = [hProduct.id, tProduct.id].sort().join(":");
-            if (!processedFamilyKeys.has(familyKey)) {
-              const { data: existingFamily, error: familyLookupError } = await (supabase.from("product_families") as any)
-                .select("id,h_product_id,t_product_id,name")
-                .or("h_product_id.eq." + hProduct.id + ",t_product_id.eq." + tProduct.id).maybeSingle();
-              if (familyLookupError && !/does not exist|relation/i.test(familyLookupError.message)) throw familyLookupError;
-              if (!existingFamily) {
-                const familyName = productIdName.trim();
-                const { data: family, error: familyError } = await (supabase.from("product_families") as any)
-                  .insert({ name: familyName, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("*").single();
-                if (familyError) throw familyError;
-                const { error: linkError } = await (supabase.from("products") as any)
-                  .update({ family_id: family.id, variant_type: "H" }).eq("id", hProduct.id);
-                if (linkError) throw linkError;
-                const { error: tLinkError } = await (supabase.from("products") as any)
-                  .update({ family_id: family.id, variant_type: "T" }).eq("id", tProduct.id);
-                if (tLinkError) throw tLinkError;
-              }
-              processedFamilyKeys.add(familyKey);
-            }
-          }
+      const productByCode = new Map<string, Product>();
+      [...allProducts, ...created].forEach((p) => productByCode.set(p.code.trim().toLowerCase(), p));
+      for (const draft of productSetupDrafts) {
+        const hCode = /^H_/i.test(draft.code) ? draft.code.trim() : draft.counterpartCode.trim();
+        const tCode = /^T_/i.test(draft.code) ? draft.code.trim() : draft.counterpartCode.trim();
+        if (!hCode || !tCode || !/^H_/i.test(hCode) || !/^T_/i.test(tCode)) continue;
+        const hProduct = productByCode.get(hCode.toLowerCase());
+        const tProduct = productByCode.get(tCode.toLowerCase());
+        if (!hProduct || !tProduct || hProduct.id === tProduct.id) continue;
+        const { data: existingFamily, error: familyLookupError } = await (supabase.from("product_families") as any)
+          .select("id,h_product_id,t_product_id,name")
+          .or("h_product_id.eq." + hProduct.id + ",t_product_id.eq." + tProduct.id).maybeSingle();
+        if (familyLookupError && !/does not exist|relation/i.test(familyLookupError.message)) throw familyLookupError;
+        if (!existingFamily) {
+          const familyName = productIdName.trim();
+          if (!familyName) throw new Error("Zadejte název Product ID.");
+          const { data: family, error: familyError } = await (supabase.from("product_families") as any)
+            .insert({ name: familyName, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("*").single();
+          if (familyError) throw familyError;
+          const { error: hLinkError } = await (supabase.from("products") as any).update({ family_id: family.id, variant_type: "H" }).eq("id", hProduct.id);
+          if (hLinkError) throw hLinkError;
+          const { error: tLinkError } = await (supabase.from("products") as any).update({ family_id: family.id, variant_type: "T" }).eq("id", tProduct.id);
+          if (tLinkError) throw tLinkError;
         }
       }
+
       setCreatedProducts((prev) => {
         const byCode = new Map(prev.map((p) => [p.code.trim().toLowerCase(), p]));
         created.forEach((p) => byCode.set(p.code.trim().toLowerCase(), p));
         return Array.from(byCode.values());
       });
-      // Hodinová fáze už nesmí používat původní OCR normu. Použije přesně
-      // hodnotu, kterou uživatel potvrdil při založení Product ID.
       setProductDrafts((prev) => prev.map((p) => {
         const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === p.product_code.trim().toLowerCase());
         return setup ? { ...p, norm_per_hour: Number(setup.norm), employees_per_product: Number(setup.capacity) } : p;
       }));
       setNewProductModalOpen(false);
-      // Setup drafts ponecháme do konce importu, aby hodinová fáze použila
-      // právě potvrzenou normu i kapacitu, ne původní OCR hodnotu.
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_norms"] });
-      toast.success(`Zkontrolováno/ založeno ${productSetupDrafts.length} Product ID. Pokračuji na zaměstnance.`);
+      toast.success(`Zkontrolováno / založeno ${created.length} Product ID. Pokračuji na zaměstnance.`);
       if (previewUrl) void runEmployeeStage(previewUrl);
     } finally {
       setProductSetupSaving(false);
@@ -221,25 +209,15 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     setBusy(true); setStage("employees");
     try {
       const r = await extractStage({ data: { imageDataUrl, stage: "employees" } });
-      // Načti čerstvý seznam zaměstnanců přímo z DB. Props mohou být po předchozím
-      // importu ještě chvíli zastaralé a pak by OCR jméno zůstalo nepřiřazené.
       const { data: dbEmployees, error: employeeLoadError } = await supabase.from("employees").select("*").eq("active", true);
       if (employeeLoadError) throw employeeLoadError;
       const freshEmployees = (dbEmployees ?? []) as Employee[];
       const employeePool = [...freshEmployees, ...addedEmployees];
       setResult((prev) => ({ ...(prev ?? r), work_date: prev?.work_date ?? r.work_date, shift: prev?.shift ?? r.shift, line: prev?.line ?? r.line, product_code: prev?.product_code ?? r.product_code, norm_per_hour: prev?.norm_per_hour ?? r.norm_per_hour, products: prev?.products?.length ? prev.products : r.products, header_confidence: Math.max(prev?.header_confidence ?? 0, r.header_confidence), rows: r.rows, hourly_metrics: prev?.hourly_metrics ?? [], predicted_shift_output: prev?.predicted_shift_output ?? null, productive_minutes: prev?.productive_minutes ?? null }));
       const fallbackPosition: "HA" | "TUP" = productDrafts.some((p) => /^T_/i.test(p.product_code)) ? "TUP" : "HA";
-      const nextRows: DraftRow[] = r.rows.map((row, i) => {
-        const emp = matchEmployee(row.employee_name, employeePool);
-        return { key: i + "-" + (row.employee_name || "manual"), ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? fallbackPosition, oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true };
-      });
+      const nextRows: DraftRow[] = r.rows.map((row, i) => { const emp = matchEmployee(row.employee_name, employeePool); return { key: i + "-" + (row.employee_name || "manual"), ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? fallbackPosition, oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true }; });
       setRows(nextRows);
-      if (!nextRows.length || nextRows.some((r) => r.include && !r.employeeId)) {
-        setEmployeeSetupOpen(true);
-        if (!nextRows.length) toast.warning("OCR zaměstnanců nevrátil žádný čitelný řádek. Hodinová data se zatím nespustí.");
-      } else {
-        await runHourlyStage(imageDataUrl, nextRows);
-      }
+      if (!nextRows.length || nextRows.some((r) => r.include && !r.employeeId)) { setEmployeeSetupOpen(true); if (!nextRows.length) toast.warning("OCR zaměstnanců nevrátil žádný čitelný řádek. Hodinová data se zatím nespustí."); } else await runHourlyStage(imageDataUrl, nextRows);
     } catch (e) { toast.error("OCR zaměstnanců se nepodařilo dokončit: " + (e as Error).message); setStage("employees"); }
     finally { setBusy(false); }
   };
@@ -253,18 +231,11 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         const product = findProductByCode(allProducts, target);
         const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === target.trim().toLowerCase());
         if (setup && Number.isFinite(Number(setup.norm)) && Number(setup.norm) > 0) return Number(setup.norm);
-        if (product) {
-          const operation: "HA" | "TUP" = /^T_/i.test(product.code) ? "TUP" : "HA";
-          const dbNorm = currentNorm(norms, product.id, operation);
-          if (dbNorm) return Number(dbNorm.norm_per_hour);
-        }
+        if (product) { const operation: "HA" | "TUP" = /^T_/i.test(product.code) ? "TUP" : "HA"; const dbNorm = currentNorm(norms, product.id, operation); if (dbNorm) return Number(dbNorm.norm_per_hour); }
         const draft = productDrafts.find((p) => p.product_code.trim().toLowerCase() === target.trim().toLowerCase());
         return draft?.norm_per_hour ?? null;
       };
-      const hourly = (r.hourly_metrics ?? []).map((metric) => ({
-        ...metric,
-        norm_per_hour: resolveImportNorm(metric.product_code),
-      }));
+      const hourly = (r.hourly_metrics ?? []).map((metric) => ({ ...metric, norm_per_hour: resolveImportNorm(metric.product_code) }));
       setHourlyMetrics(hourly);
       const avgPerformanceValues = hourly.map((x) => x.performance_pct).filter((x): x is number => x !== null);
       const avgAvailabilityValues = hourly.map((x) => x.availability_pct).filter((x): x is number => x !== null);
@@ -289,14 +260,12 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       const path = "daily/" + new Date().toISOString().slice(0, 10) + "/" + crypto.randomUUID() + "." + ext;
       const { error: upErr } = await supabase.storage.from("screenshots").upload(path, file, { contentType: file.type || "image/png" });
       if (upErr) toast.warning("Screenshot se nepodařilo uložit do archivu, rozpoznávání pokračuje."); else setScreenshotPath(path);
-      // FÁZE 1: pouze produkty a hlavička.
       const r = await extractStage({ data: { imageDataUrl: dataUrl, stage: "products" } });
       setResult(r); setWorkDate(r.work_date ?? new Date().toISOString().slice(0, 10)); setShift(r.shift && SHIFTS.includes(r.shift as never) ? r.shift : SHIFTS[0]); setLine(r.line ?? ""); setProductCode(r.product_code ?? ""); setNormValue(r.norm_per_hour !== null ? String(r.norm_per_hour) : "");
       const detectedProducts = r.products?.length ? r.products : (r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : []);
       setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: i + "-" + p.product_code, employees_per_product: findProductByCode(allProducts, p.product_code)?.employees_per_product ?? null })));
       const newProducts = detectedProducts.filter((p) => !findProductByCode(allProducts, p.product_code));
-      if (newProducts.length > 0) { setStage("products"); openProductSetup(detectedProducts); toast.warning("Nalezeno " + newProducts.length + " nové Product ID. Nejprve je založte."); }
-      else await runEmployeeStage(dataUrl);
+      if (newProducts.length > 0) { setStage("products"); openProductSetup(detectedProducts); toast.warning("Nalezeno " + newProducts.length + " nové Product ID. Nejprve je založte."); } else await runEmployeeStage(dataUrl);
     } catch (e) { toast.error((e as Error).message); setStage("products"); }
     finally { setBusy(false); }
   };
@@ -308,29 +277,19 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const confirmImport = useMutation({
     mutationFn: async () => {
       if (!line.trim()) throw new Error("Doplňte linku."); const l = line.trim().toLowerCase();
-      const includedRows = rows.filter((r) => r.include);
-      const unresolved = includedRows.filter((r) => !r.employeeId);
+      const includedRows = rows.filter((r) => r.include); const unresolved = includedRows.filter((r) => !r.employeeId);
       if (unresolved.length) throw new Error(`Nelze importovat: ${unresolved.length} ${unresolved.length === 1 ? "řádek nemá přiřazeného zaměstnance" : "řádky nemají přiřazeného zaměstnance"}. Přiřaďte nebo vytvořte zaměstnance.`);
       const selected = includedRows.filter((r) => r.employeeId && !existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l));
-      if (!selected.length) {
-        const duplicateCount = includedRows.filter((r) => r.employeeId && existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)).length;
-        throw new Error(`Všechny vybrané řádky už jsou pro datum ${workDate}, směnu ${shift} a linku ${line.trim()} uložené (duplicitních řádků: ${duplicateCount}).`);
-      }
+      if (!selected.length) { const duplicateCount = includedRows.filter((r) => r.employeeId && existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)).length; throw new Error(`Všechny vybrané řádky už jsou pro datum ${workDate}, směnu ${shift} a linku ${line.trim()} uložené (duplicitních řádků: ${duplicateCount}).`); }
       const drafts = productDrafts.filter((p) => p.product_code.trim()); if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null }); if (!drafts.length) throw new Error("Screenshot neobsahuje žádný rozpoznaný produkt.");
-      const productByCode = new Map<string, Product>();
-      for (const d of drafts) {
-        const existing = findProductByCode(allProducts, d.product_code);
-        if (existing) productByCode.set(d.product_code.trim().toLowerCase(), existing);
-      }
+      const productByCode = new Map<string, Product>(); for (const d of drafts) { const existing = findProductByCode(allProducts, d.product_code); if (existing) productByCode.set(d.product_code.trim().toLowerCase(), existing); }
       if (missingProductCodes.length) throw new Error("Nejprve dokončete kontrolu/založení všech Product ID v prvním kroku.");
       const primary = productByCode.get(drafts[0].product_code.trim().toLowerCase());
       const hProduct = productByCode.get((drafts.find((d) => /^H_/i.test(d.product_code))?.product_code || "").trim().toLowerCase());
       const tProduct = productByCode.get((drafts.find((d) => /^T_/i.test(d.product_code))?.product_code || "").trim().toLowerCase());
       if (!primary && !hProduct && !tProduct) throw new Error("Produkt se nepodařilo dohledat.");
       const records = selected.map((r) => { const positionProduct = r.position === "TUP" ? tProduct : hProduct; const product = positionProduct || primary; if (!product) throw new Error(`Pro pozici ${r.position} nebyl nalezen Product ID.`); return { employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, position: r.position, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }; });
-      const { error } = await supabase.from("daily_records").insert(records);
-      if (error) throw error;
-      return selected.length;
+      const { error } = await supabase.from("daily_records").insert(records); if (error) throw error; return selected.length;
     },
     onSuccess: (count) => { qc.invalidateQueries(); toast.success(`Importováno ${count} řádků.`); onImported?.(); reset(); },
     onError: (e: Error) => toast.error(`Import se nepodařil: ${e.message}`),
@@ -357,21 +316,12 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
             const importNorm = dbNorm ?? p.norm_per_hour;
             const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === p.product_code.trim().toLowerCase());
             return <div key={p.key} className="rounded border p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div><div className="font-medium">{p.product_code}</div><div className="text-[11px] text-muted-foreground">jistota {Math.round(p.confidence * 100)} % · {existing ? "Product ID evidováno" : "nové Product ID"}</div></div>
-                {existing ? <span className="text-xs text-muted-foreground">norma z Product ID</span> : <span className="text-xs text-warning">nutno založit</span>}
-              </div>
-              {existing ? <div className="text-sm font-medium">{importNorm != null ? `${importNorm} ks/h` : "norma chybí"}</div> : setup ? <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1.5"><Label>Norma (ks/h) *</Label><Input type="number" min="0.1" step="0.1" inputMode="decimal" value={setup.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div>
-                <div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={setup.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, capacity: e.target.value } : x))} /></div>
-              </div> : null}
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><div className="font-medium">{p.product_code}</div><div className="text-[11px] text-muted-foreground">jistota {Math.round(p.confidence * 100)} % · {existing ? "Product ID evidováno" : "nové Product ID"}</div></div>{existing ? <span className="text-xs text-muted-foreground">norma z Product ID</span> : <span className="text-xs text-warning">nutno založit</span>}</div>
+              {existing ? <div className="text-sm font-medium">{importNorm != null ? `${importNorm} ks/h` : "norma chybí"}</div> : setup ? <div className="grid gap-3 sm:grid-cols-2"><div className="grid gap-1.5"><Label>Norma (ks/h) *</Label><Input type="number" min="0.1" step="0.1" inputMode="decimal" value={setup.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div><div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={setup.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === setup.key ? { ...x, capacity: e.target.value } : x))} /></div></div> : null}
             </div>;
           })}
         </div>
-        {missingProductCodes.length > 0 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 p-3">
-          <span className="text-sm">Nové Product ID vyžadují potvrzení normy a kapacity.</span>
-          <Button type="button" disabled={productSetupSaving || !productSetupDrafts.length} onClick={() => void createProductIds()}><Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit ${missingProductCodes.length} Product ID a pokračovat`}</Button>
-        </div> : null}
+        {missingProductCodes.length > 0 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 p-3"><span className="text-sm">Nové Product ID vyžadují potvrzení normy a kapacity.</span><Button type="button" disabled={productSetupSaving || !productSetupDrafts.length} onClick={() => void createProductIds()}><Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit ${missingProductCodes.length} Product ID a pokračovat`}</Button></div> : null}
       </div> : null}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4"><div className="grid gap-1"><Label>Datum</Label><Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} /></div><div className="grid gap-1"><Label>Směna</Label><Select value={shift} onValueChange={setShift}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SHIFTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1"><Label>Linka</Label><Input value={line} onChange={(e) => setLine(e.target.value)} placeholder="např. L1" /></div><div className="grid gap-1"><Label>Kód produktu</Label><Input value={productCode} onChange={(e) => setProductCode(e.target.value)} /></div></div>
       {(duplicateNames.length || otherLineNotices.length) ? <div className="grid gap-2">{duplicateNames.length ? <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm"><strong>Duplicitní řádky:</strong> {duplicateNames.join(", ")}</div> : null}{otherLineNotices.length ? <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><strong>Upozornění:</strong> {otherLineNotices.map((x) => `${x.name}: ${x.lines.join(", ")}`).join("; ")}</div> : null}</div> : null}
@@ -379,56 +329,24 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       <div className="flex flex-wrap justify-end gap-2">{stage === "employees" ? <Button variant="secondary" disabled={busy || unresolvedEmployeeRows.length > 0 || !rows.length} onClick={() => void continueAfterEmployees()}>Pokračovat na hodinová data</Button> : null}<Button variant="outline" onClick={reset}>Zrušit</Button><Button disabled={confirmImport.isPending || importBlocked || !rows.some((r) => r.include && r.employeeId)} onClick={() => confirmImport.mutate()}>{confirmImport.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdit import</Button></div>
     </div>}
     <Dialog open={employeeSetupOpen} onOpenChange={(open) => { if (!busy && !createEmployee.isPending) setEmployeeSetupOpen(open); }}>
-      <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto">
-        <DialogHeader><DialogTitle>2/3 – Zaměstnanci z OCR</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">OCR přečetl pracovníky až po vyřešení Product ID. Existující zaměstnanci jsou přiřazeni automaticky. Nenalezené můžete vytvořit tlačítkem +.</div>
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b bg-muted/50"><th className="p-2 text-left">OCR jméno</th><th className="p-2 text-left">Stav</th><th className="p-2 text-left">Akce</th></tr></thead>
-              <tbody>{rows.map((r) => <tr key={r.key} className="border-b last:border-0"><td className="p-2">{r.ocrName || "Jméno nebylo rozpoznáno"}</td><td className="p-2">{r.employeeId ? "✓ Evidován" : "Nenalezen"}</td><td className="p-2">{r.employeeId ? <span className="text-xs text-muted-foreground">Přiřazen automaticky</span> : <Button type="button" size="sm" variant="outline" onClick={() => openAddEmployee(r)}><Plus className="h-4 w-4" /> Vytvořit / přiřadit</Button>}</td></tr>)}</tbody>
-            </table>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setEmployeeSetupOpen(false)}>Zrušit</Button><Button disabled={busy || unresolvedEmployeeRows.length > 0} onClick={() => void continueAfterEmployees()}>{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Načítám…</> : <>Pokračovat na hodinová data</>}</Button></DialogFooter>
-        </div>
-      </DialogContent>
+      <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>2/3 – Zaměstnanci z OCR</DialogTitle></DialogHeader><div className="grid gap-3"><div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">OCR přečetl pracovníky až po vyřešení Product ID. Existující zaměstnanci jsou přiřazeni automaticky. Nenalezené můžete vytvořit tlačítkem +.</div><div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b bg-muted/50"><th className="p-2 text-left">OCR jméno</th><th className="p-2 text-left">Stav</th><th className="p-2 text-left">Akce</th></tr></thead><tbody>{rows.map((r) => <tr key={r.key} className="border-b last:border-0"><td className="p-2">{r.ocrName || "Jméno nebylo rozpoznáno"}</td><td className="p-2">{r.employeeId ? "✓ Evidován" : "Nenalezen"}</td><td className="p-2">{r.employeeId ? <span className="text-xs text-muted-foreground">Přiřazen automaticky</span> : <Button type="button" size="sm" variant="outline" onClick={() => openAddEmployee(r)}><Plus className="h-4 w-4" /> Vytvořit / přiřadit</Button>}</td></tr>)}</tbody></table></div><DialogFooter><Button variant="outline" onClick={() => setEmployeeSetupOpen(false)}>Zrušit</Button><Button disabled={busy || unresolvedEmployeeRows.length > 0} onClick={() => void continueAfterEmployees()}>{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Načítám…</> : <>Pokračovat na hodinová data</>}</Button></DialogFooter></div></DialogContent>
     </Dialog>
     <Dialog open={addEmployeeOpen} onOpenChange={(open) => { if (!createEmployee.isPending) { setAddEmployeeOpen(open); if (!open) { setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); } } }}><DialogContent><DialogHeader><DialogTitle>Přidat zaměstnance k importu</DialogTitle></DialogHeader><div className="grid gap-3"><div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">Jméno z OCR je předvyplněné. Po uložení bude nový zaměstnanec automaticky přiřazen k tomuto řádku importu.</div><div className="grid gap-1"><Label>Jméno a příjmení <span className="text-destructive">*</span></Label><Input value={addEmployeeName} onChange={(e) => setAddEmployeeName(e.target.value)} autoFocus disabled={createEmployee.isPending} /></div><div className="grid gap-1"><Label>Osobní číslo</Label><Input value={addEmployeePersonalNo} onChange={(e) => setAddEmployeePersonalNo(e.target.value)} disabled={createEmployee.isPending} /></div></div><DialogFooter><Button type="button" variant="outline" disabled={createEmployee.isPending} onClick={() => setAddEmployeeOpen(false)}>Zrušit</Button><Button type="button" disabled={createEmployee.isPending || !addEmployeeName.trim()} onClick={() => createEmployee.mutate()}>{createEmployee.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Ukládám…</> : <><Plus className="h-4 w-4" /> Vytvořit a přiřadit</>}</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={newProductModalOpen} onOpenChange={(open) => { if (!productSetupSaving) setNewProductModalOpen(open); }}>
-      <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto">
-        <DialogHeader><DialogTitle>1/3 – Kontrola / založení Product ID</DialogTitle></DialogHeader>
-        <div className="grid gap-4">
-          <div className="rounded-xl border bg-muted/20 p-4 text-sm">
-            <div className="font-semibold">OCR našel novou produktovou rodinu / varianty</div>
-            <div className="mt-1 text-muted-foreground">H_ a T_ jsou dvě varianty jednoho Product ID. Kódy se mohou lišit, např. H_32346264-005 a T_S4962V3538. Každá varianta může mít vlastní název, normu i kapacitu.</div>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Název Product ID *</Label>
-            <Input value={productIdName} onChange={(e) => setProductIdName(e.target.value)} placeholder="Zadejte vlastní název Product ID" autoFocus />
-            <p className="text-xs text-muted-foreground">Název patří celé produktové rodině. H_ a T_ mohou mít vlastní názvy variant.</p>
-          </div>
-          <div className="grid gap-3">
-            {productSetupDrafts.map((draft) => (
-              <div key={draft.key} className="rounded-lg border p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div><div className="font-semibold">{draft.code}</div><div className="text-xs text-muted-foreground">jistota OCR {Math.round(draft.confidence * 100)} %</div></div>
-                  <span className="text-xs text-warning">nová varianta</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="grid gap-1.5 sm:col-span-2"><Label>Název varianty *</Label><Input value={draft.name} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, name: e.target.value } : x))} placeholder={/^H_/i.test(draft.code) ? "Volitelný název H_ varianty" : "Volitelný název T_ varianty"} /></div>
-                  <div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={draft.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, capacity: e.target.value } : x))} /></div>
-                  <div className="grid gap-1.5 sm:col-span-3"><Label>Norma (ks/h) *</Label><Input type="number" inputMode="decimal" min="0.1" step="0.1" value={draft.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div>
-                </div>
-              </div>
-            ))}
-          </div>
+      <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>1/3 – Kontrola / založení Product ID</DialogTitle></DialogHeader><div className="grid gap-4">
+        <div className="rounded-xl border bg-muted/20 p-4 text-sm"><div className="font-semibold">OCR našel nové Product ID</div><div className="mt-1 text-muted-foreground">H_ a T_ jsou varianty jednoho Product ID. Kód druhé varianty se NEODVOZUJE automaticky. Pokud protějšek v OCR není, zadejte jeho skutečný kód ručně. H_ a T_ mohou mít odlišný název, normu i kapacitu.</div></div>
+        <div className="grid gap-1.5"><Label>Název Product ID *</Label><Input value={productIdName} onChange={(e) => setProductIdName(e.target.value)} placeholder="Zadejte vlastní název Product ID" autoFocus /><p className="text-xs text-muted-foreground">Název Product ID zadáváte ručně; OCR ho nenastavuje.</p></div>
+        <div className="grid gap-3">
+          {productSetupDrafts.map((draft) => {
+            const isH = /^H_/i.test(draft.code); const opposite = isH ? "T_" : "H_";
+            const counterpartExists = draft.counterpartCode.trim() ? Boolean(findProductByCode(allProducts, draft.counterpartCode)) : false;
+            return <div key={draft.key} className="rounded-lg border p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><div className="font-semibold">{draft.code}</div><div className="text-xs text-muted-foreground">OCR jistota {Math.round(draft.confidence * 100)} %</div></div><span className="text-xs text-warning">rozpoznaná varianta</span></div>
+              <div className="grid gap-3 sm:grid-cols-3"><div className="grid gap-1.5 sm:col-span-2"><Label>Název varianty *</Label><Input value={draft.name} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, name: e.target.value } : x))} placeholder={isH ? "Vlastní název H_ varianty" : "Vlastní název T_ varianty"} /></div><div className="grid gap-1.5"><Label>Kapacita / operátoři *</Label><Input type="number" min="1" step="1" inputMode="numeric" value={draft.capacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, capacity: e.target.value } : x))} /></div><div className="grid gap-1.5 sm:col-span-3"><Label>Norma (ks/h) *</Label><Input type="number" min="0.1" step="0.1" inputMode="decimal" value={draft.norm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, norm: e.target.value } : x))} placeholder="např. 100" /></div></div>
+              <div className="mt-4 rounded-md border border-dashed bg-muted/20 p-3"><div className="mb-2 text-sm font-semibold">Protějšek {opposite}_ – zadává se pouze ručně</div><div className="grid gap-3 sm:grid-cols-2"><div className="grid gap-1.5"><Label>Kód protějšku</Label><Input value={draft.counterpartCode} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, counterpartCode: e.target.value } : x))} placeholder={`např. ${opposite}...`} /></div><div className="grid gap-1.5"><Label>Název protějšku</Label><Input value={draft.counterpartName} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, counterpartName: e.target.value } : x))} placeholder="Vlastní název protějšku" /></div><div className="grid gap-1.5"><Label>Norma protějšku</Label><Input type="number" min="0.1" step="0.1" value={draft.counterpartNorm} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, counterpartNorm: e.target.value } : x))} placeholder="např. 80" /></div><div className="grid gap-1.5"><Label>Kapacita protějšku</Label><Input type="number" min="1" step="1" value={draft.counterpartCapacity} onChange={(e) => setProductSetupDrafts((prev) => prev.map((x) => x.key === draft.key ? { ...x, counterpartCapacity: e.target.value } : x))} placeholder="např. 1" /></div></div>{draft.counterpartCode.trim() ? <p className="mt-2 text-xs text-muted-foreground">{counterpartExists ? "Protějšek už v databázi existuje – nebude znovu založen." : "Protějšek bude založen pouze s ručně zadanými údaji."}</p> : <p className="mt-2 text-xs text-muted-foreground">Protějšek není povinný. Program ho nevytváří automaticky.</p>}</div>
+            </div>;
+          })}
         </div>
-        <DialogFooter>
-          <Button variant="outline" disabled={productSetupSaving} onClick={() => setNewProductModalOpen(false)}>Zrušit</Button>
-          <Button disabled={productSetupSaving || !productSetupDrafts.length || !productIdName.trim()} onClick={async () => { try { await createProductIds(); } catch (e) { toast.error((e as Error).message); } }}>
-            <Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : `Založit položky a pokračovat`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+      </div><DialogFooter><Button variant="outline" disabled={productSetupSaving} onClick={() => setNewProductModalOpen(false)}>Zrušit</Button><Button disabled={productSetupSaving || !productSetupDrafts.length || !productIdName.trim()} onClick={async () => { try { await createProductIds(); } catch (e) { toast.error((e as Error).message); } }}><Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : "Založit položky a pokračovat"}</Button></DialogFooter></DialogContent>
     </Dialog>
   </Card>;
 }
