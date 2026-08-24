@@ -64,6 +64,7 @@ PRODUKTY A HODINY:
 - Nezaměňuj normu mezi H_ a T_ produktem.
 - actual_output je hodnota ze sloupce reálný.
 - Výkon a Dostupnost hodinové tabulky jsou procenta.
+- Hodinová norma v hourly_metrics je vždy null; skutečná norma se doplní z Product ID v aplikaci.
 
 DALŠÍ:
 - Procenta vracej jako čísla bez %.
@@ -83,7 +84,7 @@ SCHÉMA:
   "products": [{"product_code":"kód","norm_per_hour":číslo nebo null,"confidence":0..1}],
   "header_confidence": 0..1,
   "rows": [{"employee_name":"jméno","position":"HA | TUP | null","oee":číslo nebo null,"performance":číslo nebo null,"available_time":číslo nebo null,"confidence":0..1}],
-  "hourly_metrics": [{"hour":číslo nebo null,"product_code":"produkt nebo null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null,"norm_per_hour":číslo nebo null}]
+  "hourly_metrics": [{"hour":číslo nebo null,"product_code":"produkt nebo null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null,"norm_per_hour":null}]
 }`;
 
 const WORKER_RETRY = `Udělěj SAMOSTATNÝ DRUHÝ PRŮCHOD stejného screenshotu.
@@ -366,9 +367,9 @@ const HOURLY_STAGE_SYSTEM = `${SYSTEM}
 
 TENTO PRŮCHOD JE VÝHRADNĚ PRO HODINOVÁ DATA.
 1) Najdi hodinovou výrobní tabulku.
-2) Pro KAŽDOU skutečně viditelnou hodinu vrať product_code, actual_output (reálný výstup), norm_per_hour, performance_pct a availability_pct.
-3) Nezaměňuj hodinovou tabulku s tabulkou pracovníků.
-4) Vrať také produkty a jejich normy, pokud jsou v hodinové tabulce viditelné.
+2) Pro KAŽDOU skutečně viditelnou hodinu vrať product_code, actual_output (reálný výstup), performance_pct a availability_pct.
+3) Normu hodinové výroby NEČTI jako zdroj denního záznamu – norma se po OCR doplní z databázového Product ID.
+4) Nezaměňuj hodinovou tabulku s tabulkou pracovníků.
 5) Datum, směnu a linku vrať, pokud jsou čitelné.
 Vrať JSON podle společného schématu; rows musí být prázdné.
 `;
@@ -376,7 +377,7 @@ Vrať JSON podle společného schématu; rows musí být prázdné.
 const stageInstruction = (stage: OcrStage): string => {
   if (stage === "products") return "Proveď první průchod: pouze Product ID, jejich normy a hlavičku (datum, směna, linka). Neřeš zaměstnance ani hodinová data.";
   if (stage === "employees") return "Proveď druhý průchod: pouze zaměstnanci a hodnoty z jejich řádků (OEE, Výkon, Dostupnost). Product ID ber jen jako kontext.";
-  return "Proveď třetí průchod: pouze hodinová výrobní data, normy, reálný výstup, Výkon a Dostupnost.";
+  return "Proveď třetí průchod: pouze hodinová výrobní data, reálný výstup, Výkon a Dostupnost. Hodinovou normu nečti – aplikace ji doplní z Product ID.";
 };
 
 async function runStage(stage: OcrStage, imageDataUrl: string): Promise<OcrResult> {
@@ -456,7 +457,7 @@ async function runStage(stage: OcrStage, imageDataUrl: string): Promise<OcrResul
     actual_output: actualOutputForHour(h),
     performance_pct: firstNum(h, ["performance_pct", "performance", "vykon", "výkon"]),
     availability_pct: firstNum(h, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]),
-    norm_per_hour: firstNum(h, ["norm_per_hour", "norm", "hourly_norm"]),
+    norm_per_hour: null,
   }));
 
   return {
