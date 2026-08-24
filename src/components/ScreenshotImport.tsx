@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, ImageUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractDailyFromScreenshot, type OcrProduct, type OcrResult } from "@/lib/ocr.functions";
+import { extractScreenshotStage, type OcrProduct, type OcrResult, type OcrHourlyMetric } from "@/lib/ocr.functions";
 import { useProductNorms, useProducts, useShiftAggregates } from "@/lib/data";
 import { currentNorm, findProductByCode, type Product, type ProductNorm } from "@/lib/products";
 import { SHIFTS, type Employee } from "@/lib/metrics";
@@ -18,21 +18,23 @@ import { useApprovalFields } from "@/lib/auth";
 
 type DraftRow = { key: string; ocrName: string; employeeId: string | null; position: "HA" | "TUP"; oee: string; performance: string; availableTime: string; helpScore: string; confidence: number; include: boolean };
 type DraftProduct = OcrProduct & { key: string; employees_per_product: number | null };
+type ImportStage = "products" | "employees" | "hourly" | "ready";
 const strip = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 function matchEmployee(name: string, employees: Employee[]): Employee | undefined { const n = strip(name); if (!n) return undefined; const exact = employees.find((e) => strip(e.full_name) === n); if (exact) return exact; const parts = n.split(/\s+/).filter(Boolean); return employees.find((e) => { const en = strip(e.full_name); return parts.length > 1 && parts.every((p) => en.includes(p)); }); }
 
 export function ScreenshotImport({ employees, onImported }: { employees: Employee[]; onImported?: () => void }) {
   const qc = useQueryClient();
   const approval = useApprovalFields();
-  const extract = useServerFn(extractDailyFromScreenshot);
+  const extractStage = useServerFn(extractScreenshotStage);
   const { data: products = [] } = useProducts();
   const { data: norms = [] } = useProductNorms();
   const { records: existingRecords, shifts: existingShifts } = useShiftAggregates();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [workDate, setWorkDate] = useState(""); const [shift, setShift] = useState<string>(SHIFTS[0]); const [line, setLine] = useState(""); const [productCode, setProductCode] = useState(""); const [normValue, setNormValue] = useState(""); const [productDrafts, setProductDrafts] = useState<DraftProduct[]>([]); const [rows, setRows] = useState<DraftRow[]>([]);
-  const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]); const [addEmployeeOpen, setAddEmployeeOpen] = useState(false); const [addEmployeeRowKey, setAddEmployeeRowKey] = useState<string | null>(null); const [addEmployeeName, setAddEmployeeName] = useState(""); const [addEmployeePersonalNo, setAddEmployeePersonalNo] = useState("");
+  const [busy, setBusy] = useState(false); const [stage, setStage] = useState<ImportStage>("products"); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [workDate, setWorkDate] = useState(""); const [shift, setShift] = useState<string>(SHIFTS[0]); const [line, setLine] = useState(""); const [productCode, setProductCode] = useState(""); const [normValue, setNormValue] = useState(""); const [productDrafts, setProductDrafts] = useState<DraftProduct[]>([]); const [rows, setRows] = useState<DraftRow[]>([]);
+  const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]); const [employeeSetupOpen, setEmployeeSetupOpen] = useState(false); const [addEmployeeOpen, setAddEmployeeOpen] = useState(false); const [addEmployeeRowKey, setAddEmployeeRowKey] = useState<string | null>(null); const [addEmployeeName, setAddEmployeeName] = useState(""); const [addEmployeePersonalNo, setAddEmployeePersonalNo] = useState("");
   const [newProductModalOpen, setNewProductModalOpen] = useState(false); const [productSetupSaving, setProductSetupSaving] = useState(false); const [pendingProductCode, setPendingProductCode] = useState(""); const [familyName, setFamilyName] = useState(""); const [familyHCode, setFamilyHCode] = useState(""); const [familyTCode, setFamilyTCode] = useState(""); const [familyHNorm, setFamilyHNorm] = useState(""); const [familyTNorm, setFamilyTNorm] = useState(""); const [capacityHA, setCapacityHA] = useState("1"); const [capacityTUP, setCapacityTUP] = useState("1");
   const [productFamily, setProductFamily] = useState<{ familyId: string; hProduct: Product; tProduct: Product } | null>(null);
+  const [hourlyMetrics, setHourlyMetrics] = useState<OcrHourlyMetric[]>([]);
   const activeEmployees = useMemo(() => [...employees, ...addedEmployees].filter((e) => e.active), [employees, addedEmployees]);
   const primaryProductCode = productDrafts[0]?.product_code || productCode.trim();
   const existingProduct: Product | undefined = useMemo(() => findProductByCode(products, primaryProductCode), [products, primaryProductCode]);
@@ -40,7 +42,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const normNum = normValue === "" ? null : Number(normValue);
   const missingProductCodes = useMemo(() => productDrafts.filter((p) => !findProductByCode(products, p.product_code)).map((p) => p.product_code), [productDrafts, products]);
   const patch = (key: string, p: Partial<DraftRow>) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...p } : r)));
-  const reset = () => { setResult(null); setRows([]); setProductDrafts([]); setScreenshotPath(null); setPreviewUrl(null); setProductCode(""); setNormValue(""); setAddedEmployees([]); setAddEmployeeOpen(false); setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); setNewProductModalOpen(false); setProductSetupSaving(false); setPendingProductCode(""); setFamilyName(""); setFamilyHCode(""); setFamilyTCode(""); setFamilyHNorm(""); setFamilyTNorm(""); setCapacityHA("1"); setCapacityTUP("1"); setProductFamily(null); if (fileRef.current) fileRef.current.value = ""; };
+  const reset = () => { setStage("products"); setResult(null); setHourlyMetrics([]); setEmployeeSetupOpen(false); setRows([]); setProductDrafts([]); setScreenshotPath(null); setPreviewUrl(null); setProductCode(""); setNormValue(""); setAddedEmployees([]); setAddEmployeeOpen(false); setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); setNewProductModalOpen(false); setProductSetupSaving(false); setPendingProductCode(""); setFamilyName(""); setFamilyHCode(""); setFamilyTCode(""); setFamilyHNorm(""); setFamilyTNorm(""); setCapacityHA("1"); setCapacityTUP("1"); setProductFamily(null); if (fileRef.current) fileRef.current.value = ""; };
   const openAddEmployee = (row: DraftRow) => { setAddEmployeeRowKey(row.key); setAddEmployeeName(row.ocrName.trim()); setAddEmployeePersonalNo(""); setAddEmployeeOpen(true); };
   const createEmployee = useMutation({
     mutationFn: async () => {
