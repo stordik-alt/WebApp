@@ -166,7 +166,8 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         return setup ? { ...p, norm_per_hour: Number(setup.norm), employees_per_product: Number(setup.capacity) } : p;
       }));
       setNewProductModalOpen(false);
-      setProductSetupDrafts([]);
+      // Setup drafts ponecháme do konce importu, aby hodinová fáze použila
+      // právě potvrzenou normu i kapacitu, ne původní OCR hodnotu.
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_norms"] });
       toast.success(`Zkontrolováno/ založeno ${productSetupDrafts.length} Product ID. Pokračuji na zaměstnance.`);
@@ -210,6 +211,8 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       const resolveImportNorm = (code: string | null) => {
         const target = code || productDrafts[0]?.product_code || productCode;
         const product = findProductByCode(allProducts, target);
+        const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === target.trim().toLowerCase());
+        if (setup && Number.isFinite(Number(setup.norm)) && Number(setup.norm) > 0) return Number(setup.norm);
         if (product) {
           const operation: "HA" | "TUP" = /^T_/i.test(product.code) ? "TUP" : "HA";
           const dbNorm = currentNorm(norms, product.id, operation);
