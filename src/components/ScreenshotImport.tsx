@@ -79,15 +79,36 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   });
 
   const openProductSetup = (detected: DraftProduct[]) => {
-    const missing = detected.filter((p) => !findProductByCode(allProducts, p.product_code));
+    // Product ID se zakládá po dvojicích H_/T_. Pokud OCR přečte pouze jednu
+    // variantu, nabídneme automaticky i chybějící protějšek. Díky tomu lze
+    // při prvním založení vždy zadat normu a kapacitu i pro TUP.
+    const detectedByCode = new Map(detected.map((p) => [p.product_code.trim().toLowerCase(), p]));
+    const codes = new Set(detected.map((p) => p.product_code.trim()));
+    for (const p of detected) {
+      const code = p.product_code.trim();
+      if (/^H_/i.test(code)) {
+        const tCode = "T_" + code.replace(/^H_/i, "");
+        if (!findProductByCode(allProducts, tCode)) codes.add(tCode);
+      } else if (/^T_/i.test(code)) {
+        const hCode = "H_" + code.replace(/^T_/i, "");
+        if (!findProductByCode(allProducts, hCode)) codes.add(hCode);
+      }
+    }
+    const missing = Array.from(codes).filter((code) => !findProductByCode(allProducts, code));
     if (!missing.length) return;
-    setProductSetupDrafts(missing.map((p, i) => ({
-      key: `${i}-${p.product_code}`,
-      code: p.product_code.trim(),
-      norm: p.norm_per_hour != null ? String(p.norm_per_hour) : "",
-      capacity: String(findProductByCode(allProducts, p.product_code)?.employees_per_product ?? 1),
-      confidence: p.confidence,
-    })));
+    setProductSetupDrafts(missing.map((code, i) => {
+      const detectedProduct = detectedByCode.get(code.toLowerCase());
+      const counterpart = detectedProduct
+        ? undefined
+        : detected.find((p) => /^H_/i.test(code) ? /^T_/i.test(p.product_code) : /^H_/i.test(p.product_code));
+      return {
+        key: i + "-" + code,
+        code,
+        norm: detectedProduct?.norm_per_hour != null ? String(detectedProduct.norm_per_hour) : counterpart?.norm_per_hour != null ? String(counterpart.norm_per_hour) : "",
+        capacity: "1",
+        confidence: detectedProduct?.confidence ?? 0.5,
+      };
+    }));
     setNewProductModalOpen(true);
   };
 
@@ -138,6 +159,12 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
         created.forEach((p) => byCode.set(p.code.trim().toLowerCase(), p));
         return Array.from(byCode.values());
       });
+      // Hodinová fáze už nesmí používat původní OCR normu. Použije přesně
+      // hodnotu, kterou uživatel potvrdil při založení Product ID.
+      setProductDrafts((prev) => prev.map((p) => {
+        const setup = productSetupDrafts.find((d) => d.code.trim().toLowerCase() === p.product_code.trim().toLowerCase());
+        return setup ? { ...p, norm_per_hour: Number(setup.norm), employees_per_product: Number(setup.capacity) } : p;
+      }));
       setNewProductModalOpen(false);
       setProductSetupDrafts([]);
       qc.invalidateQueries({ queryKey: ["products"] });
