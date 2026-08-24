@@ -98,13 +98,12 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
     if (!missing.length) return;
     setProductSetupDrafts(missing.map((code, i) => {
       const detectedProduct = detectedByCode.get(code.toLowerCase());
-      const counterpart = detectedProduct
-        ? undefined
-        : detected.find((p) => /^H_/i.test(code) ? /^T_/i.test(p.product_code) : /^H_/i.test(p.product_code));
+      // Název ani normu variant nepřebíráme z protějšku.
+      // Každá H_/T_ varianta je samostatný Product ID a uživatel ji vyplní sám.
       return {
         key: i + "-" + code,
         code,
-        norm: detectedProduct?.norm_per_hour != null ? String(detectedProduct.norm_per_hour) : counterpart?.norm_per_hour != null ? String(counterpart.norm_per_hour) : "",
+        norm: detectedProduct?.norm_per_hour != null ? String(detectedProduct.norm_per_hour) : "",
         capacity: "1",
         confidence: detectedProduct?.confidence ?? 0.5,
       };
