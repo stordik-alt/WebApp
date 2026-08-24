@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ImageUp, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Check, ImageUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractDailyFromScreenshot, type OcrProduct, type OcrResult } from "@/lib/ocr.functions";
 import { useProductNorms, useProducts, useShiftAggregates } from "@/lib/data";
@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useApprovalFields } from "@/lib/auth";
@@ -32,84 +31,56 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [workDate, setWorkDate] = useState(""); const [shift, setShift] = useState<string>(SHIFTS[0]); const [line, setLine] = useState(""); const [productCode, setProductCode] = useState(""); const [normValue, setNormValue] = useState(""); const [productDrafts, setProductDrafts] = useState<DraftProduct[]>([]); const [rows, setRows] = useState<DraftRow[]>([]);
   const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]); const [addEmployeeOpen, setAddEmployeeOpen] = useState(false); const [addEmployeeRowKey, setAddEmployeeRowKey] = useState<string | null>(null); const [addEmployeeName, setAddEmployeeName] = useState(""); const [addEmployeePersonalNo, setAddEmployeePersonalNo] = useState("");
-  const [familyName, setFamilyName] = useState(""); const [familyHCode, setFamilyHCode] = useState(""); const [familyTCode, setFamilyTCode] = useState(""); const [familyHNorm, setFamilyHNorm] = useState(""); const [familyTNorm, setFamilyTNorm] = useState(""); const [familyCapacity, setFamilyCapacity] = useState("1");
-  const [newProductModalOpen, setNewProductModalOpen] = useState(false); const [pendingProduct, setPendingProduct] = useState<DraftProduct | null>(null); const [capacityHA, setCapacityHA] = useState("1"); const [capacityTUP, setCapacityTUP] = useState("1"); const [productNorm, setProductNorm] = useState("");
+  const [newProductModalOpen, setNewProductModalOpen] = useState(false); const [productSetupSaving, setProductSetupSaving] = useState(false); const [pendingProductCode, setPendingProductCode] = useState(""); const [familyName, setFamilyName] = useState(""); const [familyHCode, setFamilyHCode] = useState(""); const [familyTCode, setFamilyTCode] = useState(""); const [familyHNorm, setFamilyHNorm] = useState(""); const [familyTNorm, setFamilyTNorm] = useState(""); const [capacityHA, setCapacityHA] = useState("1"); const [capacityTUP, setCapacityTUP] = useState("1");
+  const [productFamily, setProductFamily] = useState<{ familyId: string; hProduct: Product; tProduct: Product } | null>(null);
   const activeEmployees = useMemo(() => [...employees, ...addedEmployees].filter((e) => e.active), [employees, addedEmployees]);
   const primaryProductCode = productDrafts[0]?.product_code || productCode.trim();
   const existingProduct: Product | undefined = useMemo(() => findProductByCode(products, primaryProductCode), [products, primaryProductCode]);
   const haNorm: ProductNorm | undefined = existingProduct ? currentNorm(norms, existingProduct.id, "HA") : undefined;
   const normNum = normValue === "" ? null : Number(normValue);
-  const isNewProduct = !!primaryProductCode && !existingProduct;
-  const isNormChange = !!existingProduct && normNum !== null && !!haNorm && Number(haNorm.norm_per_hour) !== normNum;
-  const isNewNorm = !!existingProduct && normNum !== null && !haNorm;
-  const allNewProducts = useMemo(() => productDrafts.filter(p => !findProductByCode(products, p.product_code)), [productDrafts, products]);
-  const familyRequired = useMemo(() => {
-    if (!productDrafts.length) return false;
-    const hasNew = productDrafts.some(p => !findProductByCode(products, p.product_code));
-    return hasNew && productDrafts.some(p => /^H_/i.test(p.product_code)) || hasNew && productDrafts.some(p => /^T_/i.test(p.product_code));
-  }, [productDrafts, products]);
+  const missingProductCodes = useMemo(() => productDrafts.filter((p) => !findProductByCode(products, p.product_code)).map((p) => p.product_code), [productDrafts, products]);
   const patch = (key: string, p: Partial<DraftRow>) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...p } : r)));
-  const reset = () => { setResult(null); setRows([]); setProductDrafts([]); setScreenshotPath(null); setPreviewUrl(null); setProductCode(""); setNormValue(""); setAddedEmployees([]); setAddEmployeeOpen(false); setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); setFamilyName(""); setFamilyHCode(""); setFamilyTCode(""); setFamilyHNorm(""); setFamilyTNorm(""); setFamilyCapacity("1"); setNewProductModalOpen(false); setPendingProduct(null); setCapacityHA("1"); setCapacityTUP("1"); setProductNorm(""); if (fileRef.current) fileRef.current.value = ""; };
+  const reset = () => { setResult(null); setRows([]); setProductDrafts([]); setScreenshotPath(null); setPreviewUrl(null); setProductCode(""); setNormValue(""); setAddedEmployees([]); setAddEmployeeOpen(false); setAddEmployeeRowKey(null); setAddEmployeeName(""); setAddEmployeePersonalNo(""); setNewProductModalOpen(false); setProductSetupSaving(false); setPendingProductCode(""); setFamilyName(""); setFamilyHCode(""); setFamilyTCode(""); setFamilyHNorm(""); setFamilyTNorm(""); setCapacityHA("1"); setCapacityTUP("1"); setProductFamily(null); if (fileRef.current) fileRef.current.value = ""; };
   const openAddEmployee = (row: DraftRow) => { setAddEmployeeRowKey(row.key); setAddEmployeeName(row.ocrName.trim()); setAddEmployeePersonalNo(""); setAddEmployeeOpen(true); };
-  const createEmployee = useMutation({ mutationFn: async () => { const fullName = addEmployeeName.trim(); if (!fullName) throw new Error("Zadejte jméno zaměstnance."); const existing = matchEmployee(fullName, activeEmployees); if (existing) return existing; const { data, error } = await supabase.from("employees").insert({ full_name: fullName, personal_no: addEmployeePersonalNo.trim() || null, qual_ha: false, qual_tup: false, active: true, is_temporary: false, position_type: "standard" }).select("*").single(); if (error) throw error; return data as Employee; }, onSuccess: (employee) => { setAddedEmployees((prev) => prev.some((e) => e.id === employee.id) ? prev : [...prev, employee]); if (addEmployeeRowKey) patch(addEmployeeRowKey, { employeeId: employee.id }); qc.invalidateQueries({ queryKey: ["employees"] }); setAddEmployeeOpen(false); toast.success(`Zaměstnanec „${employee.full_name}\" byl přidán.`); }, onError: (e: Error) => toast.error(`Zaměstnance se nepodařilo přidat: ${e.message}`) });
+  const createEmployee = useMutation({ mutationFn: async () => { const fullName = addEmployeeName.trim(); if (!fullName) throw new Error("Zadejte jméno zaměstnance."); const existing = matchEmployee(fullName, activeEmployees); if (existing) return existing; const { data, error } = await supabase.from("employees").insert({ full_name: fullName, personal_no: addEmployeePersonalNo.trim() || null, qual_ha: false, qual_tup: false, active: true, is_temporary: false, position_type: "standard" }).select("*").single(); if (error) throw error; return data as Employee; }, onSuccess: (employee) => { setAddedEmployees((prev) => prev.some((e) => e.id === employee.id) ? prev : [...prev, employee]); if (addEmployeeRowKey) patch(addEmployeeRowKey, { employeeId: employee.id }); qc.invalidateQueries({ queryKey: ["employees"] }); setAddEmployeeOpen(false); toast.success(`Zaměstnanec „${employee.full_name}" byl přidán.`); }, onError: (e: Error) => toast.error(`Zaměstnance se nepodařilo přidat: ${e.message}`) });
 
-  // Create new product function
-  const createNewProduct = async (product: DraftProduct, capHA: number, capTUP: number, norm: number | null) => {
-    const code = product.product_code.trim();
-    if (!code) throw new Error("Zadejte kód produktu.");
-    if (!Number.isInteger(capHA) || capHA < 1) throw new Error("Kapacita HA musí být celé číslo alespoň 1.");
-    if (!Number.isInteger(capTUP) || capTUP < 1) throw new Error("Kapacita TUP musí být celé číslo alespoň 1.");
-    
-    const { data, error } = await supabase.from("products").insert({ 
-      code, 
-      first_seen_date: workDate, 
-      employees_per_product: /^T_/i.test(code) ? capTUP : capHA,
-      ...approval() 
-    }).select("*").single();
-    if (error) throw error;
-    
-    const p = data as Product;
-    
-    // Add norm if provided
-    if (norm && Number.isFinite(norm) && norm > 0) {
-      const operation: "HA" | "TUP" = /^T_/i.test(code) ? "TUP" : "HA";
-      const { error: normErr } = await supabase.from("product_norms").insert({ 
-        product_id: p.id, 
-        operation, 
-        norm_per_hour: norm, 
-        valid_from: workDate, 
-        source: "screenshot", 
-        confirmed: true, 
-        note: operation === "HA" ? "Norma OCR screenshot" : "Norma T_ OCR screenshot",
-        ...approval() 
-      }); 
-      if (normErr) throw normErr;
-    }
-    
-    // Update productDrafts with new product
-    setProductDrafts((prev) => prev.map(d => d.key === product.key ? { ...d, employees_per_product: /^T_/i.test(code) ? capTUP : capHA } : d));
-    
-    toast.success(`Produkt „${code}“ byl vytvořen.`);
-    return p;
+  const openProductSetup = (detected: DraftProduct[]) => {
+    const missing = detected.filter((p) => !findProductByCode(products, p.product_code));
+    if (!missing.length) return;
+    const first = missing[0]; const base = first.product_code.replace(/^H_|^T_/i, "");
+    const h = detected.find((p) => /^H_/i.test(p.product_code)); const t = detected.find((p) => /^T_/i.test(p.product_code));
+    setPendingProductCode(first.product_code);
+    setFamilyName(base ? `Produkt ${base}` : "");
+    setFamilyHCode(h?.product_code || (/^H_/i.test(first.product_code) ? first.product_code : `H_${base}`));
+    setFamilyTCode(t?.product_code || (/^T_/i.test(first.product_code) ? first.product_code : `T_${base}`));
+    setFamilyHNorm(h?.norm_per_hour != null ? String(h.norm_per_hour) : (!/^T_/i.test(first.product_code) && first.norm_per_hour != null ? String(first.norm_per_hour) : ""));
+    setFamilyTNorm(t?.norm_per_hour != null ? String(t.norm_per_hour) : (/^T_/i.test(first.product_code) && first.norm_per_hour != null ? String(first.norm_per_hour) : ""));
+    setCapacityHA("1"); setCapacityTUP("1"); setProductFamily(null); setNewProductModalOpen(true);
   };
 
-  // Handle next product in queue
-  const handleNextProduct = () => {
-    if (allNewProducts.length > 1) {
-      // Find first product not yet created
-      const remaining = allNewProducts.filter(p => !findProductByCode(products, p.product_code));
-      if (remaining.length > 0) {
-        setPendingProduct(remaining[0]);
-        setCapacityHA(remaining[0].product_code.startsWith("H_") ? "3" : "1");
-        setCapacityTUP(remaining[0].product_code.startsWith("T_") ? "2" : "1");
-        setProductNorm(remaining[0].norm_per_hour != null ? String(remaining[0].norm_per_hour) : "");
-        setNewProductModalOpen(true);
-        return true;
-      }
-    }
-    setPendingProduct(null);
-    setNewProductModalOpen(false);
-    return false;
+  const createProductFamily = async () => {
+    const name = familyName.trim(), hCode = familyHCode.trim(), tCode = familyTCode.trim();
+    const hNorm = Number(familyHNorm), tNorm = Number(familyTNorm), hCapacity = Number(capacityHA), tCapacity = Number(capacityTUP);
+    if (!name) throw new Error("Zadejte název Product ID.");
+    if (!/^H_/i.test(hCode)) throw new Error("H_ varianta musí začínat H_.");
+    if (!/^T_/i.test(tCode)) throw new Error("T_ varianta musí začínat T_.");
+    if (hCode.toLowerCase() === tCode.toLowerCase()) throw new Error("H_ a T_ varianta musí mít odlišný kód.");
+    if (!Number.isFinite(hNorm) || hNorm <= 0 || !Number.isFinite(tNorm) || tNorm <= 0) throw new Error("Zadejte platnou normu H_ i T_.");
+    if (!Number.isInteger(hCapacity) || hCapacity < 1 || !Number.isInteger(tCapacity) || tCapacity < 1) throw new Error("Kapacita operátorů musí být celé číslo alespoň 1.");
+    setProductSetupSaving(true);
+    try {
+      const date = workDate || new Date().toISOString().slice(0, 10);
+      const findByCode = (code: string) => products.find((p) => p.code.trim().toLowerCase() === code.toLowerCase());
+      const createProduct = async (code: string, capacity: number) => { const existing = findByCode(code); if (existing) return existing; const { data, error } = await supabase.from("products").insert({ code, name, employees_per_product: capacity, first_seen_date: date, ...approval() }).select("*").single(); if (error) throw error; return data as Product; };
+      const hProduct = await createProduct(hCode, hCapacity); const tProduct = await createProduct(tCode, tCapacity); if (hProduct.id === tProduct.id) throw new Error("H_ a T_ nesmí odkazovat na stejný produkt.");
+      const { data: familyData, error: familyError } = await (supabase.from("product_families") as any).insert({ name, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("id").single(); if (familyError) throw familyError; const familyId = familyData.id as string;
+      const { error: hp } = await (supabase.from("products") as any).update({ family_id: familyId, variant_type: "H", name, employees_per_product: hCapacity }).eq("id", hProduct.id); if (hp) throw hp;
+      const { error: tp } = await (supabase.from("products") as any).update({ family_id: familyId, variant_type: "T", name, employees_per_product: tCapacity }).eq("id", tProduct.id); if (tp) throw tp;
+      const saveNorm = async (productId: string, operation: "HA" | "TUP", value: number, note: string) => { const current = currentNorm(norms, productId, operation); if (current && Number(current.norm_per_hour) === value) return; if (current) { const { error } = await supabase.from("product_norms").update({ valid_to: date }).eq("id", current.id); if (error) throw error; } const { error } = await supabase.from("product_norms").insert({ product_id: productId, operation, norm_per_hour: value, valid_from: date, source: "screenshot", confirmed: true, note, ...approval() }); if (error) throw error; };
+      await saveNorm(hProduct.id, "HA", hNorm, "Norma H_ varianty vytvořená při importu screenshotu"); await saveNorm(tProduct.id, "TUP", tNorm, "Norma T_ varianty vytvořená při importu screenshotu");
+      const { error: linkError } = await (supabase.from("product_relationships") as any).upsert({ source_product_id: hProduct.id, target_product_id: tProduct.id, relationship_type: "HA_TO_TUP", ...approval() }, { onConflict: "source_product_id,target_product_id,relationship_type" }); if (linkError && !/duplicate/i.test(linkError.message)) throw linkError;
+      setProductFamily({ familyId, hProduct, tProduct }); setNewProductModalOpen(false); qc.invalidateQueries({ queryKey: ["products"] }); qc.invalidateQueries({ queryKey: ["product_norms"] }); toast.success(`Product ID „${name}" bylo vytvořeno a připraveno pro import.`);
+    } finally { setProductSetupSaving(false); }
   };
 
   const onFile = async (file: File) => {
@@ -121,20 +92,9 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       const detectedProducts = r.products?.length ? r.products : (r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : []);
       setProductDrafts(detectedProducts.map((p, i) => ({ ...p, key: `${i}-${p.product_code}`, employees_per_product: findProductByCode(products, p.product_code)?.employees_per_product ?? null })));
       const h = detectedProducts.find(p => /^H_/i.test(p.product_code)); const t = detectedProducts.find(p => /^T_/i.test(p.product_code));
-      if (h) { setFamilyHCode(h.product_code); setFamilyHNorm(h.norm_per_hour != null ? String(h.norm_per_hour) : ""); }
-      if (t) { setFamilyTCode(t.product_code); setFamilyTNorm(t.norm_per_hour != null ? String(t.norm_per_hour) : ""); }
       setRows(r.rows.map((row, i) => { const emp = matchEmployee(row.employee_name, activeEmployees); return { key: `${i}-${row.employee_name}`, ocrName: row.employee_name, employeeId: emp?.id ?? null, position: row.position ?? "HA", oee: row.oee !== null ? String(row.oee) : "", performance: row.performance !== null ? String(row.performance) : "", availableTime: row.available_time !== null ? String(row.available_time) : "", helpScore: "0", confidence: row.confidence, include: true }; }));
-      
-      // Check for new products and open modal if needed
-      const newProducts = allNewProducts.filter(p => !findProductByCode(products, p.product_code));
-      if (newProducts.length > 0) {
-        setPendingProduct(newProducts[0]);
-        setCapacityHA(newProducts[0].product_code.startsWith("H_") ? "3" : "1");
-        setCapacityTUP(newProducts[0].product_code.startsWith("T_") ? "2" : "1");
-        setProductNorm(newProducts[0].norm_per_hour != null ? String(newProducts[0].norm_per_hour) : "");
-        setNewProductModalOpen(true);
-      }
-      
+      const newProducts = detectedProducts.filter(p => !findProductByCode(products, p.product_code));
+      if (newProducts.length > 0) openProductSetup(detectedProducts);
       if (!r.rows.length) toast.warning("Ze screenshotu se nepodařilo přečíst žádné řádky."); else toast.success(`Rozpoznáno ${detectedProducts.length || 0} produktů. Zkontrolujte data před uložením.`);
     } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
   };
@@ -147,15 +107,14 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       const selected = rows.filter((r) => r.include && r.employeeId && !existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)); if (!selected.length) throw new Error("Není co importovat – doplňte pracovníka, nebo už jsou tyto řádky uložené.");
       const drafts = productDrafts.filter((p) => p.product_code.trim()); if (!drafts.length && productCode.trim()) drafts.push({ key: "legacy", product_code: productCode.trim(), norm_per_hour: normNum, confidence: 0.5, employees_per_product: null }); if (!drafts.length) throw new Error("Screenshot neobsahuje žádný rozpoznaný produkt.");
       const productByCode = new Map<string, Product>();
-      for (const d of drafts) { const existing = findProductByCode(products, d.product_code); if (existing) productByCode.set(d.product_code, existing); }
-      for (const d of drafts) {
-        if (productByCode.has(d.product_code)) continue;
-        const created = await createNewProduct(d, d.product_code.startsWith("H_") ? (d.employees_per_product ?? 1) : 1, d.product_code.startsWith("T_") ? (d.employees_per_product ?? 1) : 1, d.norm_per_hour);
-        productByCode.set(d.product_code, created);
-      }
-      const product = productByCode.get(drafts[0].product_code);
-      if (!product) throw new Error("Produkt se nepodařilo dohledat.");
-      const records = selected.map((r) => ({ employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, position: r.position, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }));
+      for (const d of drafts) { const existing = findProductByCode(products, d.product_code); if (existing) productByCode.set(d.product_code.toLowerCase(), existing); }
+      if (productFamily) { productByCode.set(productFamily.hProduct.code.toLowerCase(), productFamily.hProduct); productByCode.set(productFamily.tProduct.code.toLowerCase(), productFamily.tProduct); }
+      if (missingProductCodes.length && !productFamily) throw new Error("Nejprve dokončete založení Product ID v okně pro nový produkt.");
+      const primary = productByCode.get(drafts[0].product_code.toLowerCase());
+      const hProduct = productFamily?.hProduct || productByCode.get((drafts.find((d) => /^H_/i.test(d.product_code))?.product_code || "").toLowerCase());
+      const tProduct = productFamily?.tProduct || productByCode.get((drafts.find((d) => /^T_/i.test(d.product_code))?.product_code || "").toLowerCase());
+      if (!primary && !hProduct && !tProduct) throw new Error("Produkt se nepodařilo dohledat.");
+      const records = selected.map((r) => { const positionProduct = r.position === "TUP" ? tProduct : hProduct; const product = positionProduct || primary; if (!product) throw new Error(`Pro pozici ${r.position} nebyl nalezen Product ID.`); return { employee_id: r.employeeId, work_date: workDate, shift, line: line.trim(), product_id: product.id, position: r.position, oee: Number(r.oee) || 0, performance: Number(r.performance) || 0, available_time: Number(r.availableTime) || 0, help_score: Number(r.helpScore) || 0, screenshot_path: screenshotPath, ...approval() }; });
       const { error } = await supabase.from("daily_records").insert(records);
       if (error) throw error;
       return selected.length;
@@ -167,6 +126,7 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
   const otherLineNotices = useMemo(() => { if (!workDate || !line.trim()) return [] as { name: string; lines: string[] }[]; const l = line.trim().toLowerCase(); return rows.filter((r) => r.include && r.employeeId).map((r) => { const agg = existingShifts.find((a) => a.employee_id === r.employeeId && a.work_date === workDate && a.shift === shift); if (!agg) return null; const otherLines = agg.lines.filter((x) => x.trim().toLowerCase() !== l); if (!otherLines.length) return null; const name = employees.find((e) => e.id === r.employeeId)?.full_name ?? r.ocrName; return { name, lines: otherLines }; }).filter((x): x is { name: string; lines: string[] } => x !== null); }, [workDate, line, rows, existingShifts]);
   const duplicateNames = useMemo(() => { if (!workDate || !line.trim()) return []; const l = line.trim().toLowerCase(); return rows.filter((r) => r.include && r.employeeId && existingRecords.some((x) => x.employee_id === r.employeeId && x.work_date === workDate && x.shift === shift && x.line.trim().toLowerCase() === l)).map((r) => employees.find((e) => e.id === r.employeeId)?.full_name ?? r.ocrName); }, [workDate, line, rows, existingRecords, employees]);
   const lowConf = (c: number) => c < 0.7;
+  const importBlocked = missingProductCodes.length > 0 && !productFamily;
 
   return <Card className="min-w-0 gap-4 overflow-hidden p-4 shadow-[var(--shadow-card)] sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Import ze screenshotu</h2>{result ? <Button variant="ghost" size="sm" onClick={reset}><X className="h-4 w-4" /> Zrušit</Button> : null}</div>
@@ -177,9 +137,9 @@ export function ScreenshotImport({ employees, onImported }: { employees: Employe
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4"><div className="grid gap-1"><Label>Datum</Label><Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} /></div><div className="grid gap-1"><Label>Směna</Label><Select value={shift} onValueChange={setShift}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SHIFTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1"><Label>Linka</Label><Input value={line} onChange={(e) => setLine(e.target.value)} placeholder="např. L1" /></div><div className="grid gap-1"><Label>Kód produktu</Label><Input value={productCode} onChange={(e) => setProductCode(e.target.value)} /></div></div>
       {(duplicateNames.length || otherLineNotices.length) ? <div className="grid gap-2">{duplicateNames.length ? <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm"><strong>Duplicitní řádky:</strong> {duplicateNames.join(", ")}</div> : null}{otherLineNotices.length ? <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><strong>Upozornění:</strong> {otherLineNotices.map((x) => `${x.name}: ${x.lines.join(", ")}`).join("; ")}</div> : null}</div> : null}
       <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b bg-muted/50"><th className="p-2 text-left">Zahrnout</th><th className="p-2 text-left">Zaměstnanec</th><th className="p-2 text-left">Pozice</th><th className="p-2 text-left">OEE</th><th className="p-2 text-left">Výkon</th><th className="p-2 text-left">Dostupný čas</th><th className="p-2 text-left">Pomoc</th><th className="p-2 text-left">Jistota</th><th className="p-2 text-left"></th></tr></thead><tbody>{rows.map((r) => <tr key={r.key} className="border-b last:border-0"><td className="p-2"><input type="checkbox" checked={r.include} onChange={(e) => patch(r.key, { include: e.target.checked })} /></td><td className="p-2"><div className="flex items-center gap-2"><Select value={r.employeeId ?? "__none"} onValueChange={(v) => patch(r.key, { employeeId: v === "__none" ? null : v })}><SelectTrigger className="min-w-[220px]"><SelectValue placeholder={r.ocrName || "Vyberte zaměstnance"} /></SelectTrigger><SelectContent><SelectItem value="__none">{r.ocrName || "Nenalezeno"}</SelectItem>{activeEmployees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}{e.personal_no ? ` (${e.personal_no})` : ""}</SelectItem>)}</SelectContent></Select><Button type="button" variant="outline" size="sm" onClick={() => openAddEmployee(r)}><Plus className="h-4 w-4" /></Button></div></td><td className="p-2"><Select value={r.position} onValueChange={(v) => patch(r.key, { position: v as "HA" | "TUP" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="HA">HA</SelectItem><SelectItem value="TUP">TUP</SelectItem></SelectContent></Select></td><td className="p-2"><Input className={lowConf(r.confidence) ? "border-warning" : ""} value={r.oee} onChange={(e) => patch(r.key, { oee: e.target.value })} /></td><td className="p-2"><Input className={lowConf(r.confidence) ? "border-warning" : ""} value={r.performance} onChange={(e) => patch(r.key, { performance: e.target.value })} /></td><td className="p-2"><Input className={lowConf(r.confidence) ? "border-warning" : ""} value={r.availableTime} onChange={(e) => patch(r.key, { availableTime: e.target.value })} /></td><td className="p-2"><Input value={r.helpScore} onChange={(e) => patch(r.key, { helpScore: e.target.value })} /></td><td className="p-2">{Math.round(r.confidence * 100)} %</td><td className="p-2"><Button variant="ghost" size="sm" onClick={() => patch(r.key, { include: false })}><Trash2 className="h-4 w-4" /></Button></td></tr>)}</tbody></table></div>
-      <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={reset}>Zrušit</Button><Button disabled={confirmImport.isPending || !rows.some((r) => r.include && r.employeeId)} onClick={() => confirmImport.mutate()}>{confirmImport.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdit import</Button></div>
+      <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={reset}>Zrušit</Button><Button disabled={confirmImport.isPending || importBlocked || !rows.some((r) => r.include && r.employeeId)} onClick={() => confirmImport.mutate()}>{confirmImport.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Potvrdit import</Button></div>
     </div>}
     <Dialog open={addEmployeeOpen} onOpenChange={setAddEmployeeOpen}><DialogContent><DialogHeader><DialogTitle>Přidat zaměstnance</DialogTitle></DialogHeader><div className="grid gap-3"><div className="grid gap-1"><Label>Jméno</Label><Input value={addEmployeeName} onChange={(e) => setAddEmployeeName(e.target.value)} /></div><div className="grid gap-1"><Label>Osobní číslo</Label><Input value={addEmployeePersonalNo} onChange={(e) => setAddEmployeePersonalNo(e.target.value)} /></div></div><DialogFooter><Button variant="outline" onClick={() => setAddEmployeeOpen(false)}>Zrušit</Button><Button disabled={createEmployee.isPending} onClick={() => createEmployee.mutate()}>{createEmployee.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Přidat</Button></DialogFooter></DialogContent></Dialog>
-    <Dialog open={newProductModalOpen} onOpenChange={setNewProductModalOpen}><DialogContent><DialogHeader><DialogTitle>Nový produkt</DialogTitle></DialogHeader>{pendingProduct ? <div className="grid gap-3"><div className="text-sm">Produkt: <strong>{pendingProduct.product_code}</strong></div><div className="grid grid-cols-2 gap-3"><div className="grid gap-1"><Label>Kapacita HA</Label><Input type="number" min="1" step="1" value={capacityHA} onChange={(e) => setCapacityHA(e.target.value)} /></div><div className="grid gap-1"><Label>Kapacita TUP</Label><Input type="number" min="1" step="1" value={capacityTUP} onChange={(e) => setCapacityTUP(e.target.value)} /></div></div><div className="grid gap-1"><Label>Norma ks/h</Label><Input type="number" inputMode="decimal" step="0.1" value={productNorm} onChange={(e) => setProductNorm(e.target.value)} /></div></div> : null}<DialogFooter><Button variant="outline" onClick={() => setNewProductModalOpen(false)}>Zrušit</Button><Button onClick={async () => { if (!pendingProduct) return; try { await createNewProduct(pendingProduct, Number(capacityHA), Number(capacityTUP), productNorm === "" ? null : Number(productNorm)); handleNextProduct(); } catch (e) { toast.error((e as Error).message); } }}>Vytvořit</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={newProductModalOpen} onOpenChange={(open) => { if (!productSetupSaving) setNewProductModalOpen(open); }}><DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto p-0"><DialogHeader className="border-b px-6 py-5"><DialogTitle className="text-lg">Vytvořit nové Product ID</DialogTitle></DialogHeader><div className="grid gap-4 px-6 py-5"><div className="rounded-xl border bg-muted/20 p-4 text-sm"><div className="font-semibold">Product ID nebylo nalezeno</div><div className="mt-1 text-muted-foreground">Screenshot rozpoznal nové varianty. Zadejte údaje pro jejich založení před dokončením importu.</div><div className="mt-2 text-xs text-muted-foreground">Rozpoznaný kód: <strong>{pendingProductCode || primaryProductCode}</strong></div></div><div className="grid gap-1.5"><Label>Název Product ID <span className="text-destructive">*</span></Label><Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Např. Držák motoru" autoFocus /></div><div className="grid grid-cols-1 gap-4 md:grid-cols-2"><div className="rounded-lg border p-4"><div className="mb-3 font-semibold">H_ varianta</div><div className="grid gap-3"><div className="grid gap-1.5"><Label>Kód H_ <span className="text-destructive">*</span></Label><Input value={familyHCode} onChange={(e) => setFamilyHCode(e.target.value)} placeholder="H_ABC123" /></div><div className="grid gap-1.5"><Label>Norma H_ (ks/h) <span className="text-destructive">*</span></Label><Input type="number" inputMode="decimal" min="0.1" step="0.1" value={familyHNorm} onChange={(e) => setFamilyHNorm(e.target.value)} placeholder="např. 120" /></div><div className="grid gap-1.5"><Label>Kapacita H_ / operátoři <span className="text-destructive">*</span></Label><Input type="number" min="1" step="1" inputMode="numeric" value={capacityHA} onChange={(e) => setCapacityHA(e.target.value)} /></div></div></div><div className="rounded-lg border p-4"><div className="mb-3 font-semibold">T_ varianta</div><div className="grid gap-3"><div className="grid gap-1.5"><Label>Kód T_ <span className="text-destructive">*</span></Label><Input value={familyTCode} onChange={(e) => setFamilyTCode(e.target.value)} placeholder="T_ABC123" /></div><div className="grid gap-1.5"><Label>Norma T_ (ks/h) <span className="text-destructive">*</span></Label><Input type="number" inputMode="decimal" min="0.1" step="0.1" value={familyTNorm} onChange={(e) => setFamilyTNorm(e.target.value)} placeholder="např. 80" /></div><div className="grid gap-1.5"><Label>Kapacita T_ / operátoři <span className="text-destructive">*</span></Label><Input type="number" min="1" step="1" inputMode="numeric" value={capacityTUP} onChange={(e) => setCapacityTUP(e.target.value)} /></div></div></div></div></div><DialogFooter className="border-t px-6 py-4"><Button variant="outline" disabled={productSetupSaving} onClick={() => setNewProductModalOpen(false)}>Zrušit</Button><Button disabled={productSetupSaving || !familyHCode.trim() || !familyTCode.trim()} onClick={async () => { try { await createProductFamily(); } catch (e) { toast.error((e as Error).message); } }}><Check className="h-4 w-4" /> {productSetupSaving ? "Vytvářím…" : "Vytvořit Product ID"}</Button></DialogFooter></DialogContent></Dialog>
   </Card>;
 }
