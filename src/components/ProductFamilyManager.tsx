@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Link2, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Link2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductNorms, useProducts } from "@/lib/data";
 import { useApprovalFields } from "@/lib/auth";
@@ -200,7 +200,7 @@ export function ProductFamilyManager() {
         const norm = currentNorm(norms, product.id, operation);
         return <div key={product.id} className="overflow-hidden rounded-xl border border-dashed">
           <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(`product:${product.id}`)}>
-            <div><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{product.name || product.code}</span><Badge variant="outline">Samostatný produkt</Badge></div><div className="mt-1 text-xs text-muted-foreground">{product.code} · kapacita {product.employees_per_product} · norma {norm?.norm_per_hour ?? "–"} ks/h</div></div>{open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+            <div><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{product.name || product.code}</span><Badge variant="outline">Samostatný produkt</Badge></div><div className="mt-1 text-xs text-muted-foreground">{product.code} · kapacita {product.employees_per_product} · norma {norm?.norm_per_hour ?? "–"} ks/h</div></div>{open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}</button>
           {open && <div className="border-t bg-muted/10 p-4"><div className="grid gap-3 sm:grid-cols-3"><div><Label>Product ID</Label><Input value={product.code} readOnly /></div><div><Label>Norma ks/h</Label><Input value={norm ? String(norm.norm_per_hour) : "–"} readOnly /></div><div><Label>Kapacita operátorů</Label><Input value={String(product.employees_per_product)} readOnly /></div></div><p className="mt-3 text-xs text-muted-foreground">Tento produkt zatím není propojený do H_/T_ profilu. Pro vytvoření společného profilu použijte „Nové Product ID“ nahoře.</p></div>}
         </div>;
       })}
