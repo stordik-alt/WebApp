@@ -68,16 +68,59 @@ function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[
 }
 
 async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> {
-  if (context.profiles?.length) return context.profiles;
-  const codes = Array.from(new Set((context.products ?? []).map((p) => p.product_code.trim()).filter(Boolean)));
-  if (!codes.length) return [];
+  // The database Product Profile is the source of truth. The context from
+  // sequence 1 may contain only the norm (or an incomplete profile), so it
+  // must never prevent us from loading the existing capacity from Supabase.
+  const contextProfiles = context.profiles ?? [];
+  const codes = Array.from(new Set([
+    ...contextProfiles.flatMap((p) => [p.ha_subassy, p.tup_subassy]),
+    ...(context.products ?? []).map((p) => p.product_code),
+  ].map((code) => text(code)).filter(Boolean)));
+
+  if (!codes.length) return contextProfiles;
+
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("product_profiles")
     .select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour")
     .or(codes.map((code) => `ha_subassy.eq.${code},tup_subassy.eq.${code}`).join(","));
   if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`);
-  return (data ?? []) as ProductProfileContext[];
+
+  const dbProfiles = (data ?? []) as ProductProfileContext[];
+  if (!dbProfiles.length) return contextProfiles;
+
+  // Merge the first-sequence context with the persistent profile. Database
+  // values win whenever present, while context can supply a value missing in
+  // an older/incomplete profile row.
+  const merged: ProductProfileContext[] = [];
+  const usedDb = new Set<string>();
+  for (const contextProfile of contextProfiles) {
+    const contextCodes = [contextProfile.ha_subassy, contextProfile.tup_subassy].map(normalize).filter(Boolean);
+    const dbIndex = dbProfiles.findIndex((p, index) => {
+      if (usedDb.has(String(index))) return false;
+      return [p.ha_subassy, p.tup_subassy].map(normalize).some((code) => code && contextCodes.includes(code));
+    });
+    if (dbIndex < 0) {
+      merged.push(contextProfile);
+      continue;
+    }
+    usedDb.add(String(dbIndex));
+    const dbProfile = dbProfiles[dbIndex];
+    merged.push({
+      ...contextProfile,
+      ...dbProfile,
+      ha_subassy: dbProfile.ha_subassy ?? contextProfile.ha_subassy,
+      h_capacity: dbProfile.h_capacity ?? contextProfile.h_capacity,
+      h_norm_per_hour: dbProfile.h_norm_per_hour ?? contextProfile.h_norm_per_hour,
+      tup_subassy: dbProfile.tup_subassy ?? contextProfile.tup_subassy,
+      t_capacity: dbProfile.t_capacity ?? contextProfile.t_capacity,
+      t_norm_per_hour: dbProfile.t_norm_per_hour ?? contextProfile.t_norm_per_hour,
+    });
+  }
+  dbProfiles.forEach((profile, index) => {
+    if (!usedDb.has(String(index))) merged.push(profile);
+  });
+  return merged;
 }
 
 async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> {
@@ -120,8 +163,12 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<HourlyStageResult> => {
     const dbProfiles = await loadExistingProfiles(data.context);
-    const resolvedContext: HourlyStageContext = { ...data.context, profiles: dbProfiles.length ? dbProfiles : data.context.profiles };
-    if (!normalizedProfiles(resolvedContext).length) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
+    const resolvedContext: HourlyStageContext = { ...data.context, profiles: dbProfiles };
+    const usableProfile = normalizedProfiles(resolvedContext).some((profile) =>
+      (profile.h_norm_per_hour != null && profile.h_capacity != null) ||
+      (profile.t_norm_per_hour != null && profile.t_capacity != null),
+    );
+    if (!usableProfile) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
     const attempts: string[] = []; let parsed: Record<string, unknown> | null = null;
     for (const provider of providers()) { try { parsed = await callAi(provider, data.imageDataUrl, resolvedContext); break; } catch (e) { const error = e as Error & { status?: number }; attempts.push(`${error.status ?? "error"}`); if (error.status !== 402 && error.status !== 429) break; } }
     if (!parsed) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}).`);
