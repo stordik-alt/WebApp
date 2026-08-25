@@ -24,6 +24,7 @@ export function ProductFamilyManager() {
   const { data: norms = [] } = useProductNorms();
   const [families, setFamilies] = useState<Family[]>([]);
   const [allNorms, setAllNorms] = useState<ProfileNorm[]>([]);
+  const [resolvedProducts, setResolvedProducts] = useState<Product[]>([]);
   const [form, setForm] = useState<ProfileDraft>(emptyForm);
   const [editing, setEditing] = useState<Family | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -45,12 +46,30 @@ export function ProductFamilyManager() {
     setFamilies((familyData ?? []) as Family[]);
     setAllNorms((normData ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as ProfileNorm[]);
   };
+
   useEffect(() => { void load(); }, []);
 
-  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const familyProductIds = useMemo(() => new Set(families.flatMap((f) => [f.h_product_id, f.t_product_id].filter(Boolean) as string[])), [families]);
-  const standalone = useMemo(() => products.filter((p) => p.active && !familyProductIds.has(p.id)), [products, familyProductIds]);
-  const findByCode = (code: string) => products.find((p) => p.code.trim().toLowerCase() === code.trim().toLowerCase());
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>();
+    for (const p of products) map.set(p.id, p);
+    for (const p of resolvedProducts) map.set(p.id, p);
+    return map;
+  }, [products, resolvedProducts]);
+
+  const familyProductIds = useMemo(
+    () => new Set(families.flatMap((f) => [f.h_product_id, f.t_product_id].filter(Boolean) as string[])),
+    [families],
+  );
+
+  const standalone = useMemo(
+    () => products.filter((p) => p.active && !familyProductIds.has(p.id)),
+    [products, familyProductIds],
+  );
+
+  const findByCode = (code: string) => {
+    const wanted = code.trim().toLowerCase();
+    return Array.from(productById.values()).find((p) => p.code.trim().toLowerCase() === wanted);
+  };
 
   const visibleNorms = useMemo(() => {
     const byId = new Map<string, ProductNorm>();
@@ -71,13 +90,33 @@ export function ProductFamilyManager() {
     return candidates[0] ?? currentNorm(visibleNorms, productId, operation);
   };
 
-  const reset = () => { setForm(emptyForm); setEditing(null); };
+  const reset = () => {
+    setForm(emptyForm);
+    setEditing(null);
+  };
 
-  const startEdit = (family: Family) => {
-    const h = family.h_product_id ? productById.get(family.h_product_id) : undefined;
-    const t = family.t_product_id ? productById.get(family.t_product_id) : undefined;
+  const startEdit = async (family: Family) => {
+    const ids = [family.h_product_id, family.t_product_id].filter(Boolean) as string[];
+    const missingIds = ids.filter((id) => !productById.has(id));
+    let fetched: Product[] = [];
+
+    if (missingIds.length) {
+      const { data, error } = await supabase.from("products").select("*").in("id", missingIds);
+      if (error) {
+        toast.error(`Nepodařilo se načíst Product ID pro úpravu: ${error.message}`);
+        return;
+      }
+      fetched = (data ?? []) as unknown as Product[];
+      if (fetched.length) setResolvedProducts((current) => [...current, ...fetched.filter((p) => !current.some((x) => x.id === p.id))]);
+    }
+
+    const map = new Map(productById);
+    for (const p of fetched) map.set(p.id, p);
+    const h = family.h_product_id ? map.get(family.h_product_id) : undefined;
+    const t = family.t_product_id ? map.get(family.t_product_id) : undefined;
     const hn = h ? profileNorm(h.id, "HA") : undefined;
     const tn = t ? profileNorm(t.id, "TUP") : undefined;
+
     setEditing(family);
     setExpanded(family.id);
     setForm({
@@ -89,6 +128,8 @@ export function ProductFamilyManager() {
       hCapacity: String(h?.employees_per_product ?? 1),
       tCapacity: String(t?.employees_per_product ?? 1),
     });
+
+    window.requestAnimationFrame(() => document.getElementById("product-family-edit-form")?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
 
   const saveNorm = async (productId: string, operation: "HA" | "TUP", value: number, date: string) => {
@@ -96,10 +137,7 @@ export function ProductFamilyManager() {
     if (current && Number(current.norm_per_hour) === value) return;
 
     const approvalFields = approval();
-    // A pending norm created earlier by the same editor must be updated rather
-    // than creating another invisible pending row. Admins can update the live
-    // row in place; non-admins create a new pending version from an approved row.
-    const canUpdateCurrent = current && (
+    const canUpdateCurrent = !!current && (
       approvalFields.approval_status === "approved" || current.approval_status === "pending"
     );
 
@@ -119,8 +157,7 @@ export function ProductFamilyManager() {
     if (current && current.approval_status === "approved") {
       const previousDay = new Date(`${date}T00:00:00Z`);
       previousDay.setUTCDate(previousDay.getUTCDate() - 1);
-      const previousDate = previousDay.toISOString().slice(0, 10);
-      const { error } = await supabase.from("product_norms").update({ valid_to: previousDate }).eq("id", current.id);
+      const { error } = await supabase.from("product_norms").update({ valid_to: previousDay.toISOString().slice(0, 10) }).eq("id", current.id);
       if (error) throw error;
     }
 
@@ -146,6 +183,7 @@ export function ProductFamilyManager() {
     const tNorm = Number(form.tNorm);
     const hCapacity = Number(form.hCapacity);
     const tCapacity = Number(form.tCapacity);
+
     if (!name) throw new Error("Zadejte název Product ID.");
     if (!/^H_/i.test(hCode)) throw new Error("H_ varianta musí začínat H_.");
     if (!/^T_/i.test(tCode)) throw new Error("T_ varianta musí začínat T_.");
@@ -158,35 +196,79 @@ export function ProductFamilyManager() {
       const date = new Date().toISOString().slice(0, 10);
       let hProduct = findByCode(hCode);
       let tProduct = findByCode(tCode);
+
       const createProduct = async (code: string, capacity: number) => {
-        const { data, error } = await supabase.from("products").insert({ code, name, employees_per_product: capacity, first_seen_date: date, ...approval() }).select("*").single();
+        const { data, error } = await supabase.from("products").insert({
+          code,
+          name,
+          employees_per_product: capacity,
+          first_seen_date: date,
+          ...approval(),
+        }).select("*").single();
         if (error) throw error;
-        return data as Product;
+        return data as unknown as Product;
       };
+
       if (!hProduct) hProduct = await createProduct(hCode, hCapacity);
       if (!tProduct) tProduct = await createProduct(tCode, tCapacity);
       if (hProduct.id === tProduct.id) throw new Error("H_ a T_ nesmí odkazovat na stejný produkt.");
 
+      const oldHId = editing?.h_product_id ?? null;
+      const oldTId = editing?.t_product_id ?? null;
       let familyId = editing?.id;
+
       if (familyId) {
-        const { error } = await (supabase.from("product_families") as any).update({ name, h_product_id: hProduct.id, t_product_id: tProduct.id, updated_at: new Date().toISOString() }).eq("id", familyId);
+        const { error } = await (supabase.from("product_families") as any).update({
+          name,
+          h_product_id: hProduct.id,
+          t_product_id: tProduct.id,
+          updated_at: new Date().toISOString(),
+        }).eq("id", familyId);
         if (error) throw error;
       } else {
-        const { data, error } = await (supabase.from("product_families") as any).insert({ name, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("id").single();
+        const { data, error } = await (supabase.from("product_families") as any).insert({
+          name,
+          h_product_id: hProduct.id,
+          t_product_id: tProduct.id,
+        }).select("id").single();
         if (error) throw error;
         familyId = data.id;
       }
 
       const productFields = approval();
-      const { error: hError } = await (supabase.from("products") as any).update({ code: hCode, family_id: familyId, variant_type: "H", name, employees_per_product: hCapacity, ...productFields }).eq("id", hProduct.id);
+      const { error: hError } = await (supabase.from("products") as any).update({
+        code: hCode,
+        family_id: familyId,
+        variant_type: "H",
+        name,
+        employees_per_product: hCapacity,
+        ...productFields,
+      }).eq("id", hProduct.id);
       if (hError) throw hError;
-      const { error: tError } = await (supabase.from("products") as any).update({ code: tCode, family_id: familyId, variant_type: "T", name, employees_per_product: tCapacity, ...productFields }).eq("id", tProduct.id);
+
+      const { error: tError } = await (supabase.from("products") as any).update({
+        code: tCode,
+        family_id: familyId,
+        variant_type: "T",
+        name,
+        employees_per_product: tCapacity,
+        ...productFields,
+      }).eq("id", tProduct.id);
       if (tError) throw tError;
+
+      if (oldHId && oldHId !== hProduct.id) await (supabase.from("products") as any).update({ family_id: null }).eq("id", oldHId);
+      if (oldTId && oldTId !== tProduct.id) await (supabase.from("products") as any).update({ family_id: null }).eq("id", oldTId);
 
       await saveNorm(hProduct.id, "HA", hNorm, date);
       await saveNorm(tProduct.id, "TUP", tNorm, date);
+
       await (supabase.from("product_relationships") as any).delete().eq("target_product_id", tProduct.id).eq("relationship_type", "HA_TO_TUP");
-      const { error: linkError } = await (supabase.from("product_relationships") as any).insert({ source_product_id: hProduct.id, target_product_id: tProduct.id, relationship_type: "HA_TO_TUP", ...approval() });
+      const { error: linkError } = await (supabase.from("product_relationships") as any).insert({
+        source_product_id: hProduct.id,
+        target_product_id: tProduct.id,
+        relationship_type: "HA_TO_TUP",
+        ...approval(),
+      });
       if (linkError && !/duplicate/i.test(linkError.message)) throw linkError;
 
       await load();
@@ -213,10 +295,13 @@ export function ProductFamilyManager() {
   return <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
     <div className="mb-4 flex items-center gap-2">
       <Link2 className="h-4 w-4" />
-      <div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product ID – profily</h2><p className="text-xs text-muted-foreground">Každé Product ID lze rozkliknout. Uvnitř jsou samostatně H_ a T_ norma i kapacita.</p></div>
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product ID – profily</h2>
+        <p className="text-xs text-muted-foreground">Každé Product ID lze rozkliknout. Uvnitř jsou samostatně H_ a T_ norma i kapacita.</p>
+      </div>
     </div>
 
-    <div className="mb-4 rounded-xl border bg-muted/20 p-4">
+    <div id="product-family-edit-form" className="mb-4 rounded-xl border bg-muted/20 p-4">
       <div className="mb-3 text-sm font-semibold">{editing ? "Úprava Product ID" : "Nové Product ID"}</div>
       <div className="grid gap-3 lg:grid-cols-6">
         <div className="grid gap-1.5 lg:col-span-2"><Label>Název</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Např. Sestava 4962V3596B" /></div>
@@ -226,7 +311,10 @@ export function ProductFamilyManager() {
         <div className="grid gap-1.5"><Label>Norma T_</Label><Input type="number" step="0.1" value={form.tNorm} onChange={(e) => setForm({ ...form, tNorm: e.target.value })} placeholder="ks/h" /></div>
         <div className="grid gap-1.5"><Label>Kapacita H_</Label><Input type="number" min="1" value={form.hCapacity} onChange={(e) => setForm({ ...form, hCapacity: e.target.value })} /></div>
         <div className="grid gap-1.5"><Label>Kapacita T_</Label><Input type="number" min="1" value={form.tCapacity} onChange={(e) => setForm({ ...form, tCapacity: e.target.value })} /></div>
-        <div className="flex items-end gap-2 lg:col-span-6"><Button disabled={busy} onClick={() => void saveFamily().catch((e: Error) => toast.error(e.message))}>{editing ? "Uložit změny" : <><Plus className="h-4 w-4" /> Založit Product ID</>}</Button>{editing && <Button variant="outline" onClick={reset}>Zrušit úpravu</Button>}</div>
+        <div className="flex items-end gap-2 lg:col-span-6">
+          <Button type="button" disabled={busy} onClick={() => void saveFamily().catch((e: Error) => toast.error(e.message))}>{editing ? "Uložit změny" : <><Plus className="h-4 w-4" /> Založit Product ID</>}</Button>
+          {editing && <Button type="button" variant="outline" onClick={reset}>Zrušit úpravu</Button>}
+        </div>
       </div>
     </div>
 
@@ -238,14 +326,22 @@ export function ProductFamilyManager() {
         const hNorm = h ? profileNorm(h.id, "HA") : undefined;
         const tNorm = t ? profileNorm(t.id, "TUP") : undefined;
         return <div key={family.id} className="overflow-hidden rounded-xl border">
-          <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(family.id)}>
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{family.name}</span><Badge variant="outline">Product ID</Badge></div><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>H_: {h?.code ?? "–"}</span><span>T_: {t?.code ?? "–"}</span><span>H kap.: {h?.employees_per_product ?? "–"}</span><span>T kap.: {t?.employees_per_product ?? "–"}</span></div></div>{open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}</button>
+          <div className="flex items-center gap-2">
+            <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(family.id)}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{family.name}</span><Badge variant="outline">Product ID</Badge></div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>H_: {h?.code ?? family.h_product_id ?? "–"}</span><span>T_: {t?.code ?? family.t_product_id ?? "–"}</span><span>H kap.: {h?.employees_per_product ?? "–"}</span><span>T kap.: {t?.employees_per_product ?? "–"}</span></div>
+              </div>
+              {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+            </button>
+            <Button type="button" variant="outline" size="sm" className="mr-3 shrink-0" onClick={() => void startEdit(family)}><Pencil className="mr-1 h-4 w-4" /> Upravit</Button>
+          </div>
           {open && <div className="border-t bg-muted/10 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border bg-background p-4"><div className="mb-3 flex items-center justify-between"><div className="font-semibold">H_ varianta</div><Badge>HA</Badge></div><div className="grid gap-3"><div><Label>Product ID</Label><Input value={h?.code ?? "–"} readOnly /></div><div><Label>Norma ks/h</Label><Input value={hNorm ? String(hNorm.norm_per_hour) : "–"} readOnly /></div><div><Label>Kapacita operátorů</Label><Input value={String(h?.employees_per_product ?? "–")} readOnly /></div></div></div>
               <div className="rounded-lg border bg-background p-4"><div className="mb-3 flex items-center justify-between"><div className="font-semibold">T_ varianta</div><Badge variant="secondary">TUP</Badge></div><div className="grid gap-3"><div><Label>Product ID</Label><Input value={t?.code ?? "–"} readOnly /></div><div><Label>Norma ks/h</Label><Input value={tNorm ? String(tNorm.norm_per_hour) : "–"} readOnly /></div><div><Label>Kapacita operátorů</Label><Input value={String(t?.employees_per_product ?? "–")} readOnly /></div></div></div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" onClick={() => startEdit(family)}><Pencil className="mr-1 h-4 w-4" /> Upravit profil</Button><Button variant="ghost" onClick={() => void remove(family)}><Trash2 className="mr-1 h-4 w-4" /> Odstranit profil</Button></div>
+            <div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => void startEdit(family)}><Pencil className="mr-1 h-4 w-4" /> Upravit profil</Button><Button type="button" variant="ghost" onClick={() => void remove(family)}><Trash2 className="mr-1 h-4 w-4" /> Odstranit profil</Button></div>
           </div>}
         </div>;
       })}
@@ -255,7 +351,9 @@ export function ProductFamilyManager() {
         const norm = profileNorm(product.id, operation);
         return <div key={product.id} className="overflow-hidden rounded-xl border border-dashed">
           <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(`product:${product.id}`)}>
-            <div><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{product.name || product.code}</span><Badge variant="outline">Samostatný produkt</Badge></div><div className="mt-1 text-xs text-muted-foreground">{product.code} · kapacita {product.employees_per_product} · norma {norm?.norm_per_hour ?? "–"} ks/h</div></div>{open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}</button>
+            <div><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{product.name || product.code}</span><Badge variant="outline">Samostatný produkt</Badge></div><div className="mt-1 text-xs text-muted-foreground">{product.code} · kapacita {product.employees_per_product} · norma {norm?.norm_per_hour ?? "–"} ks/h</div></div>
+            {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+          </button>
           {open && <div className="border-t bg-muted/10 p-4"><div className="grid gap-3 sm:grid-cols-3"><div><Label>Product ID</Label><Input value={product.code} readOnly /></div><div><Label>Norma ks/h</Label><Input value={norm ? String(norm.norm_per_hour) : "–"} readOnly /></div><div><Label>Kapacita operátorů</Label><Input value={String(product.employees_per_product)} readOnly /></div></div><p className="mt-3 text-xs text-muted-foreground">Tento produkt zatím není propojený do H_/T_ profilu. Pro vytvoření společného profilu použijte „Nové Product ID“ nahoře.</p></div>}
         </div>;
       })}
