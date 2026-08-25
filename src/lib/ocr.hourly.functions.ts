@@ -145,9 +145,7 @@ function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] {
 
 function productContext(context: HourlyStageContext, code: string | null): HourlyStageContextProduct | null {
   const normalized = code?.trim().toLowerCase() ?? "";
-  return context.products.find((p) => p.product_code.trim().toLowerCase() === normalized)
-    ?? context.products[0]
-    ?? null;
+  return context.products.find((p) => p.product_code.trim().toLowerCase() === normalized) ?? context.products[0] ?? null;
 }
 
 function actualOutput(row: Record<string, unknown>): number | null {
@@ -218,17 +216,19 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     });
 
     const weights = effectiveWeights(hourly_metrics.length);
-    let weightedActual = 0;
+    let weightedActualCapacity = 0;
     let weightedNorm = 0;
+    let weightedNormWithCapacity = 0;
     hourly_metrics.forEach((metric, index) => {
       if (metric.actual_output === null || metric.norm_per_hour === null || metric.norm_per_hour <= 0) return;
+      if (metric.capacity === null || metric.capacity <= 0) return;
       const weight = weights[index] ?? 1;
-      weightedActual += metric.actual_output * weight;
+      weightedActualCapacity += metric.actual_output * (metric.capacity / data.context.operator_count) * weight;
+      weightedNormWithCapacity += metric.norm_per_hour * weight;
       weightedNorm += metric.norm_per_hour * weight;
     });
-    const capacityFactor = hourly_metrics.find((m) => m.capacity !== null)?.capacity;
-    const actual_shift_oee_pct = weightedNorm > 0 && capacityFactor !== undefined && capacityFactor !== null
-      ? weightedActual / weightedNorm * (capacityFactor / data.context.operator_count) * 100
+    const actual_shift_oee_pct = weightedNormWithCapacity > 0
+      ? weightedActualCapacity / weightedNormWithCapacity * 100
       : null;
     const predicted_shift_output = weightedNorm > 0 ? weightedNorm : null;
 
