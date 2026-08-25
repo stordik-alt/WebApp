@@ -13,6 +13,8 @@ export type ProductProfileContext = {
 
 export type HourlyStageContext = {
   profiles: ProductProfileContext[];
+  /** Backward-compatible shape used by the current import UI. */
+  products?: Array<{ product_code: string; norm_per_hour: number | null; capacity: number | null }>;
   operator_count: number;
 };
 
@@ -89,8 +91,22 @@ function normalize(value: string | null): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[] {
+  if (context.profiles?.length) return context.profiles;
+  return (context.products ?? []).map((p) => ({
+    id: p.product_code,
+    ha_subassy: p.product_code,
+    h_capacity: p.capacity,
+    h_norm_per_hour: p.norm_per_hour,
+    tup_subassy: null,
+    t_capacity: null,
+    t_norm_per_hour: null,
+  }));
+}
+
 async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> {
-  const contextLines = context.profiles.map((p) => [
+  const profiles = normalizedProfiles(context);
+  const contextLines = profiles.map((p) => [
     `- profil ${p.id ?? ""}`,
     `HA/subassy=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
     `TUP/subassy=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
@@ -165,16 +181,12 @@ function profileVariant(profile: ProductProfileContext, code: string | null, rol
   if (role === "TUP" && tupMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
   if (haMatch && !tupMatch) return { norm: profile.h_norm_per_hour, capacity: profile.h_capacity };
   if (tupMatch && !haMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
-  if (haMatch && tupMatch) {
-    // Same subassy can legitimately be used for HA and TUP. Without a readable
-    // role the application must not guess between the two variants.
-    return null;
-  }
+  if (haMatch && tupMatch) return null;
   return null;
 }
 
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) {
-  for (const profile of context.profiles) {
+  for (const profile of normalizedProfiles(context)) {
     const variant = profileVariant(profile, code, role);
     if (variant) return variant;
   }
@@ -212,8 +224,8 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     if (!input.context || !Number.isInteger(input.context.operator_count) || input.context.operator_count < 1) {
       throw new Error("3. sekvence potřebuje skutečný počet operátorů z 2. sekvence.");
     }
-    if (!Array.isArray(input.context.profiles) || !input.context.profiles.length) {
-      throw new Error("3. sekvence potřebuje Product Profile z 1. sekvence.");
+    if (!Array.isArray(input.context.profiles) && !Array.isArray(input.context.products)) {
+      throw new Error("3. sekvence potřebuje kontext z 1. sekvence.");
     }
     return input;
   })
