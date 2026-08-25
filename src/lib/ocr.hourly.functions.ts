@@ -1,20 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export type HourlyStageContextProduct = {
-  product_code: string;
-  norm_per_hour: number | null;
-  capacity: number | null;
+export type ProductProfileContext = {
+  id?: string;
+  ha_subassy: string | null;
+  h_capacity: number | null;
+  h_norm_per_hour: number | null;
+  tup_subassy: string | null;
+  t_capacity: number | null;
+  t_norm_per_hour: number | null;
 };
 
 export type HourlyStageContext = {
-  products: HourlyStageContextProduct[];
+  profiles: ProductProfileContext[];
   operator_count: number;
 };
 
 export type HourlyStageMetric = {
   hour: number | null;
   product_code: string | null;
+  role: "HA" | "TUP" | null;
   actual_output: number | null;
   performance_pct: number | null;
   availability_pct: number | null;
@@ -80,32 +85,40 @@ function firstText(row: Record<string, unknown>, keys: string[]): string {
   return "";
 }
 
+function normalize(value: string | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
 async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> {
-  const contextLines = context.products.map((p) =>
-    `- Product ID ${p.product_code}: norma ${p.norm_per_hour ?? "NEZNÁMÁ"} ks/h, kapacita ${p.capacity ?? "NEZNÁMÁ"} operátorů`,
-  ).join("\n");
+  const contextLines = context.profiles.map((p) => [
+    `- profil ${p.id ?? ""}`,
+    `HA/subassy=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
+    `TUP/subassy=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
+  ].join(" | ")).join("\n");
+
   const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.
 
 KONTEXT Z 1. A 2. SEKQUENCE – JE ZÁVAZNÝ:
-${contextLines || "- žádný produktový kontext"}
+${contextLines || "- žádný produktový profil"}
 - skutečný počet operátorů na směně: ${context.operator_count}
 
 Přečti pro KAŽDOU skutečně viditelnou hodinu:
 - hour
-- product_code
+- product_code = skutečný kód/podsestava ze sloupce produktu
+- role = HA nebo TUP, pouze pokud je role/provoz na screenshotu čitelný; jinak null
 - actual_output = skutečný hodinový výstup linky ze sloupce Reálný
 - performance_pct a availability_pct pouze pokud jsou ve screenshotu čitelné
 
-NORMU NEODVOZUJ ZE SCREENSHOTU. Norma pro výpočet musí být převzata výhradně z Product ID v kontextu výše.
-KAPACITU MUSÍŠ VZÍT VÝHRADNĚ Z KONTEXTU 1. SEKVENCE.
-POČET OPERÁTORŮ MUSÍŠ VZÍT VÝHRADNĚ Z KONTEXTU 2. SEKVENCE.
-Po OCR vrať JSON. Nevymýšlej hodnoty.
+NORMU ANI KAPACITU NEODVOZUJ ZE SCREENSHOTU. Pro výpočet použij výhradně profil z 1. sekvence.
+POČET OPERÁTORŮ VŽDY POUŽIJ VÝHRADNĚ Z 2. SEKQUENCE A PŘEDPOKLÁDEJ, ŽE SE BĚHEM SMĚNY NEMĚNÍ.
+Pokud je stejná podsestava použita pro HA i TUP, nesmíš podle prefixu kódu rozhodnout roli; použij pouze skutečně čitelný kontext role.
 
-Výpočet skutečného OEE pro každou hodinu provede aplikace podle:
-OEE = (skutečný hodinový výstup / hodinová norma z Product ID) * ((kapacita Product ID / skutečný počet operátorů) * 100)
-Tento výpočet nedělej odhadem z OCR výkonu. Použij skutečný actual_output.`;
+Vrať pouze JSON. Nevymýšlej hodnoty.
+Skutečné OEE pak aplikace vypočítá přesně jako:
+OEE = (skutečný hodinový výstup / norma z Product Profile) * ((kapacita z Product Profile / skutečný počet operátorů) * 100)
+Výpočet se nesmí opírat o OCR výkon.`;
 
-  const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Tvým úkolem je přesně přečíst hodinovou výrobní tabulku. Product ID, norma, kapacita a počet operátorů jsou předané jako externí kontext a mají přednost před jakoukoli hodnotou normy na screenshotu. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
+  const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile z 1. sekvence a počet operátorů z 2. sekvence jsou externí kontext a mají absolutní přednost. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","role":"HA | TUP | null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
 
   const res = await fetch(provider.url, {
     method: "POST",
@@ -143,13 +156,40 @@ function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] {
   return [];
 }
 
-function productContext(context: HourlyStageContext, code: string | null): HourlyStageContextProduct | null {
-  const normalized = code?.trim().toLowerCase() ?? "";
-  return context.products.find((p) => p.product_code.trim().toLowerCase() === normalized) ?? context.products[0] ?? null;
+function profileVariant(profile: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) {
+  const codeNorm = normalize(code);
+  const haMatch = normalize(profile.ha_subassy) === codeNorm;
+  const tupMatch = normalize(profile.tup_subassy) === codeNorm;
+
+  if (role === "HA" && haMatch) return { norm: profile.h_norm_per_hour, capacity: profile.h_capacity };
+  if (role === "TUP" && tupMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
+  if (haMatch && !tupMatch) return { norm: profile.h_norm_per_hour, capacity: profile.h_capacity };
+  if (tupMatch && !haMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
+  if (haMatch && tupMatch) {
+    // Same subassy can legitimately be used for HA and TUP. Without a readable
+    // role the application must not guess between the two variants.
+    return null;
+  }
+  return null;
+}
+
+function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) {
+  for (const profile of context.profiles) {
+    const variant = profileVariant(profile, code, role);
+    if (variant) return variant;
+  }
+  return null;
 }
 
 function actualOutput(row: Record<string, unknown>): number | null {
   return firstNum(row, ["actual_output", "actual", "realny", "real", "reálný"]);
+}
+
+function normalizeRole(value: unknown): "HA" | "TUP" | null {
+  const s = text(value).toLowerCase();
+  if (s === "ha" || s.includes("ha")) return "HA";
+  if (s === "tup" || s.includes("tup")) return "TUP";
+  return null;
 }
 
 function effectiveWeights(count: number): number[] {
@@ -172,8 +212,8 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     if (!input.context || !Number.isInteger(input.context.operator_count) || input.context.operator_count < 1) {
       throw new Error("3. sekvence potřebuje skutečný počet operátorů z 2. sekvence.");
     }
-    if (!Array.isArray(input.context.products) || !input.context.products.length) {
-      throw new Error("3. sekvence potřebuje normu a kapacitu z 1. sekvence.");
+    if (!Array.isArray(input.context.profiles) || !input.context.profiles.length) {
+      throw new Error("3. sekvence potřebuje Product Profile z 1. sekvence.");
     }
     return input;
   })
@@ -195,16 +235,19 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     const raw = rawHourly(parsed);
     const hourly_metrics: HourlyStageMetric[] = raw.map((row) => {
       const product_code = firstText(row, ["product_code", "product"]) || null;
-      const product = productContext(data.context, product_code);
-      const norm_per_hour = product?.norm_per_hour ?? null;
-      const capacity = product?.capacity ?? null;
+      const role = normalizeRole(firstText(row, ["role", "position", "operation", "pozice"]));
+      const variant = findVariant(data.context, product_code, role);
+      const norm_per_hour = variant?.norm ?? null;
+      const capacity = variant?.capacity ?? null;
       const actual_output = actualOutput(row);
       const actual_oee_pct = actual_output !== null && norm_per_hour !== null && norm_per_hour > 0 && capacity !== null && capacity > 0
-        ? actual_output / norm_per_hour * (capacity / data.context.operator_count) * 100
+        ? (actual_output / norm_per_hour) * ((capacity / data.context.operator_count) * 100)
         : null;
+
       return {
         hour: firstNum(row, ["hour", "hodina"]),
         product_code,
+        role,
         actual_output,
         performance_pct: firstNum(row, ["performance_pct", "performance", "vykon", "výkon"]),
         availability_pct: firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]),
@@ -216,21 +259,26 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     });
 
     const weights = effectiveWeights(hourly_metrics.length);
-    let weightedActualCapacity = 0;
+    let weightedActual = 0;
+    let weightedExpected = 0;
     let weightedNorm = 0;
-    let weightedNormWithCapacity = 0;
+
     hourly_metrics.forEach((metric, index) => {
       if (metric.actual_output === null || metric.norm_per_hour === null || metric.norm_per_hour <= 0) return;
       if (metric.capacity === null || metric.capacity <= 0) return;
       const weight = weights[index] ?? 1;
-      weightedActualCapacity += metric.actual_output * (metric.capacity / data.context.operator_count) * weight;
-      weightedNormWithCapacity += metric.norm_per_hour * weight;
+      const expectedAtCurrentStaffing = metric.norm_per_hour * (data.context.operator_count / metric.capacity);
+      weightedActual += metric.actual_output * weight;
+      weightedExpected += expectedAtCurrentStaffing * weight;
       weightedNorm += metric.norm_per_hour * weight;
     });
-    const actual_shift_oee_pct = weightedNormWithCapacity > 0
-      ? weightedActualCapacity / weightedNormWithCapacity * 100
+
+    const actual_shift_oee_pct = weightedExpected > 0
+      ? weightedActual / weightedExpected * 100
       : null;
-    const predicted_shift_output = weightedNorm > 0 ? weightedNorm : null;
+    const predicted_shift_output = weightedNorm > 0
+      ? weightedNorm
+      : null;
 
     return {
       hourly_metrics,
