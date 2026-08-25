@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Link2, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductNorms, useProducts } from "@/lib/data";
 import { useApprovalFields } from "@/lib/auth";
-import { currentNorm, type Product } from "@/lib/products";
+import { currentNorm, type Product, type ProductNorm } from "@/lib/products";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Family = { id: string; name: string; h_product_id: string | null; t_product_id: string | null };
 type ProfileDraft = { name: string; hCode: string; tCode: string; hNorm: string; tNorm: string; hCapacity: string; tCapacity: string };
+type ProfileNorm = ProductNorm & { approval_status?: string | null; submitted_by?: string | null };
 const emptyForm: ProfileDraft = { name: "", hCode: "", tCode: "", hNorm: "", tNorm: "", hCapacity: "1", tCapacity: "1" };
 
 export function ProductFamilyManager() {
@@ -22,20 +23,27 @@ export function ProductFamilyManager() {
   const { data: products = [] } = useProducts();
   const { data: norms = [] } = useProductNorms();
   const [families, setFamilies] = useState<Family[]>([]);
+  const [allNorms, setAllNorms] = useState<ProfileNorm[]>([]);
   const [form, setForm] = useState<ProfileDraft>(emptyForm);
   const [editing, setEditing] = useState<Family | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const { data, error } = await (supabase.from("product_families") as any)
-      .select("id,name,h_product_id,t_product_id")
-      .order("name");
-    if (error) {
-      if (!/does not exist|relation/i.test(error.message)) toast.error(`Nepodařilo se načíst produktové profily: ${error.message}`);
+    const [{ data: familyData, error: familyError }, { data: normData, error: normError }] = await Promise.all([
+      (supabase.from("product_families") as any).select("id,name,h_product_id,t_product_id").order("name"),
+      supabase.from("product_norms").select("*").order("valid_from", { ascending: false }).order("created_at", { ascending: false }),
+    ]);
+    if (familyError) {
+      if (!/does not exist|relation/i.test(familyError.message)) toast.error(`Nepodařilo se načíst produktové profily: ${familyError.message}`);
       return;
     }
-    setFamilies((data ?? []) as Family[]);
+    if (normError) {
+      toast.error(`Nepodařilo se načíst normy Product ID: ${normError.message}`);
+      return;
+    }
+    setFamilies((familyData ?? []) as Family[]);
+    setAllNorms((normData ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as ProfileNorm[]);
   };
   useEffect(() => { void load(); }, []);
 
@@ -44,13 +52,32 @@ export function ProductFamilyManager() {
   const standalone = useMemo(() => products.filter((p) => p.active && !familyProductIds.has(p.id)), [products, familyProductIds]);
   const findByCode = (code: string) => products.find((p) => p.code.trim().toLowerCase() === code.trim().toLowerCase());
 
+  const visibleNorms = useMemo(() => {
+    const byId = new Map<string, ProductNorm>();
+    for (const n of norms) byId.set(n.id, n);
+    for (const n of allNorms) byId.set(n.id, n);
+    return Array.from(byId.values());
+  }, [norms, allNorms]);
+
+  const profileNorm = (productId: string, operation: "HA" | "TUP") => {
+    const today = new Date().toISOString().slice(0, 10);
+    const candidates = allNorms
+      .filter((n) => n.product_id === productId && n.operation === operation && n.valid_from <= today && (n.valid_to === null || n.valid_to >= today))
+      .sort((a, b) => {
+        const pendingA = a.approval_status === "pending" ? 1 : 0;
+        const pendingB = b.approval_status === "pending" ? 1 : 0;
+        return pendingB - pendingA || b.valid_from.localeCompare(a.valid_from) || b.created_at.localeCompare(a.created_at);
+      });
+    return candidates[0] ?? currentNorm(visibleNorms, productId, operation);
+  };
+
   const reset = () => { setForm(emptyForm); setEditing(null); };
 
   const startEdit = (family: Family) => {
     const h = family.h_product_id ? productById.get(family.h_product_id) : undefined;
     const t = family.t_product_id ? productById.get(family.t_product_id) : undefined;
-    const hn = h ? currentNorm(norms, h.id, "HA") : undefined;
-    const tn = t ? currentNorm(norms, t.id, "TUP") : undefined;
+    const hn = h ? profileNorm(h.id, "HA") : undefined;
+    const tn = t ? profileNorm(t.id, "TUP") : undefined;
     setEditing(family);
     setExpanded(family.id);
     setForm({
@@ -65,21 +92,48 @@ export function ProductFamilyManager() {
   };
 
   const saveNorm = async (productId: string, operation: "HA" | "TUP", value: number, date: string) => {
-    const current = currentNorm(norms, productId, operation);
+    const current = profileNorm(productId, operation);
     if (current && Number(current.norm_per_hour) === value) return;
-    if (current) {
-      const { error } = await supabase.from("product_norms").update({ valid_to: date }).eq("id", current.id);
+
+    const approvalFields = approval();
+    // A pending norm created earlier by the same editor must be updated rather
+    // than creating another invisible pending row. Admins can update the live
+    // row in place; non-admins create a new pending version from an approved row.
+    const canUpdateCurrent = current && (
+      approvalFields.approval_status === "approved" || current.approval_status === "pending"
+    );
+
+    if (canUpdateCurrent && current.valid_from === date) {
+      const { error } = await supabase.from("product_norms").update({
+        norm_per_hour: value,
+        valid_to: null,
+        source: "product_family",
+        confirmed: true,
+        note: operation === "HA" ? "Norma H_ varianty celé HA linky" : "Norma T_ varianty",
+        ...approvalFields,
+      }).eq("id", current.id);
+      if (error) throw error;
+      return;
+    }
+
+    if (current && current.approval_status === "approved") {
+      const previousDay = new Date(`${date}T00:00:00Z`);
+      previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+      const previousDate = previousDay.toISOString().slice(0, 10);
+      const { error } = await supabase.from("product_norms").update({ valid_to: previousDate }).eq("id", current.id);
       if (error) throw error;
     }
+
     const { error } = await supabase.from("product_norms").insert({
       product_id: productId,
       operation,
       norm_per_hour: value,
       valid_from: date,
+      valid_to: null,
       source: "product_family",
       confirmed: true,
       note: operation === "HA" ? "Norma H_ varianty celé HA linky" : "Norma T_ varianty",
-      ...approval(),
+      ...approvalFields,
     });
     if (error) throw error;
   };
@@ -115,7 +169,7 @@ export function ProductFamilyManager() {
 
       let familyId = editing?.id;
       if (familyId) {
-        const { error } = await (supabase.from("product_families") as any).update({ name, h_product_id: hProduct.id, t_product_id: tProduct.id }).eq("id", familyId);
+        const { error } = await (supabase.from("product_families") as any).update({ name, h_product_id: hProduct.id, t_product_id: tProduct.id, updated_at: new Date().toISOString() }).eq("id", familyId);
         if (error) throw error;
       } else {
         const { data, error } = await (supabase.from("product_families") as any).insert({ name, h_product_id: hProduct.id, t_product_id: tProduct.id }).select("id").single();
@@ -123,9 +177,10 @@ export function ProductFamilyManager() {
         familyId = data.id;
       }
 
-      const { error: hError } = await (supabase.from("products") as any).update({ code: hCode, family_id: familyId, variant_type: "H", name, employees_per_product: hCapacity }).eq("id", hProduct.id);
+      const productFields = approval();
+      const { error: hError } = await (supabase.from("products") as any).update({ code: hCode, family_id: familyId, variant_type: "H", name, employees_per_product: hCapacity, ...productFields }).eq("id", hProduct.id);
       if (hError) throw hError;
-      const { error: tError } = await (supabase.from("products") as any).update({ code: tCode, family_id: familyId, variant_type: "T", name, employees_per_product: tCapacity }).eq("id", tProduct.id);
+      const { error: tError } = await (supabase.from("products") as any).update({ code: tCode, family_id: familyId, variant_type: "T", name, employees_per_product: tCapacity, ...productFields }).eq("id", tProduct.id);
       if (tError) throw tError;
 
       await saveNorm(hProduct.id, "HA", hNorm, date);
@@ -137,7 +192,7 @@ export function ProductFamilyManager() {
       await load();
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_norms"] });
-      toast.success(editing ? "Profil Product ID byl upraven." : "Profil Product ID byl založen.");
+      toast.success(editing ? "Profil Product ID byl upraven a normy uloženy." : "Profil Product ID byl založen a normy uloženy.");
       reset();
     } finally {
       setBusy(false);
@@ -162,7 +217,7 @@ export function ProductFamilyManager() {
     </div>
 
     <div className="mb-4 rounded-xl border bg-muted/20 p-4">
-      <div className="mb-3 text-sm font-semibold">Nové Product ID</div>
+      <div className="mb-3 text-sm font-semibold">{editing ? "Úprava Product ID" : "Nové Product ID"}</div>
       <div className="grid gap-3 lg:grid-cols-6">
         <div className="grid gap-1.5 lg:col-span-2"><Label>Název</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Např. Sestava 4962V3596B" /></div>
         <div className="grid gap-1.5"><Label>H_ Product ID</Label><Input value={form.hCode} onChange={(e) => setForm({ ...form, hCode: e.target.value })} placeholder="H_..." /></div>
@@ -171,7 +226,7 @@ export function ProductFamilyManager() {
         <div className="grid gap-1.5"><Label>Norma T_</Label><Input type="number" step="0.1" value={form.tNorm} onChange={(e) => setForm({ ...form, tNorm: e.target.value })} placeholder="ks/h" /></div>
         <div className="grid gap-1.5"><Label>Kapacita H_</Label><Input type="number" min="1" value={form.hCapacity} onChange={(e) => setForm({ ...form, hCapacity: e.target.value })} /></div>
         <div className="grid gap-1.5"><Label>Kapacita T_</Label><Input type="number" min="1" value={form.tCapacity} onChange={(e) => setForm({ ...form, tCapacity: e.target.value })} /></div>
-        <div className="flex items-end gap-2 lg:col-span-6"><Button disabled={busy} onClick={() => void saveFamily().catch((e: Error) => toast.error(e.message))}><Plus className="h-4 w-4" /> Založit Product ID</Button>{editing && <Button variant="outline" onClick={reset}>Zrušit úpravu</Button>}</div>
+        <div className="flex items-end gap-2 lg:col-span-6"><Button disabled={busy} onClick={() => void saveFamily().catch((e: Error) => toast.error(e.message))}>{editing ? "Uložit změny" : <><Plus className="h-4 w-4" /> Založit Product ID</>}</Button>{editing && <Button variant="outline" onClick={reset}>Zrušit úpravu</Button>}</div>
       </div>
     </div>
 
@@ -180,8 +235,8 @@ export function ProductFamilyManager() {
         const h = family.h_product_id ? productById.get(family.h_product_id) : undefined;
         const t = family.t_product_id ? productById.get(family.t_product_id) : undefined;
         const open = expanded === family.id;
-        const hNorm = h ? currentNorm(norms, h.id, "HA") : undefined;
-        const tNorm = t ? currentNorm(norms, t.id, "TUP") : undefined;
+        const hNorm = h ? profileNorm(h.id, "HA") : undefined;
+        const tNorm = t ? profileNorm(t.id, "TUP") : undefined;
         return <div key={family.id} className="overflow-hidden rounded-xl border">
           <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(family.id)}>
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{family.name}</span><Badge variant="outline">Product ID</Badge></div><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>H_: {h?.code ?? "–"}</span><span>T_: {t?.code ?? "–"}</span><span>H kap.: {h?.employees_per_product ?? "–"}</span><span>T kap.: {t?.employees_per_product ?? "–"}</span></div></div>{open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}</button>
@@ -197,7 +252,7 @@ export function ProductFamilyManager() {
       {standalone.map((product) => {
         const open = expanded === `product:${product.id}`;
         const operation = /^T_/i.test(product.code) ? "TUP" : "HA";
-        const norm = currentNorm(norms, product.id, operation);
+        const norm = profileNorm(product.id, operation);
         return <div key={product.id} className="overflow-hidden rounded-xl border border-dashed">
           <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/30" onClick={() => toggle(`product:${product.id}`)}>
             <div><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{product.name || product.code}</span><Badge variant="outline">Samostatný produkt</Badge></div><div className="mt-1 text-xs text-muted-foreground">{product.code} · kapacita {product.employees_per_product} · norma {norm?.norm_per_hour ?? "–"} ks/h</div></div>{open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}</button>
