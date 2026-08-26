@@ -38,14 +38,16 @@ export type HourlyStageResult = {
   raw?: string;
 };
 
-type AiProvider = { url: string; model: string; headers: Record<string, string> };
+type AiProvider = { name: string; url: string; model: string; headers: Record<string, string> };
+
+type AiError = Error & { status?: number; provider?: string; detail?: string };
 
 function providers(): AiProvider[] {
   const result: AiProvider[] = [];
   const openrouterKey = process.env.OPENROUTER_API_KEY;
-  if (openrouterKey) result.push({ url: "https://openrouter.ai/api/v1/chat/completions", model: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openrouterKey}` } });
+  if (openrouterKey) result.push({ name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", model: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openrouterKey}` } });
   const lovableKey = process.env.LOVABLE_API_KEY;
-  if (lovableKey) result.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } });
+  if (lovableKey) result.push({ name: "Lovable AI", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } });
   if (!result.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY).");
   return result;
 }
@@ -60,6 +62,35 @@ function num(value: unknown): number | null {
 function text(value: unknown): string { return String(value ?? "").trim(); }
 function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const value = num(row[key]); if (value !== null) return value; } return null; }
 function firstText(row: Record<string, unknown>, keys: string[]): string { for (const key of keys) { const value = text(row[key]); if (value) return value; } return ""; }
+
+// Keep provider error details useful for debugging, but never expose headers,
+// request bodies, API keys, or arbitrary response payloads to the browser.
+function providerErrorDetail(body: string): string {
+  const fallback = body.replace(/\s+/g, " ").trim();
+  if (!fallback) return "prázdná odpověď";
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const error = parsed.error;
+    if (error && typeof error === "object") {
+      const e = error as Record<string, unknown>;
+      const parts = [e.message, e.code, e.type, e.status].filter((value) => value !== undefined && value !== null && String(value).trim());
+      if (parts.length) return parts.map(String).join(" | ").slice(0, 600);
+    }
+    const message = parsed.message ?? parsed.detail;
+    if (message) return String(message).slice(0, 600);
+  } catch {
+    // Some gateways return plain text instead of JSON.
+  }
+  return fallback.slice(0, 600);
+}
+
+function aiError(message: string, provider: AiProvider, status?: number, detail?: string): AiError {
+  const error = new Error(message) as AiError;
+  error.status = status;
+  error.provider = provider.name;
+  error.detail = detail;
+  return error;
+}
 
 // Product codes are machine identifiers, so matching must tolerate OCR-added
 // spaces/case differences (for example "H_R32346264-005" vs "H_R32346264 - 005").
@@ -132,11 +163,42 @@ async function callAi(provider: AiProvider, imageDataUrl: string, context: Hourl
   ].join(" | ")).join("\n");
   const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nKONTEXT Z 1. A 2. SEKQUENCE – JE ZÁVAZNÝ:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na směně: ${context.operator_count}\n\nPřečti pro KAŽDOU skutečně viditelnou hodinu:\n- hour\n- product_code = skutečný kód/podsestava ze sloupce produktu\n- role = HA nebo TUP, pouze pokud je role/provoz na screenshotu čitelný; jinak null\n- actual_output = skutečný hodinový výstup linky ze sloupce Reálný\n- performance_pct a availability_pct pouze pokud jsou ve screenshotu čitelné\n\nNORMU ANI KAPACITU NEODVOZUJ ZE SCREENSHOTU. Pro výpočet použij výhradně existující Product Profile z databáze, případně profil předaný v kontextu 1. sekvence.\nPOČET OPERÁTORŮ VŽDY POUŽIJ VÝHRADNĚ Z 2. SEKQUENCE A PŘEDPOKLÁDEJ, ŽE SE BĚHEM SMĚNY NEMĚNÍ.\nPokud je stejná podsestava použita pro HA i TUP, nesmíš podle prefixu kódu rozhodnout roli; použij pouze skutečně čitelný kontext role.\n\nVrať pouze JSON. Nevymýšlej hodnoty.\nSkutečné OEE pak aplikace vypočítá přesně jako:\nOEE = (skutečný hodinový výstup / norma z Product Profile) * ((kapacita z Product Profile / skutečný počet operátorů) * 100)\nVýpočet se nesmí opírat o OCR výkon.`;
   const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile z 1. sekvence/databáze a počet operátorů z 2. sekvence jsou externí kontext a mají absolutní přednost. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","role":"HA | TUP | null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
-  const res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) });
-  if (!res.ok) { const body = await res.text(); const error = new Error(`AI:${res.status}:${body.slice(0, 300)}`) as Error & { status?: number }; error.status = res.status; throw error; }
-  const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+  let res: Response;
+  try {
+    res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) });
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw aiError(`${provider.name}: nepodařilo se spojit s AI službou.`, provider, undefined, detail);
+  }
+
+  let body = "";
+  try {
+    body = await res.text();
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw aiError(`${provider.name}: nepodařilo se přečíst odpověď AI.`, provider, res.status, detail);
+  }
+
+  if (!res.ok) {
+    const detail = providerErrorDetail(body);
+    throw aiError(`${provider.name}: HTTP ${res.status}`, provider, res.status, detail);
+  }
+
+  let json: { choices?: { message?: { content?: string } }[] };
+  try {
+    json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw aiError(`${provider.name}: odpověď není platný JSON.`, provider, res.status, detail);
+  }
+
   const content = json.choices?.[0]?.message?.content ?? "";
-  try { return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>; } catch { throw new Error("AI vrátila neočekávanou JSON odpověď."); }
+  if (!content.trim()) throw aiError(`${provider.name}: odpověď neobsahuje AI obsah.`, provider, res.status, "prázdný choices[0].message.content");
+  try {
+    return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>;
+  } catch {
+    throw aiError(`${provider.name}: AI vrátila neplatný JSON obsah.`, provider, res.status, content.slice(0, 600));
+  }
 }
 
 function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] { for (const key of ["hourly_metrics", "hours", "hourly", "metrics"]) { if (Array.isArray(parsed[key])) return parsed[key] as Record<string, unknown>[]; } return []; }
@@ -170,8 +232,20 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
     );
     if (!usableProfile) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
     const attempts: string[] = []; let parsed: Record<string, unknown> | null = null;
-    for (const provider of providers()) { try { parsed = await callAi(provider, data.imageDataUrl, resolvedContext); break; } catch (e) { const error = e as Error & { status?: number }; attempts.push(`${error.status ?? "error"}`); if (error.status !== 402 && error.status !== 429) break; } }
-    if (!parsed) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}).`);
+    for (const provider of providers()) {
+      try {
+        parsed = await callAi(provider, data.imageDataUrl, resolvedContext);
+        break;
+      } catch (e) {
+        const error = e as AiError;
+        const status = error.status != null ? `HTTP ${error.status}` : "síťová chyba";
+        const detail = error.detail ? `: ${error.detail}` : "";
+        attempts.push(`${provider.name} – ${status}${detail}`);
+      }
+    }
+    if (!parsed) {
+      throw new Error(`AI OCR se nepodařilo dokončit. Pokusy: ${attempts.join("; ")}`);
+    }
     const raw = rawHourly(parsed);
     const hourly_metrics: HourlyStageMetric[] = raw.map((row) => {
       const product_code = firstText(row, ["product_code", "product"]) || null;
