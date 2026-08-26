@@ -1,0 +1,2 @@
+Fresh deployment requested after runtime error: Card is not defined on /denni-data.
+Source verification confirms Card is explicitly imported by denni-data.tsx and ScreenshotImport.tsx.
