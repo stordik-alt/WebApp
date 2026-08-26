@@ -60,7 +60,10 @@ function num(value: unknown): number | null {
 function text(value: unknown): string { return String(value ?? "").trim(); }
 function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const value = num(row[key]); if (value !== null) return value; } return null; }
 function firstText(row: Record<string, unknown>, keys: string[]): string { for (const key of keys) { const value = text(row[key]); if (value) return value; } return ""; }
-function normalize(value: string | null): string { return (value ?? "").trim().toLowerCase(); }
+
+// Product codes are machine identifiers, so matching must tolerate OCR-added
+// spaces/case differences (for example "H_R32346264-005" vs "H_R32346264 - 005").
+function normalize(value: string | null): string { return (value ?? "").trim().toLowerCase().replace(/\s+/g, ""); }
 
 function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[] {
   if (context.profiles?.length) return context.profiles;
@@ -68,43 +71,37 @@ function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[
 }
 
 async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> {
-  // The database Product Profile is the source of truth. The context from
-  // sequence 1 may contain only the norm (or an incomplete profile), so it
-  // must never prevent us from loading the existing capacity from Supabase.
+  // Product Profiles already stored in Supabase are the source of truth.
+  // Do not require the profile to have been created by the current import.
   const contextProfiles = context.profiles ?? [];
-  const codes = Array.from(new Set([
-    ...contextProfiles.flatMap((p) => [p.ha_subassy, p.tup_subassy]),
-    ...(context.products ?? []).map((p) => p.product_code),
-  ].map((code) => text(code)).filter(Boolean)));
-
-  if (!codes.length) return contextProfiles;
-
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  // Load the persistent profile set instead of doing an exact SQL match on the
+  // OCR/context code. This makes existing profiles available even when OCR
+  // inserted spaces or when HA/TUP share the same subassembly code.
   const { data, error } = await supabaseAdmin
     .from("product_profiles")
-    .select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour")
-    .or(codes.map((code) => `ha_subassy.eq.${code},tup_subassy.eq.${code}`).join(","));
+    .select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour");
   if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`);
 
   const dbProfiles = (data ?? []) as ProductProfileContext[];
   if (!dbProfiles.length) return contextProfiles;
 
-  // Merge the first-sequence context with the persistent profile. Database
-  // values win whenever present, while context can supply a value missing in
-  // an older/incomplete profile row.
+  // Merge context with the persistent profiles. Database values win when
+  // present; sequence 1 may still fill a missing value in an older row.
   const merged: ProductProfileContext[] = [];
-  const usedDb = new Set<string>();
+  const usedDb = new Set<number>();
   for (const contextProfile of contextProfiles) {
     const contextCodes = [contextProfile.ha_subassy, contextProfile.tup_subassy].map(normalize).filter(Boolean);
     const dbIndex = dbProfiles.findIndex((p, index) => {
-      if (usedDb.has(String(index))) return false;
+      if (usedDb.has(index)) return false;
       return [p.ha_subassy, p.tup_subassy].map(normalize).some((code) => code && contextCodes.includes(code));
     });
     if (dbIndex < 0) {
       merged.push(contextProfile);
       continue;
     }
-    usedDb.add(String(dbIndex));
+    usedDb.add(dbIndex);
     const dbProfile = dbProfiles[dbIndex];
     merged.push({
       ...contextProfile,
@@ -117,8 +114,11 @@ async function loadExistingProfiles(context: HourlyStageContext): Promise<Produc
       t_norm_per_hour: dbProfile.t_norm_per_hour ?? contextProfile.t_norm_per_hour,
     });
   }
+
+  // Include profiles that were not present in sequence 1 as well. The hourly
+  // OCR can then resolve an existing Product Profile directly from its code.
   dbProfiles.forEach((profile, index) => {
-    if (!usedDb.has(String(index))) merged.push(profile);
+    if (!usedDb.has(index)) merged.push(profile);
   });
   return merged;
 }
