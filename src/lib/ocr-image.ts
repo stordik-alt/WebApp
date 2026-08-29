@@ -6,40 +6,55 @@ export type OcrPreprocessOptions = {
 };
 
 /**
- * Prepare a screenshot for vision OCR without modifying the original upload.
- * Runs in the browser so the AI receives a larger, normalized image while
- * storage can continue to keep the original screenshot unchanged.
+ * Creates a temporary, enlarged JPEG for OCR. The original upload is never
+ * modified; callers can continue uploading the original File to storage.
+ * If browser image processing is unavailable or fails, the original data URL
+ * is returned so OCR can continue unchanged.
  */
 export async function preprocessOcrImage(
   dataUrl: string,
   options: OcrPreprocessOptions = {},
 ): Promise<string> {
-  const scale = options.scale ?? 2;
-  const quality = options.quality ?? 0.94;
-  const maxWidth = options.maxWidth ?? 4096;
-  const maxHeight = options.maxHeight ?? 4096;
+  try {
+    const scale = Math.max(1, options.scale ?? 2);
+    const quality = options.quality ?? 0.94;
+    const maxWidth = options.maxWidth ?? 4096;
+    const maxHeight = options.maxHeight ?? 4096;
 
-  if (!dataUrl.startsWith("data:image/")) return dataUrl;
+    if (!dataUrl.startsWith("data:image/")) return dataUrl;
 
-  const image = new Image();
-  image.decoding = "async";
-  image.src = dataUrl;
-  await image.decode();
+    const image = new Image();
+    image.decoding = "async";
+    image.src = dataUrl;
+    await image.decode();
 
-  const targetScale = Math.max(1, scale);
-  const width = Math.min(Math.round(image.naturalWidth * targetScale), maxWidth);
-  const height = Math.min(Math.round(image.naturalHeight * targetScale), maxHeight);
-  if (width === image.naturalWidth && height === image.naturalHeight) return dataUrl;
+    const sourceWidth = image.naturalWidth;
+    const sourceHeight = image.naturalHeight;
+    if (!sourceWidth || !sourceHeight) return dataUrl;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d", { alpha: false });
-  if (!ctx) return dataUrl;
+    const limitingScale = Math.min(
+      scale,
+      maxWidth / sourceWidth,
+      maxHeight / sourceHeight,
+    );
+    const targetScale = Math.max(1, limitingScale);
+    const width = Math.max(1, Math.round(sourceWidth * targetScale));
+    const height = Math.max(1, Math.round(sourceHeight * targetScale));
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, 0, 0, width, height);
+    if (width === sourceWidth && height === sourceHeight) return dataUrl;
 
-  return canvas.toDataURL("image/jpeg", quality);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) return dataUrl;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch {
+    return dataUrl;
+  }
 }
