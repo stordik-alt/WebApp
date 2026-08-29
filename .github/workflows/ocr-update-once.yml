@@ -1,0 +1,86 @@
+name: Apply OCR preprocessing integration
+
+on:
+  push:
+    branches: [OCR_update]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, 'Apply OCR preprocessing integration')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Patch ScreenshotImport
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImport.tsx')
+          s = p.read_text()
+
+          s = s.replace(
+              'import { useApprovalFields } from "@/lib/auth";\n',
+              'import { useApprovalFields } from "@/lib/auth";\nimport { preprocessOcrImage } from "@/lib/ocr-image";\n',
+              1,
+          )
+          s = s.replace(
+              'const [busy, setBusy] = useState(false); const [stage, setStage] = useState<ImportStage>("products"); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null);',
+              'const [busy, setBusy] = useState(false); const [stage, setStage] = useState<ImportStage>("products"); const [result, setResult] = useState<OcrResult | null>(null); const [screenshotPath, setScreenshotPath] = useState<string | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [ocrImageUrl, setOcrImageUrl] = useState<string | null>(null);',
+              1,
+          )
+          s = s.replace(
+              'setScreenshotPath(null); setPreviewUrl(null); setProductCode("");',
+              'setScreenshotPath(null); setPreviewUrl(null); setOcrImageUrl(null); setProductCode("");',
+              1,
+          )
+          old = 'fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error("Soubor se nepodařilo načíst.")); fr.readAsDataURL(file); }); setPreviewUrl(dataUrl);'
+          new = 'fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error("Soubor se nepodařilo načíst.")); fr.readAsDataURL(file); }); const ocrDataUrl = await preprocessOcrImage(dataUrl); setPreviewUrl(dataUrl); setOcrImageUrl(ocrDataUrl);'
+          if old not in s:
+              raise SystemExit('onFile read/preview anchor not found')
+          s = s.replace(old, new, 1)
+          s = s.replace(
+              'const r = await extractStage({ data: { imageDataUrl: dataUrl, stage: "products" } });',
+              'const r = await extractStage({ data: { imageDataUrl: ocrDataUrl, stage: "products" } });',
+              1,
+          )
+          s = s.replace(
+              '} else await runEmployeeStage(dataUrl); } catch (e)',
+              '} else await runEmployeeStage(ocrDataUrl); } catch (e)',
+              1,
+          )
+          s = s.replace(
+              'if (previewUrl) void runEmployeeStage(previewUrl);',
+              'if (ocrImageUrl) void runEmployeeStage(ocrImageUrl);',
+              1,
+          )
+          s = s.replace(
+              'if (!previewUrl) return; if (!rows.length)',
+              'if (!ocrImageUrl) return; if (!rows.length)',
+              1,
+          )
+          s = s.replace(
+              'await runHourlyStage(previewUrl, rows);',
+              'await runHourlyStage(ocrImageUrl, rows);',
+              1,
+          )
+          p.write_text(s)
+      - name: Verify and commit
+        run: |
+          grep -q 'preprocessOcrImage' src/components/ScreenshotImport.tsx
+          grep -q 'const ocrDataUrl = await preprocessOcrImage(dataUrl)' src/components/ScreenshotImport.tsx
+          grep -q 'imageDataUrl: ocrDataUrl' src/components/ScreenshotImport.tsx
+          grep -q 'runEmployeeStage(ocrDataUrl)' src/components/ScreenshotImport.tsx
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ScreenshotImport.tsx
+          git commit -m 'feat: use preprocessed image for OCR' || exit 0
+          git push
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          git rm .github/workflows/ocr-update-once.yml
+          git commit -m 'chore: remove temporary OCR patch workflow'
+          git push
