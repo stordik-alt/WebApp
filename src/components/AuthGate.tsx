@@ -61,11 +61,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <Card className="w-full max-w-sm gap-5 rounded-2xl border-border/70 p-7 shadow-[var(--shadow-card)]">
           <div>
             <ResideoLogo variant="dark" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              {mode === "in"
-                ? "Interní nástroj – přihlaste se prosím."
-                : "Registrace nového účtu. Přístup přidělí správce."}
-            </p>
+            {mode === "up" ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Registrace nového účtu. Přístup přidělí správce.
+              </p>
+            ) : null}
           </div>
 
           {sentTo ? (
@@ -85,7 +85,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           >
             {mode === "up" ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1.5">
+                <div className="grid gap-1.5 form-row">
                   <Label htmlFor="firstName">Jméno</Label>
                   <Input
                     id="firstName"
@@ -95,7 +95,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                     required
                   />
                 </div>
-                <div className="grid gap-1.5">
+                <div className="grid gap-1.5 form-row">
                   <Label htmlFor="lastName">Příjmení</Label>
                   <Input
                     id="lastName"
@@ -108,7 +108,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               </div>
             ) : null}
 
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 form-row">
               <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
@@ -119,7 +119,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 required
               />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 form-row">
               <Label htmlFor="password">Heslo</Label>
               <Input
                 id="password"
@@ -130,7 +130,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 required
               />
             </div>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy} className="shadow-md">
               {mode === "in" ? "Přihlásit se" : "Vytvořit účet"}
             </Button>
             <Button
@@ -158,9 +158,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <Card className="w-full max-w-sm gap-4 p-6 text-center shadow-[var(--shadow-card)]">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Čeká se na schválení
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Čeká se na schválení</h1>
           <p className="text-sm text-muted-foreground">
             Účet {profile?.email ?? ""} zatím nemá přidělenou úroveň přístupu ({roleLabel(null)}).
             Požádejte prosím správce aplikace o přidělení role.
