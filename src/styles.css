@@ -50,6 +50,10 @@
 
   /* Focus */
   --focus-ring: rgba(128,0,0,0.18);
+
+  /* Input / border tokens */
+  --border: rgba(2,6,23,0.12);
+  --input-bg: rgba(15,23,36,0.04);
 }
 
 /* Dark mode: tuned for readability and modern contrast */
@@ -70,6 +74,10 @@
   --shadow-md: 0 12px 30px rgba(2,6,23,0.5);
 
   --focus-ring: rgba(178,77,77,0.24);
+
+  /* Dark border + input background */
+  --border: rgba(255,255,255,0.06);
+  --input-bg: #071427;
 }
 
 /* Base element styles */
@@ -110,7 +118,7 @@ body {
 .bg-surface-elevated { background-color: var(--color-surface-elevated) !important; }
 .text-foreground { color: var(--color-text) !important; }
 .text-muted { color: var(--color-muted) !important; }
-.border-input { border-color: rgba(2,6,23,0.06) !important; }
+.border-input { border-color: var(--border) !important; }
 
 .rounded-md { border-radius: var(--radius-sm) !important; }
 .rounded-lg { border-radius: var(--radius-md) !important; }
@@ -134,9 +142,9 @@ body {
 
 /* Improve readability of dark mode for small text (forms, tables) */
 .dark input, .dark textarea, .dark select {
-  background: #071427;
+  background: var(--input-bg);
   color: var(--color-text);
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
 }
 
 /* Theme toggle hint */
