@@ -1,164 +1,189 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 @import "tailwindcss" source(none);
 @source "../src";
-@import "tw-animate-css";
 
 /*
-  Updated theme tokens for improved modern look and accessible dark mode.
-  - Preserves primary color #800000 per request
-  - Adds explicit darker/lighter primary shades for hover/active
-  - Provides elevated surface colors and readable text colors in dark mode
-  - Improves focus ring contrast
+  COMPLETE THEME OVERHAUL
+  - Modern, balanced palette built around brand accent #800000
+  - Clear layer system for surfaces, elevated surfaces, and controls
+  - Improved spacing, typography scale, and shadows for "airy" look
+  - Sidebar, header, card, and KPI styles to create a coherent dashboard layout
+  - Dark mode tuned for readability (not pure black)
 */
 
 :root {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  --lead: 1.4;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
 
   /* Radii */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
+  --radius-round: 9999px;
 
-  /* Spacing scale (example) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
+  /* Brand */
+  --brand: #800000; /* requested */
+  --brand-600: #A13B3B; /* accent for light surfaces */
+  --brand-300: #B24D4D; /* used in dark mode as lighter accent */
+  --brand-50: rgba(128,0,0,0.06);
 
-  /* Light theme colors */
-  --color-bg: #FBFDFF; /* page background */
-  --color-surface: #FFFFFF; /* default surfaces/cards */
-  --color-surface-elevated: #F8FAFC; /* slightly elevated */
-  --color-text: #0F172A; /* main text */
-  --color-muted: #6B7280; /* secondary text */
-
-  /* Primary (brand) - user requested */
-  --color-primary: #800000; /* primary */
-  --color-primary-600: #5f0000; /* hover */
-  --color-primary-700: #430000; /* active */
-  --color-primary-foreground: #FFFFFF;
-
-  /* Semantic */
-  --color-success: #059669;
-  --color-danger: #DC2626;
+  /* Neutral / backgrounds (light theme) */
+  --bg: #F6F8FA; /* page background */
+  --surface: #FFFFFF; /* card / surface */
+  --surface-elevated: #F3F6F9; /* slightly elevated */
+  --muted: #6B7280; /* secondary text */
+  --text: #0F1724; /* primary text */
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(2,6,23,0.06);
-  --shadow-md: 0 6px 18px rgba(2,6,23,0.08);
-  --shadow-lg: 0 24px 48px rgba(2,6,23,0.12);
+  --shadow-1: 0 4px 14px rgba(3, 10, 18, 0.06);
+  --shadow-2: 0 10px 30px rgba(3, 10, 18, 0.08);
+  --shadow-cta: 0 6px 24px rgba(128,0,0,0.14);
 
-  /* Focus */
-  --focus-ring: rgba(128,0,0,0.18);
+  /* Borders & inputs */
+  --border: rgba(15, 23, 36, 0.06);
+  --input-bg: rgba(15, 23, 36, 0.02);
+  --placeholder: rgba(107,114,128,0.6);
 
-  /* Input / border tokens */
-  --border: rgba(2,6,23,0.12);
-  --input-bg: rgba(15,23,36,0.04);
+  /* Charts / grid */
+  --chart-grid: rgba(15,23,36,0.06);
+  --chart-foreground: rgba(15,23,36,0.9);
+
+  /* focus */
+  --focus-ring: rgba(128,0,0,0.14);
 }
 
-/* Dark mode: tuned for readability and modern contrast */
+/* Dark mode: tuned for readability and warmth (avoid pure black) */
 .dark {
-  --color-bg: #071026; /* deep navy with a little warmth */
-  --color-surface: #0f1724; /* main card surface */
-  --color-surface-elevated: #0b1320; /* slightly darker for elevated */
-  --color-text: #E6EEF8; /* readable on dark */
-  --color-muted: #9AA8BD; /* muted on dark */
+  --bg: #061122; /* deep navy */
+  --surface: #0b1220; /* main card surface */
+  --surface-elevated: #0f1a2a; /* slightly lighter */
+  --muted: #9AA8BD;
+  --text: #E6EEF8;
 
-  /* Primary adjusted for dark so it pops but stays harmonious */
-  --color-primary: #B24D4D; /* lighter maroon for better contrast */
-  --color-primary-600: #9a3f3f; /* hover */
-  --color-primary-700: #7a2f2f; /* active */
-  --color-primary-foreground: #FFFFFF;
+  --brand: #B24D4D; /* lighter brand on dark */
+  --brand-600: #9a3f3f;
+  --brand-300: #d07b7b;
+  --brand-50: rgba(178,77,77,0.08);
 
-  --shadow-sm: 0 2px 6px rgba(2,6,23,0.45);
-  --shadow-md: 0 12px 30px rgba(2,6,23,0.5);
+  --shadow-1: 0 6px 18px rgba(2,8,20,0.45);
+  --shadow-2: 0 14px 40px rgba(2,8,20,0.55);
 
-  --focus-ring: rgba(178,77,77,0.24);
+  --border: rgba(255,255,255,0.04);
+  --input-bg: rgba(255,255,255,0.02);
+  --placeholder: rgba(230,238,248,0.46);
 
-  /* Dark border + input background */
-  --border: rgba(255,255,255,0.06);
-  --input-bg: #071427;
+  --chart-grid: rgba(255,255,255,0.03);
+  --chart-foreground: rgba(230,238,248,0.92);
+
+  --focus-ring: rgba(178,77,77,0.22);
 }
 
-/* Base element styles */
-html, body, #root {
-  height: 100%;
-}
-
+/* Global base */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
 body {
   font-family: var(--font-sans);
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  background: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: var(--lead);
+  margin: 0;
 }
 
-/* Surface/card utility */
-.card {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+/* Layout helpers */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px;
+  background: linear-gradient(180deg, var(--surface-elevated), var(--surface));
+  border-right: 1px solid var(--border);
+  padding: var(--space-lg) 12px;
+  display: flex; flex-direction: column; gap: var(--space-md);
+}
+.main { flex: 1; padding: var(--space-lg); min-width: 0; }
+.header {
+  height: 72px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md);
+  padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--border);
 }
 
-/* Elevated surface (modals, floating panels) */
-.surface-elevated {
-  background: var(--color-surface-elevated);
-  box-shadow: var(--shadow-md);
+/* Sidebar branding */
+.brand { display:flex; gap:12px; align-items:center; padding: 8px 12px; }
+.brand .logo { width: 44px; height:44px; border-radius: 8px; background: linear-gradient(135deg, var(--brand), var(--brand-600)); color: white; display:flex; align-items:center; justify-content:center; font-weight:700; }
+.brand .title { font-weight:700; font-size:0.95rem; }
+.brand .subtitle { font-size:0.75rem; color:var(--muted); }
+
+/* Navigation */
+.nav { display:flex; flex-direction:column; gap:6px; margin-top:8px; overflow:auto; padding-right:8px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; color:var(--muted); cursor:pointer; transition: background .12s, color .12s, transform .06s; }
+.nav-item:hover { background: rgba(128,0,0,0.04); color:var(--text); transform: translateY(-1px); }
+.nav-item.active { background: var(--surface); box-shadow: var(--shadow-1); color:var(--text); border-left: 4px solid var(--brand); padding-left:8px; }
+.nav-item .icon { width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background: transparent; }
+
+/* Content grid */
+.kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-md); margin-bottom: var(--space-lg); }
+.kpi { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-md); box-shadow: var(--shadow-1); border:1px solid var(--border); }
+.kpi .value { font-size:1.8rem; font-weight:700; }
+.kpi .label { color:var(--muted); font-size:0.85rem; }
+
+/* Cards */
+.card { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-md); border: 1px solid var(--border); box-shadow: var(--shadow-1); }
+.card .card-title { font-weight:700; margin-bottom:8px; }
+.card .card-body { color:var(--muted); }
+
+/* Inputs */
+input, textarea, select {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  height: 44px;
+  border-radius: 10px;
+  transition: box-shadow .12s, border-color .12s;
+}
+input::placeholder, textarea::placeholder { color: var(--placeholder); }
+input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 4px var(--focus-ring); outline: none; border-color: var(--brand); }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-radius:12px; font-weight:600; cursor:pointer; border: none; }
+.btn-primary { background: linear-gradient(180deg, var(--brand), var(--brand-600)); color: white; box-shadow: var(--shadow-cta); }
+.btn-ghost { background: transparent; color:var(--text); border: 1px solid var(--border); }
+.btn-outline { background: transparent; color:var(--text); border: 1px solid var(--border); }
+.btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+
+/* Form row separator */
+.form-row { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+.form-row:last-child { border-bottom: none; }
+
+/* Charts: lighter grid + readable axes */
+.chart-container { background: transparent; border-radius: 10px; padding: 12px; }
+.recharts-cartesian-grid line { stroke: var(--chart-grid); }
+.recharts-text { fill: var(--chart-foreground); }
+
+/* Responsive tweaks */
+@media (max-width: 1024px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .sidebar { width: 72px; padding: 12px 8px; }
+  .brand .title, .brand .subtitle { display:none; }
 }
 
-/* Buttons/token helpers mapping (keeps compatibility with existing classes) */
-.bg-primary { background-color: var(--color-primary) !important; }
-.text-primary-foreground { color: var(--color-primary-foreground) !important; }
-.bg-primary-600 { background-color: var(--color-primary-600) !important; }
-.bg-primary-700 { background-color: var(--color-primary-700) !important; }
-
-.bg-background { background-color: var(--color-bg) !important; }
-.bg-surface { background-color: var(--color-surface) !important; }
-.bg-surface-elevated { background-color: var(--color-surface-elevated) !important; }
-.text-foreground { color: var(--color-text) !important; }
-.text-muted { color: var(--color-muted) !important; }
+/* Small helper classes kept for compatibility */
+.bg-primary { background: var(--brand) !important; }
+.text-foreground { color: var(--text) !important; }
+.bg-background { background: var(--bg) !important; }
 .border-input { border-color: var(--border) !important; }
 
-.rounded-md { border-radius: var(--radius-sm) !important; }
-.rounded-lg { border-radius: var(--radius-md) !important; }
-
-.shadow-sm { box-shadow: var(--shadow-sm) !important; }
-.shadow-md { box-shadow: var(--shadow-md) !important; }
-.shadow-lg { box-shadow: var(--shadow-lg) !important; }
-
-/* Accessible focus styles (uses brand tint in both modes) */
-:focus {
-  outline: none;
-}
-:focus-visible {
-  box-shadow: 0 0 0 4px var(--focus-ring);
-  border-radius: var(--radius-sm);
-}
-
-/* Small helpers */
-.px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
-.py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-
-/* Improve readability of dark mode for small text (forms, tables) */
-.dark input, .dark textarea, .dark select {
-  background: var(--input-bg);
-  color: var(--color-text);
-  border: 1px solid var(--border);
-}
-
-/* Theme toggle hint */
-.theme-hint {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  color: var(--color-muted);
-  font-size: 0.9rem;
-}
-
-/* Keep the rest of project-specific rules below (compatibility) */
-/* --- original rules preserved below --- */
-
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
+/* Accessibility: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
 }
