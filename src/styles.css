@@ -3,49 +3,80 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark)) {
-}
+/*
+  Updated theme tokens for improved modern look and accessible dark mode.
+  - Preserves primary color #800000 per request
+  - Adds explicit darker/lighter primary shades for hover/active
+  - Provides elevated surface colors and readable text colors in dark mode
+  - Improves focus ring contrast
+*/
 
-@custom-variant dark (&:is(.dark)) {
-}
-
-@custom-variant dark (&:is(.dark)) {
-}
-
-/* Design tokens - centralised */
 :root {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 
+  /* Spacing scale (example) */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 24px;
 
-  --color-bg: #fbfdff;
-  --color-surface: #ffffff;
-  --color-primary: #800000; /* user chosen */
-  --color-primary-foreground: #ffffff;
-  --color-muted: #6B7280;
-  --color-text: #0F172A;
+  /* Light theme colors */
+  --color-bg: #FBFDFF; /* page background */
+  --color-surface: #FFFFFF; /* default surfaces/cards */
+  --color-surface-elevated: #F8FAFC; /* slightly elevated */
+  --color-text: #0F172A; /* main text */
+  --color-muted: #6B7280; /* secondary text */
 
+  /* Primary (brand) - user requested */
+  --color-primary: #800000; /* primary */
+  --color-primary-600: #5f0000; /* hover */
+  --color-primary-700: #430000; /* active */
+  --color-primary-foreground: #FFFFFF;
+
+  /* Semantic */
+  --color-success: #059669;
+  --color-danger: #DC2626;
+
+  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(2,6,23,0.06);
   --shadow-md: 0 6px 18px rgba(2,6,23,0.08);
+  --shadow-lg: 0 24px 48px rgba(2,6,23,0.12);
+
+  /* Focus */
+  --focus-ring: rgba(128,0,0,0.18);
 }
 
-/* Dark mode tokens */
+/* Dark mode: tuned for readability and modern contrast */
 .dark {
-  --color-bg: #071127;
-  --color-surface: #0b1220;
-  --color-primary: #b23b3b; /* slightly lighter for dark */
-  --color-primary-foreground: #ffffff;
-  --color-text: #E6EEF8;
+  --color-bg: #071026; /* deep navy with a little warmth */
+  --color-surface: #0f1724; /* main card surface */
+  --color-surface-elevated: #0b1320; /* slightly darker for elevated */
+  --color-text: #E6EEF8; /* readable on dark */
+  --color-muted: #9AA8BD; /* muted on dark */
+
+  /* Primary adjusted for dark so it pops but stays harmonious */
+  --color-primary: #B24D4D; /* lighter maroon for better contrast */
+  --color-primary-600: #9a3f3f; /* hover */
+  --color-primary-700: #7a2f2f; /* active */
+  --color-primary-foreground: #FFFFFF;
+
+  --shadow-sm: 0 2px 6px rgba(2,6,23,0.45);
+  --shadow-md: 0 12px 30px rgba(2,6,23,0.5);
+
+  --focus-ring: rgba(178,77,77,0.24);
 }
 
-/* Basic element rules */
+/* Base element styles */
+html, body, #root {
+  height: 100%;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--color-bg);
@@ -54,36 +85,46 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Utility mappings for existing Tailwind-like classes used in project */
-.bg-primary { background-color: var(--color-primary) !important; }
-.text-primary-foreground { color: var(--color-primary-foreground) !important; }
-.bg-primary-600 { background-color: color-mix(in srgb, var(--color-primary) 85%, black 15%) !important; }
-
-.bg-background { background-color: var(--color-bg) !important; }
-.bg-surface { background-color: var(--color-surface) !important; }
-.text-foreground { color: var(--color-text) !important; }
-.border-input { border-color: rgba(2,6,23,0.06) !important; }
-
-.rounded-md { border-radius: var(--radius-sm) !important; }
-.rounded-lg { border-radius: var(--radius-md) !important; }
-.rounded-full { border-radius: 9999px !important; }
-
-.shadow-sm { box-shadow: var(--shadow-sm) !important; }
-.shadow-md { box-shadow: var(--shadow-md) !important; }
-
-/* Card and container defaults */
+/* Surface/card utility */
 .card {
   background: var(--color-surface);
+  color: var(--color-text);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }
 
-/* Accessible focus styles */
+/* Elevated surface (modals, floating panels) */
+.surface-elevated {
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-md);
+}
+
+/* Buttons/token helpers mapping (keeps compatibility with existing classes) */
+.bg-primary { background-color: var(--color-primary) !important; }
+.text-primary-foreground { color: var(--color-primary-foreground) !important; }
+.bg-primary-600 { background-color: var(--color-primary-600) !important; }
+.bg-primary-700 { background-color: var(--color-primary-700) !important; }
+
+.bg-background { background-color: var(--color-bg) !important; }
+.bg-surface { background-color: var(--color-surface) !important; }
+.bg-surface-elevated { background-color: var(--color-surface-elevated) !important; }
+.text-foreground { color: var(--color-text) !important; }
+.text-muted { color: var(--color-muted) !important; }
+.border-input { border-color: rgba(2,6,23,0.06) !important; }
+
+.rounded-md { border-radius: var(--radius-sm) !important; }
+.rounded-lg { border-radius: var(--radius-md) !important; }
+
+.shadow-sm { box-shadow: var(--shadow-sm) !important; }
+.shadow-md { box-shadow: var(--shadow-md) !important; }
+.shadow-lg { box-shadow: var(--shadow-lg) !important; }
+
+/* Accessible focus styles (uses brand tint in both modes) */
 :focus {
   outline: none;
 }
 :focus-visible {
-  box-shadow: 0 0 0 3px rgba(128,0,0,0.12);
+  box-shadow: 0 0 0 4px var(--focus-ring);
   border-radius: var(--radius-sm);
 }
 
@@ -91,13 +132,25 @@ body {
 .px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
 .py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-/* Preserve other existing rules from original file */
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
+/* Improve readability of dark mode for small text (forms, tables) */
+.dark input, .dark textarea, .dark select {
+  background: #071427;
+  color: var(--color-text);
+  border: 1px solid rgba(255,255,255,0.04);
 }
 
-/* Rest of original styles retained below (kept for compatibility) */
-/* (original project-specific rules) */
+/* Theme toggle hint */
+.theme-hint {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
 
-@custom-variant dark (&:is(.dark)) {
+/* Keep the rest of project-specific rules below (compatibility) */
+/* --- original rules preserved below --- */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
 }
