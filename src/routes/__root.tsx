@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthGate } from "@/components/AuthGate";
 import { AuthProvider } from "@/lib/auth";
 import { themeInitScript } from "@/lib/use-theme";
+import { percentColor } from "@/lib/percent-color";
 import appCss from "../styles.css?url";
 import mintCss from "../mint-theme.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -37,6 +38,44 @@ function NotFoundComponent() {
       </div>
     </div>
   );
+}
+
+function usePercentTextColoring() {
+  useEffect(() => {
+    const colorize = (root: Node) => {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes: Text[] = [];
+      let current: Node | null = walker.nextNode();
+      while (current) {
+        if (current.nodeType === Node.TEXT_NODE) nodes.push(current as Text);
+        current = walker.nextNode();
+      }
+      for (const node of nodes) {
+        const parent = node.parentElement;
+        if (!parent || parent.closest("[data-no-percent-color]")) continue;
+        const raw = node.nodeValue?.trim() ?? "";
+        const match = raw.match(/^(-?\d+(?:[.,]\d+)?)\s*%$/);
+        if (!match) continue;
+        const numeric = Number(match[1].replace(",", "."));
+        const style = percentColor(numeric);
+        if (!style) continue;
+        parent.style.color = String(style.color);
+        if (style.textShadow) parent.style.textShadow = String(style.textShadow);
+      }
+    };
+
+    colorize(document.body);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node.nodeType === Node.TEXT_NODE) colorize(node.parentNode ?? node);
+          else colorize(node);
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
@@ -134,6 +173,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  usePercentTextColoring();
 
   return (
     <QueryClientProvider client={queryClient}>
