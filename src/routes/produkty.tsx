@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Pencil, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProducts } from "@/lib/data";
 import { AppShell } from "@/components/AppShell";
-import { ProductProfileManager } from "@/components/ProductProfileManager";
+import { ProductProfileManagerV2 } from "@/components/ProductProfileManagerV2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,8 +70,7 @@ function ProductsPage() {
   return (
     <AppShell title="Produkty a normy" subtitle="Product Profiles jsou zdrojem pravdy pro HA/TUP Product ID, normy, kapacity a jejich verzování.">
       <div className="grid min-w-0 gap-6">
-        <ProductProfileManager />
-
+        <ProductProfileManagerV2 />
         <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
           <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Samostatný produkt</h2>
@@ -84,16 +82,12 @@ function ProductsPage() {
               <Button className="h-11" disabled={addProduct.isPending || !code.trim()} onClick={() => addProduct.mutate()}><Plus className="h-4 w-4" /> Přidat produkt</Button>
             </div>
           </Card>
-
           <Card className="min-w-0 overflow-hidden p-0">
             <div className="border-b border-border px-4 py-3 text-sm font-semibold">Produkty ({products.length})</div>
             <div className="divide-y divide-border">
               {products.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné produkty.</p> : products.map((product) => (
                 <div key={product.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{product.code}{product.name ? <span className="text-muted-foreground"> – {product.name}</span> : null}</div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground"><span>Kapacita: {product.employees_per_product ?? 1}</span><span>první výskyt {product.first_seen_date}</span></div>
-                  </div>
+                  <div className="min-w-0"><div className="truncate text-sm font-medium">{product.code}{product.name ? <span className="text-muted-foreground"> – {product.name}</span> : null}</div><div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground"><span>Kapacita: {product.employees_per_product ?? 1}</span><span>první výskyt {product.first_seen_date}</span></div></div>
                   <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => document.getElementById("product-profile-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Pencil className="mr-1 h-4 w-4" /> Upravit profil</Button><Switch checked={product.active} onCheckedChange={() => toggleActive.mutate(product)} /></div>
                 </div>
               ))}
