@@ -1,4 +1,6 @@
-export function percentColor(value: number | null | undefined): React.CSSProperties | undefined {
+import type { CSSProperties } from "react";
+
+export function percentColor(value: number | null | undefined): CSSProperties | undefined {
   if (value == null || !Number.isFinite(value)) return undefined;
   const normalized = Math.max(0, Math.min(100, value));
   const hue = normalized * 1.2;
