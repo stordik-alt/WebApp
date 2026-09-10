@@ -5,9 +5,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Defs,
   Line,
   LineChart,
+  LinearGradient,
   ResponsiveContainer,
+  Stop,
   Tooltip,
   XAxis,
   YAxis,
@@ -160,11 +163,17 @@ function Dashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={oeeTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="date" fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis fontSize={12} stroke="var(--muted-foreground)" />
+                  <Defs>
+                    <LinearGradient id="oeeTrendGradient" x1="0" y1="0" x2="1" y2="0">
+                      <Stop offset="0%" stopColor="hsl(var(--chart-1))" />
+                      <Stop offset="100%" stopColor="hsl(var(--chart-3))" />
+                    </LinearGradient>
+                  </Defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.65} />
+                  <XAxis dataKey="date" fontSize={12} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis fontSize={12} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip {...tooltipStyle} />
-                  <Line type="monotone" dataKey="oee" stroke="var(--chart-1)" strokeWidth={2} />
+                  <Line type="monotone" dataKey="oee" stroke="url(#oeeTrendGradient)" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--chart-1))", strokeWidth: 0 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -179,11 +188,17 @@ function Dashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={perEmployee}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="name" fontSize={12} stroke="var(--muted-foreground)" />
-                  <YAxis fontSize={12} stroke="var(--muted-foreground)" />
+                  <Defs>
+                    <LinearGradient id="oeeBarsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor="hsl(var(--chart-1))" />
+                      <Stop offset="100%" stopColor="hsl(var(--chart-3))" />
+                    </LinearGradient>
+                  </Defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.65} />
+                  <XAxis dataKey="name" fontSize={12} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis fontSize={12} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip {...tooltipStyle} />
-                  <Bar dataKey="oee" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="oee" fill="url(#oeeBarsGradient)" radius={[5, 5, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
