@@ -114,7 +114,7 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
             {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
           </div>
         </header>
-        <main className="mx-auto min-w-0 max-w-[1600px] flex-1 px-4 pb-28 pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-8"><RouteGuard>{children}</RouteGuard></main>
+        <main className="mx-auto min-w-0 max-w-[1600px] flex-1 px-4 pb-6 pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-8"><RouteGuard>{children}</RouteGuard></main>
       </div>
       <BottomNav />
     </div>
@@ -136,5 +136,5 @@ function BottomNav() {
   const { role } = useAuth();
   const items = BOTTOM_NAV.filter((i) => role ? (i.roles as readonly AppRole[]).includes(role) : false);
   if (!items.length) return null;
-  return <nav aria-label="Rychlá navigace" className="fixed inset-x-3 bottom-3 z-50 overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>{items.map(({ to, label, icon: Icon }) => <li key={to}><Link to={to} activeOptions={{ exact: to === "/" }} className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200" activeProps={{ className: "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary" }}><span className="grid h-7 w-7 place-items-center rounded-lg"><Icon className="h-[18px] w-[18px]" /></span><span className="truncate">{label}</span></Link></li>)}</ul></nav>;
+  return <nav aria-label="Rychlá navigace" className="fixed inset-x-3 bottom-3 z-50 hidden overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl md:flex lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><ul className="grid w-full" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>{items.map(({ to, label, icon: Icon }) => <li key={to}><Link to={to} activeOptions={{ exact: to === "/" }} className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200" activeProps={{ className: "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary" }}><span className="grid h-7 w-7 place-items-center rounded-lg"><Icon className="h-[18px] w-[18px]" /></span><span className="truncate">{label}</span></Link></li>)}</ul></nav>;
 }
