@@ -24,10 +24,11 @@ jobs:
           if 'upsertImportedProductProfile' in text:
               raise SystemExit('ScreenshotImport already patched')
 
-          text = text.replace(
-              'import { currentNorm, findProductByCode, type Product } from "@/lib/products";',
-              'import { currentNorm, findProductByCode, type Product } from "@/lib/products";\nimport { upsertImportedProductProfile } from "@/lib/productProfiles";'
-          )
+          old_import = 'import { currentNorm, findProductByCode, type Product } from "@/lib/products";'
+          new_import = old_import + '\nimport { upsertImportedProductProfile } from "@/lib/productProfiles";'
+          if old_import not in text:
+              raise SystemExit('ScreenshotImport product import not found')
+          text = text.replace(old_import, new_import, 1)
 
           replacement = '''  const createProductIds = async () => { if (!productSetupDrafts.length) return; setProductSetupSaving(true); try { const date = workDate || new Date().toISOString().slice(0, 10); const created: Product[] = []; const items: Array<{ code: string; name: string; norm: string; capacity: string; confidence: number; primary: boolean; sourceKey: string }> = []; const seen = new Set<string>(); for (const draft of productSetupDrafts) { const add = (code: string, name: string, norm: string, capacity: string, primary: boolean) => { const normalized = code.trim().toLowerCase(); if (!normalized || seen.has(normalized)) return; seen.add(normalized); items.push({ code: code.trim(), name: name.trim(), norm, capacity, confidence: draft.confidence, primary, sourceKey: draft.key }); }; add(draft.code, draft.name, draft.norm, draft.capacity, true); if (draft.counterpartCode.trim()) add(draft.counterpartCode, draft.counterpartName, draft.counterpartNorm, draft.counterpartCapacity, false); }
     for (const item of items) { const code = item.code; const norm = Number(item.norm); const capacity = Number(item.capacity); if (!code) throw new Error("Každý Product ID musí mít kód."); let product = findProductByCode(allProducts, code) ?? created.find((p) => p.code.trim().toLowerCase() === code.toLowerCase()); const existedBefore = Boolean(product); const variant = /^T_/i.test(code) ? "T" : "H"; if (!product) { if (!Number.isFinite(norm) || norm <= 0) throw new Error("Zadejte platnou normu pro " + code + "."); if (!Number.isInteger(capacity) || capacity < 1) throw new Error("Zadejte platnou kapacitu operátorů pro " + code + "."); const { data, error } = await supabase.from("products").insert({ code, name: item.name || productIdName.trim(), employees_per_product: capacity, first_seen_date: date, variant_type: variant, ...approval() }).select("*").single(); if (error) throw error; product = data as Product; } else if (item.primary && item.name) { const { data, error } = await supabase.from("products").update({ name: item.name, employees_per_product: Number.isInteger(capacity) && capacity >= 1 ? capacity : product.employees_per_product, variant_type: variant }).eq("id", product.id).select("*").single(); if (error) throw error; product = data as Product; } if (!existedBefore || item.primary) created.push(product); }
@@ -39,7 +40,13 @@ jobs:
           if count != 1:
               raise SystemExit('createProductIds block not found')
           path.write_text(patched, encoding='utf-8')
-      - name: Commit patched import
+      - name: Verify patched file
+        run: |
+          test ! grep -q 'from("product_families")' src/components/ScreenshotImport.tsx
+          test ! grep -q 'from("product_norms")' src/components/ScreenshotImport.tsx
+          grep -q 'upsertImportedProductProfile' src/components/ScreenshotImport.tsx
+      - name: Commit patched import and remove workflow
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -47,3 +54,5 @@ jobs:
           git add src/components/ScreenshotImport.tsx .github/workflows/one-shot-product-profile-import-refactor.yml
           git commit -m "[profile-refactor-done] Refactor screenshot product setup to Product Profiles"
           git push origin redesign
+
+# retrigger patch workflow
