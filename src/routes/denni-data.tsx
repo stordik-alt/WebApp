@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useEmployees, useShiftAggregates } from "@/lib/data";
 import { isDuplicateLine, type ShiftAggregate } from "@/lib/shifts";
-import { type DailyRecord } from "@/lib/metrics";
-import { SHIFTS, fmt } from "@/lib/metrics";
+import { type DailyRecord, SHIFTS, fmt } from "@/lib/metrics";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,14 +21,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Trash2, Save, Plus, Pencil } from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Download,
+  FilePlus2,
+  Pencil,
+  Save,
+  Search,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { ScreenshotImport } from "@/components/ScreenshotImport";
 import { useApprovalFields } from "@/lib/auth";
 
@@ -40,12 +47,7 @@ export const Route = createFileRoute("/denni-data")({
       {
         name: "description",
         content:
-          "Rychlé zadávání denních záznamů: směna, linka, výrobek, pozice HA/TUP, OEE, výpomoc a spolupracovníci.",
-      },
-      { property: "og:title", content: "Denní data – Výkonnost operátorů" },
-      {
-        property: "og:description",
-        content: "Zadávání denních výkonových záznamů pracovníků výroby DPS.",
+          "Rychlé zadávání denních záznamů: import screenshotů, ruční zadání a přehled výkonu pracovníků.",
       },
     ],
   }),
@@ -53,6 +55,18 @@ export const Route = createFileRoute("/denni-data")({
 });
 
 const today = () => new Date().toISOString().slice(0, 10);
+const formatDate = (value: string) => {
+  if (!value) return "–";
+  const [y, m, d] = value.split("-");
+  return y && m && d ? `${d}.${m}.${y}` : value;
+};
+
+function metricTone(value: number | null | undefined) {
+  if (value == null) return "text-muted-foreground";
+  if (value >= 100) return "text-emerald-300";
+  if (value >= 80) return "text-amber-300";
+  return "text-rose-300";
+}
 
 function DailyPage() {
   const qc = useQueryClient();
@@ -71,6 +85,7 @@ function DailyPage() {
   const [note, setNote] = useState("");
   const [coworkers, setCoworkers] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<DailyRecord | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
   const [dailyFilterText, setDailyFilterText] = useState("");
   const [dailyFilterShift, setDailyFilterShift] = useState("all");
   const [dailyFilterDate, setDailyFilterDate] = useState("");
@@ -79,7 +94,6 @@ function DailyPage() {
 
   const activeEmployees = employees.filter((e) => e.active);
 
-  /** Spolupracovníci = pracovníci již evidovaní na stejném dni / směně / lince. */
   const sameShiftEmployees = useMemo(() => {
     const ids = new Set(
       records
@@ -97,11 +111,10 @@ function DailyPage() {
 
   const empName = (id: string) => employees.find((e) => e.id === id)?.full_name ?? "?";
 
-  /** Existující linky pracovníka v této směně – nejde o duplicitu, ale o další linku. */
   const myShift: ShiftAggregate | undefined = shiftAggregates.find(
     (a) => a.employee_id === employeeId && a.work_date === workDate && a.shift === shift,
   );
-  // Výpomoc se drží jednou za pracovníka+datum+směnu – předvyplníme existující hodnotu.
+
   useEffect(() => {
     setHelp(myShift?.help !== null && myShift?.help !== undefined ? String(myShift.help) : "0");
   }, [employeeId, workDate, shift]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,7 +142,6 @@ function DailyPage() {
         .single();
       if (error) throw error;
 
-      // Výpomoc je hodnocení za pracovníka + datum + směnu (jednou, ne za každou linku).
       const { error: he } = await supabase.from("shift_evaluations").upsert(
         {
           employee_id: employeeId,
@@ -159,15 +171,14 @@ function DailyPage() {
       setNote("");
       setCoworkers([]);
       setEmployeeId("");
-      if (mode === "single") {
-        setProduct("");
-      }
+      if (mode === "single") setProduct("");
+      setManualOpen(false);
       toast.success(mode === "another" ? "Uloženo – zadejte další" : "Záznam uložen");
     },
     onError: (e: Error) =>
       toast.error(
         e.message.includes("duplicate")
-          ? "Tento pracovník už má záznam na této lince v dané směně. Pro jinou linku zadejte jiný název linky."
+          ? "Tento pracovník už má záznam na této lince v dané směně."
           : e.message,
       ),
   });
@@ -175,7 +186,7 @@ function DailyPage() {
   const update = useMutation({
     mutationFn: async (recordId: string) => {
       if (!recordId) throw new Error("Chybí ID záznamu");
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("daily_records")
         .update({
           work_date: workDate,
@@ -198,6 +209,7 @@ function DailyPage() {
       qc.invalidateQueries({ queryKey: ["daily"] });
       qc.invalidateQueries({ queryKey: ["coworkers"] });
       setEditingRecord(null);
+      setManualOpen(false);
       setOee("");
       setHelp("0");
       setNote("");
@@ -218,25 +230,62 @@ function DailyPage() {
       qc.invalidateQueries({ queryKey: ["daily"] });
       toast.success("Záznam smazán");
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const canSave = workDate && shift && line.trim() && employeeId;
-  // Při úpravě záznamu ignorujeme duplicateLine (záznam se aktualizuje sám sebou)
   const canSaveOrUpdate = canSave && (!duplicateLine || !!editingRecord);
+
   const filteredShifts = useMemo(() => {
     const text = dailyFilterText.trim().toLowerCase();
     const filtered = shiftAggregates.filter((a) => {
       if (dailyFilterShift !== "all" && a.shift !== dailyFilterShift) return false;
       if (dailyFilterDate && a.work_date !== dailyFilterDate) return false;
-      if (text && !empName(a.employee_id).toLowerCase().includes(text) && !a.lines.join(" ").toLowerCase().includes(text)) return false;
+      if (
+        text &&
+        !empName(a.employee_id).toLowerCase().includes(text) &&
+        !a.lines.join(" ").toLowerCase().includes(text)
+      )
+        return false;
       return true;
     });
-    const value = (a: ShiftAggregate) => dailySort === "date" ? `${a.work_date} ${a.shift}` : dailySort === "employee" ? empName(a.employee_id).toLowerCase() : Number(dailySort === "oee" ? a.oee ?? -Infinity : dailySort === "performance" ? a.performance ?? -Infinity : a.availableTime ?? -Infinity);
-    filtered.sort((a, b) => { const av = value(a), bv = value(b); const cmp = av < bv ? -1 : av > bv ? 1 : 0; return dailySortDir === "asc" ? cmp : -cmp; });
+    const value = (a: ShiftAggregate) =>
+      dailySort === "date"
+        ? `${a.work_date} ${a.shift}`
+        : dailySort === "employee"
+          ? empName(a.employee_id).toLowerCase()
+          : Number(
+              dailySort === "oee"
+                ? a.oee ?? -Infinity
+                : dailySort === "performance"
+                  ? a.performance ?? -Infinity
+                  : a.availableTime ?? -Infinity,
+            );
+    filtered.sort((a, b) => {
+      const av = value(a);
+      const bv = value(b);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return dailySortDir === "asc" ? cmp : -cmp;
+    });
     return filtered.slice(0, 100);
   }, [shiftAggregates, dailyFilterText, dailyFilterShift, dailyFilterDate, dailySort, dailySortDir, employees]);
 
-  // Funkce pro načtení záznamu do editace
+  const summary = useMemo(() => {
+    const pool = dailyFilterDate
+      ? shiftAggregates.filter((s) => s.work_date === dailyFilterDate)
+      : shiftAggregates;
+    const avg = (values: Array<number | null | undefined>) => {
+      const usable = values.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      return usable.length ? usable.reduce((sum, v) => sum + v, 0) / usable.length : null;
+    };
+    return {
+      records: pool.reduce((sum, s) => sum + s.records.length, 0),
+      oee: avg(pool.map((s) => s.oee)),
+      performance: avg(pool.map((s) => s.performance)),
+      availability: avg(pool.map((s) => s.availableTime)),
+    };
+  }, [shiftAggregates, dailyFilterDate]);
+
   const loadForEdit = (record: DailyRecord) => {
     setEditingRecord(record);
     setWorkDate(record.work_date);
@@ -248,18 +297,52 @@ function DailyPage() {
     setOee(record.oee?.toString() ?? "");
     setHelp(record.help_score.toString());
     setNote(record.note ?? "");
-    // coworkers se načítají z links
+    setManualOpen(true);
   };
 
-  // Funkce pro ukončení editace
-  const cancelEdit = () => {
+  const openNewManual = () => {
     setEditingRecord(null);
+    setWorkDate(today());
+    setShift(SHIFTS[0]);
+    setLine("");
+    setProduct("");
+    setEmployeeId("");
+    setPosition("HA");
     setOee("");
     setHelp("0");
     setNote("");
     setCoworkers([]);
-    setEmployeeId("");
-    setProduct("");
+    setManualOpen(true);
+  };
+
+  const cancelEdit = () => {
+    setEditingRecord(null);
+    setManualOpen(false);
+  };
+
+  const exportCsv = () => {
+    const header = ["Datum", "Směna", "Zaměstnanec", "Linky", "OEE", "Výkon", "Dostupnost", "Výpomoc"].join(";");
+    const lines = filteredShifts.map((a) =>
+      [
+        a.work_date,
+        a.shift,
+        empName(a.employee_id),
+        a.lines.join(", "),
+        a.oee ?? "",
+        a.performance ?? "",
+        a.availableTime ?? "",
+        a.help ?? "",
+      ]
+        .map((v) => `"${String(v).replaceAll('"', '""')}"`)
+        .join(";"),
+    );
+    const blob = new Blob(["\uFEFF" + [header, ...lines].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `denni-data-${dailyFilterDate || "vse"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -267,298 +350,230 @@ function DailyPage() {
       title="Denní data"
       subtitle="Záznam se vytváří pouze když byl pracovník v práci – absence průměr OEE neovlivní."
     >
-      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[420px_1fr]">
-        <div className="grid min-w-0 gap-6">
-          <ScreenshotImport employees={employees} />
-          <Card className="h-fit min-w-0 overflow-hidden gap-4 p-4 shadow-[var(--shadow-card)] sm:p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Nový záznam (ručně)
-            </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label>Datum</Label>
-                <Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Směna</Label>
-                <Select value={shift} onValueChange={setShift}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SHIFTS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Linka</Label>
-                <Input
-                  value={line}
-                  onChange={(e) => setLine(e.target.value)}
-                  placeholder="např. L1"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Výrobek</Label>
-                <Input value={product} onChange={(e) => setProduct(e.target.value)} />
-              </div>
-              <div className="grid gap-1.5 sm:col-span-2">
-                <Label>Zaměstnanec</Label>
-                <Select value={employeeId} onValueChange={setEmployeeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Vyberte zaměstnance" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeEmployees.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Pozice</Label>
-                <Select value={position} onValueChange={(v) => setPosition(v as "HA" | "TUP")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="HA">HA</SelectItem>
-                    <SelectItem value="TUP">TUP</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label>OEE (%) – nepovinné</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  min="0"
-                  className="h-11"
-                  value={oee}
-                  onChange={(e) => setOee(e.target.value)}
-                  placeholder="bez horního limitu, prázdné = neuvedeno"
-                />
-              </div>
-              <div className="grid gap-1.5 sm:col-span-2">
-                <Label>Výpomoc ({help})</Label>
-                <Input
-                  type="range"
-                  min={-100}
-                  max={100}
-                  step={5}
-                  value={help}
-                  onChange={(e) => setHelp(e.target.value)}
-                  className="cursor-pointer p-0"
-                />
-                <div className="flex justify-between text-[11px] text-muted-foreground">
-                  <span>-100</span>
-                  <span>0 (výchozí)</span>
-                  <span>+100</span>
+      <div className="space-y-5">
+        <section className="grid gap-4 xl:grid-cols-2">
+          <Card className="relative overflow-hidden border-rose-400/30 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(244,63,94,0.08)]">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-rose-400 to-transparent" />
+            <div className="p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl border border-rose-400/30 bg-rose-400/10 text-rose-300">
+                  <UploadCloud className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300">Import dat</p>
+                  <h2 className="text-xl font-semibold">Screenshoty výroby</h2>
                 </div>
               </div>
-              <div className="grid gap-1.5 sm:col-span-2">
-                <Label>Spolupracovníci (stejná směna a linka)</Label>
-                {sameShiftEmployees.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Na této směně a lince zatím nejsou evidováni jiní pracovníci.
-                  </p>
-                ) : (
-                  <div className="grid gap-1.5 rounded-md border border-border p-2">
-                    {sameShiftEmployees.map((e) => (
-                      <label key={e.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={coworkers.includes(e.id)}
-                          onCheckedChange={(v) =>
-                            setCoworkers((prev) =>
-                              v === true ? [...prev, e.id] : prev.filter((x) => x !== e.id),
-                            )
-                          }
-                        />
-                        {e.full_name}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="grid gap-1.5 sm:col-span-2">
-                <Label>Poznámka</Label>
-                <Input value={note} onChange={(e) => setNote(e.target.value)} />
+              <div className="rounded-2xl border border-dashed border-rose-400/50 bg-slate-900/70 p-2">
+                <ScreenshotImport employees={employees} />
               </div>
             </div>
-            {myShift ? (
-              <div
-                className={`rounded-md border px-3 py-2 text-xs ${
-                  duplicateLine
-                    ? "border-destructive bg-destructive/10 text-destructive"
-                    : "border-warning/40 bg-warning/10"
-                }`}
-              >
-                {duplicateLine ? (
-                  <>
-                    Na lince <strong>{line.trim()}</strong> už tento pracovník v této směně záznam
-                    má – to je duplicita.
-                  </>
-                ) : (
-                  <>
-                    Pracovník už má v této směně {myShift.lineCount}× linku (
-                    {myShift.lines.join(", ")}). Nový záznam se přidá jako další linka a do denního
-                    hodnocení se započítá jako průměr přes linky.
-                  </>
-                )}
-              </div>
-            ) : null}
+          </Card>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button
-                className="h-12"
-                onClick={() => {
-                  if (editingRecord) update.mutate(editingRecord.id);
-                  else create.mutate("single");
-                }}
-                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
-              >
-                <Save className="h-4 w-4" /> {editingRecord ? "Uložit změny" : "Uložit záznam"}
-              </Button>
-              <Button
-                variant="secondary"
-                className="h-12"
-                onClick={() => {
-                  if (editingRecord) update.mutate(editingRecord.id);
-                  else create.mutate("another");
-                }}
-                disabled={!canSaveOrUpdate || create.isPending || update.isPending}
-              >
-                <Plus className="h-4 w-4" />{" "}
-                {editingRecord ? "Uložit a pokračovat" : "Uložit a přidat další"}
+          <Card className="relative overflow-hidden border-fuchsia-400/25 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(217,70,239,0.08)]">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent" />
+            <div className="flex h-full flex-col justify-between p-5 sm:p-6">
+              <div>
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300">
+                    <FilePlus2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-300">Ruční zápis</p>
+                    <h2 className="text-xl font-semibold">Zadat denní záznam ručně</h2>
+                  </div>
+                </div>
+                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                  Otevře se dialog s kompletním formulářem pro jeden denní záznam. Tabulka zůstává čistá a přehledná.
+                </p>
+              </div>
+              <Button onClick={openNewManual} className="mt-6 h-12 w-full bg-rose-500 text-slate-950 shadow-[0_0_22px_rgba(244,63,94,0.25)] hover:bg-rose-400">
+                <FilePlus2 className="mr-2 h-4 w-4" /> Zadat denní záznam ručně
               </Button>
             </div>
           </Card>
-        </div>
+        </section>
 
-        <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm font-semibold">
-            <span>
-              Směnová hodnocení ({shiftAggregates.length}) – pracovník může mít ve směně více linek
-            </span>
-            {editingRecord && (
-              <Button size="sm" variant="outline" onClick={cancelEdit}>
-                Zrušit úpravu
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: `Záznamy${dailyFilterDate ? ` (${formatDate(dailyFilterDate)})` : ""}`, value: summary.records.toLocaleString("cs-CZ"), detail: "záznamů celkem", tone: "text-sky-300" },
+            { label: "Průměrné OEE", value: summary.oee == null ? "–" : `${fmt(summary.oee)} %`, detail: "ze směnových hodnocení", tone: metricTone(summary.oee) },
+            { label: "Průměrný výkon", value: summary.performance == null ? "–" : `${fmt(summary.performance)} %`, detail: "bez horního limitu", tone: "text-cyan-300" },
+            { label: "Průměrná dostupnost", value: summary.availability == null ? "–" : `${fmt(summary.availability)} %`, detail: "z vybraných záznamů", tone: metricTone(summary.availability) },
+          ].map((item) => (
+            <Card key={item.label} className="border-border/70 bg-slate-950/45 px-4 py-4">
+              <p className="text-sm text-muted-foreground">{item.label}</p>
+              <div className={`mt-2 text-2xl font-semibold tabular-nums ${item.tone}`}>{item.value}</div>
+              <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+            </Card>
+          ))}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-border/80 bg-slate-950/40 shadow-[var(--shadow-card)]">
+          <div className="border-b border-border/70 p-4 sm:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300">Production monitoring</p>
+                <h2 className="mt-1 text-lg font-semibold">Směnová hodnocení</h2>
+                <p className="text-xs text-muted-foreground">Pracovník může mít ve směně více linek.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[220px] flex-1 xl:flex-none">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={dailyFilterText} onChange={(e) => setDailyFilterText(e.target.value)} className="pl-9" placeholder="Hledat zaměstnance nebo linku…" />
+                </div>
+                <Input type="date" value={dailyFilterDate} onChange={(e) => setDailyFilterDate(e.target.value)} className="w-auto" aria-label="Filtrovat datum" />
+                <Select value={dailyFilterShift} onValueChange={setDailyFilterShift}>
+                  <SelectTrigger className="w-[150px]"><SelectValue placeholder="Všechny směny" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Všechny směny</SelectItem>
+                    {SHIFTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={exportCsv} className="border-rose-400/40 text-rose-300 hover:bg-rose-400/10">
+                  <Download className="mr-2 h-4 w-4" /> Exportovat
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Select value={dailySort} onValueChange={(v) => setDailySort(v as typeof dailySort)}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Řazení: datum</SelectItem>
+                  <SelectItem value="employee">Řazení: zaměstnanec</SelectItem>
+                  <SelectItem value="oee">Řazení: OEE</SelectItem>
+                  <SelectItem value="performance">Řazení: výkon</SelectItem>
+                  <SelectItem value="availableTime">Řazení: dostupnost</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="ghost" size="sm" onClick={() => setDailySortDir((v) => (v === "asc" ? "desc" : "asc"))}>
+                {dailySortDir === "asc" ? "Vzestupně ↑" : "Sestupně ↓"}
               </Button>
-            )}
+              {dailyFilterDate ? (
+                <Button variant="ghost" size="sm" onClick={() => setDailyFilterDate("")}>
+                  <X className="mr-1 h-3.5 w-3.5" /> Zrušit datum
+                </Button>
+              ) : null}
+            </div>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Datum</TableHead>
-                <TableHead>Směna</TableHead>
-                <TableHead>Zaměstnanec</TableHead>
-                <TableHead>Linky</TableHead>
-                <TableHead className="text-right">Ø OEE</TableHead>
-                <TableHead className="text-right">Ø Výkon</TableHead>
-                <TableHead className="text-right">Ø Dostup.</TableHead>
-                <TableHead className="text-right">Výpomoc</TableHead>
-                <TableHead>Tým</TableHead>
-                <TableHead className="text-right">Akce</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredShifts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-muted-foreground">
-                    Zatím žádné záznamy.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredShifts.flatMap((a) => [
-                  <TableRow key={a.key} className="bg-muted/40">
-                    <TableCell>{a.work_date}</TableCell>
-                    <TableCell>{a.shift}</TableCell>
-                    <TableCell className="font-medium">{empName(a.employee_id)}</TableCell>
-                    <TableCell>
-                      <Badge variant={a.lineCount > 1 ? "default" : "secondary"}>
-                        {a.lineCount}{" "}
-                        {a.lineCount === 1 ? "linka" : a.lineCount < 5 ? "linky" : "linek"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {fmt(a.oee)} %
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmt(a.performance)} %
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmt(a.availableTime)} %
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(a.help, 0)}</TableCell>
-                    <TableCell className="max-w-[180px] truncate text-xs text-muted-foreground">
-                      {a.coworkerIds.map(empName).join(", ") || "–"}
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>,
-                  ...a.records.map((r) => (
-                    <TableRow key={r.id} className="text-xs text-muted-foreground">
-                      <TableCell colSpan={2} className="pl-6">
-                        ↳ linka {r.line}
-                      </TableCell>
-                      <TableCell>{r.product ?? "–"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{r.position}</Badge>
-                        {r.source === "screenshot" ? (
-                          <Badge variant="outline" className="ml-1 text-[10px]">
-                            import
-                          </Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(r.oee)} %</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmt(r.performance)} %
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmt(r.available_time)} %
-                      </TableCell>
-                      <TableCell />
-                      <TableCell className="max-w-[180px] truncate">
-                        {links
-                          .filter((l) => l.record_id === r.id)
-                          .map((l) => empName(l.coworker_id))
-                          .join(", ") || "–"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {editingRecord?.id === r.id ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => update.mutate(r.id)}
-                            disabled={update.isPending}
-                          >
-                            <Save className="h-3.5 w-3.5" /> Uložit změny
-                          </Button>
-                        ) : (
-                          <>
-                            <Button size="sm" variant="ghost" onClick={() => loadForEdit(r)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => remove.mutate(r.id)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )),
-                ])
-              )}
-            </TableBody>
-          </Table>
-        </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="bg-slate-900/80 text-muted-foreground">
+                <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide">
+                  {['Datum', 'Směna', 'Zaměstnanec', 'Linky', 'Ø OEE', 'Ø Výkon', 'Ø Dostupnost', 'Výpomoc', 'Tým', 'Akce'].map((head, i) => (
+                    <th key={head} className={`px-4 py-3 font-medium ${i >= 4 && i <= 7 ? 'text-right' : ''} ${i === 9 ? 'text-right' : ''}`}>{head}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredShifts.length === 0 ? (
+                  <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">Zatím žádné záznamy pro zvolené filtry.</td></tr>
+                ) : (
+                  filteredShifts.flatMap((a) => [
+                    <tr key={`${a.key}-summary`} className="border-b border-border/60 bg-slate-900/35 hover:bg-slate-900/55">
+                      <td className="px-4 py-3 font-medium">{formatDate(a.work_date)}</td>
+                      <td className="px-4 py-3">{a.shift}</td>
+                      <td className="px-4 py-3 font-medium">{empName(a.employee_id)}</td>
+                      <td className="px-4 py-3"><Badge variant="secondary" className="border-cyan-400/20 bg-cyan-400/10 text-cyan-200">{a.lineCount} {a.lineCount === 1 ? 'linka' : a.lineCount < 5 ? 'linky' : 'linek'}</Badge></td>
+                      <td className={`px-4 py-3 text-right font-semibold tabular-nums ${metricTone(a.oee)}`}>{fmt(a.oee)} %</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-cyan-200">{fmt(a.performance)} %</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${metricTone(a.availableTime)}`}>{fmt(a.availableTime)} %</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-amber-200">{fmt(a.help, 0)}</td>
+                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-muted-foreground">{a.coworkerIds.map(empName).join(', ') || '–'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <Button size="icon" variant="ghost" title="Rozbalit / akce" onClick={() => document.getElementById(`detail-${a.key}`)?.scrollIntoView({ block: 'nearest' })}><span className="text-muted-foreground">⌄</span></Button>
+                        </div>
+                      </td>
+                    </tr>,
+                    <tr key={`${a.key}-details`} id={`detail-${a.key}`} className="border-b border-border/40 bg-slate-950/20">
+                      <td colSpan={10} className="px-4 pb-4 pt-0">
+                        <div className="grid gap-2 rounded-xl border border-border/60 bg-slate-950/40 p-3">
+                          {a.records.map((r) => (
+                            <div key={r.id} className="grid items-center gap-3 rounded-lg border border-border/50 bg-slate-900/45 px-3 py-2 md:grid-cols-[1.4fr_1fr_80px_90px_90px_auto]">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">↳ {r.line}</p>
+                                <p className="truncate text-xs text-muted-foreground">{r.product ?? 'Produkt neuveden'}</p>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs">
+                                <Badge variant="outline" className={r.position === 'HA' ? 'border-cyan-400/40 text-cyan-300' : 'border-fuchsia-400/40 text-fuchsia-300'}>{r.position}</Badge>
+                                {r.source === 'screenshot' ? <Badge variant="outline" className="text-[10px]">import</Badge> : null}
+                              </div>
+                              <div className={`text-right text-xs font-semibold tabular-nums ${metricTone(r.oee)}`}>{fmt(r.oee)} %</div>
+                              <div className="text-right text-xs tabular-nums text-cyan-200">{fmt(r.performance)} %</div>
+                              <div className="text-right text-xs tabular-nums">{fmt(r.available_time)} %</div>
+                              <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="ghost" title="Upravit" onClick={() => loadForEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                <Button size="icon" variant="ghost" title="Smazat" onClick={() => remove.mutate(r.id)} disabled={remove.isPending}><Trash2 className="h-3.5 w-3.5" /></Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>,
+                  ])
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Zobrazeno {filteredShifts.reduce((sum, a) => sum + a.records.length, 0)} záznamů ve {filteredShifts.length} směnových hodnoceních.</span>
+            <span className="text-muted-foreground/70">OEE a výkon mohou být nad 100 %.</span>
+          </div>
+        </section>
       </div>
+
+      <Dialog open={manualOpen} onOpenChange={(open) => { setManualOpen(open); if (!open) setEditingRecord(null); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-fuchsia-400/30 bg-slate-950/95 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FilePlus2 className="h-5 w-5 text-fuchsia-300" />
+              {editingRecord ? "Upravit denní záznam" : "Zadat denní záznam ručně"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-4 rounded-xl border border-border/60 bg-slate-900/45 p-4 sm:grid-cols-2">
+              <div className="grid gap-1.5"><Label>Datum</Label><Input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} /></div>
+              <div className="grid gap-1.5"><Label>Směna</Label><Select value={shift} onValueChange={setShift}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SHIFTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
+              <div className="grid gap-1.5"><Label>Linka</Label><Input value={line} onChange={(e) => setLine(e.target.value)} placeholder="např. L1" /></div>
+              <div className="grid gap-1.5"><Label>Výrobek</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Product ID / popis" /></div>
+              <div className="grid gap-1.5 sm:col-span-2"><Label>Zaměstnanec</Label><Select value={employeeId} onValueChange={setEmployeeId}><SelectTrigger><SelectValue placeholder="Vyberte zaměstnance" /></SelectTrigger><SelectContent>{activeEmployees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="grid gap-1.5"><Label>Pozice</Label><Select value={position} onValueChange={(v) => setPosition(v as "HA" | "TUP")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="HA">HA</SelectItem><SelectItem value="TUP">TUP</SelectItem></SelectContent></Select></div>
+              <div className="grid gap-1.5"><Label>OEE (%) – nepovinné</Label><Input type="number" inputMode="decimal" step="0.1" min="0" value={oee} onChange={(e) => setOee(e.target.value)} placeholder="bez horního limitu" /></div>
+              <div className="grid gap-2 sm:col-span-2"><Label>Výpomoc ({help})</Label><Input type="range" min={-100} max={100} step={5} value={help} onChange={(e) => setHelp(e.target.value)} className="cursor-pointer p-0" /><div className="flex justify-between text-[11px] text-muted-foreground"><span>-100</span><span>0 (výchozí)</span><span>+100</span></div></div>
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label>Spolupracovníci (stejná směna a linka)</Label>
+                {sameShiftEmployees.length === 0 ? <p className="text-xs text-muted-foreground">Na této směně a lince zatím nejsou evidováni jiní pracovníci.</p> : <div className="grid gap-1.5 rounded-md border border-border p-2">{sameShiftEmployees.map((e) => <label key={e.id} className="flex items-center gap-2 text-sm"><Checkbox checked={coworkers.includes(e.id)} onCheckedChange={(v) => setCoworkers((prev) => v === true ? [...prev, e.id] : prev.filter((x) => x !== e.id))} />{e.full_name}</label>)}</div>}
+              </div>
+              <div className="grid gap-1.5 sm:col-span-2"><Label>Poznámka</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Volitelná poznámka" /></div>
+            </div>
+            {myShift ? <div className={`rounded-lg border px-3 py-2 text-xs ${duplicateLine ? 'border-destructive bg-destructive/10 text-destructive' : 'border-amber-400/30 bg-amber-400/5 text-amber-200'}`}>{duplicateLine ? <>Na lince <strong>{line.trim()}</strong> už tento pracovník v této směně záznam má – duplicita.</> : <>Pracovník už má v této směně {myShift.lineCount}× linku ({myShift.lines.join(', ')}). Nový záznam se přidá jako další linka.</>}</div> : null}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={cancelEdit}>Zrušit</Button>
+            <Button
+              variant="secondary"
+              onClick={() => editingRecord ? update.mutate(editingRecord.id) : create.mutate("another")}
+              disabled={!canSaveOrUpdate || create.isPending || update.isPending}
+            >
+              <PlusIcon /> Uložit a přidat další
+            </Button>
+            <Button
+              onClick={() => editingRecord ? update.mutate(editingRecord.id) : create.mutate("single")}
+              disabled={!canSaveOrUpdate || create.isPending || update.isPending}
+              className="bg-rose-500 text-slate-950 hover:bg-rose-400"
+            >
+              <Save className="mr-2 h-4 w-4" /> {editingRecord ? "Uložit změny" : "Uložit záznam"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
+}
+
+function PlusIcon() {
+  return <span className="mr-2 inline-flex text-base leading-none">＋</span>;
 }
