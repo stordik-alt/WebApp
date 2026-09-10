@@ -5,12 +5,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Defs,
   Line,
   LineChart,
-  LinearGradient,
   ResponsiveContainer,
-  Stop,
   Tooltip,
   XAxis,
   YAxis,
@@ -163,12 +160,12 @@ function Dashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={oeeTrend}>
-                  <Defs>
-                    <LinearGradient id="oeeTrendGradient" x1="0" y1="0" x2="1" y2="0">
-                      <Stop offset="0%" stopColor="hsl(var(--chart-1))" />
-                      <Stop offset="100%" stopColor="hsl(var(--chart-3))" />
-                    </LinearGradient>
-                  </Defs>
+                  <defs>
+                    <linearGradient id="oeeTrendGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(var(--chart-1))" />
+                      <stop offset="100%" stopColor="hsl(var(--chart-3))" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.65} />
                   <XAxis dataKey="date" fontSize={12} stroke="hsl(var(--muted-foreground))" />
                   <YAxis fontSize={12} stroke="hsl(var(--muted-foreground))" />
@@ -188,12 +185,12 @@ function Dashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={perEmployee}>
-                  <Defs>
-                    <LinearGradient id="oeeBarsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <Stop offset="0%" stopColor="hsl(var(--chart-1))" />
-                      <Stop offset="100%" stopColor="hsl(var(--chart-3))" />
-                    </LinearGradient>
-                  </Defs>
+                  <defs>
+                    <linearGradient id="oeeBarsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--chart-1))" />
+                      <stop offset="100%" stopColor="hsl(var(--chart-3))" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.65} />
                   <XAxis dataKey="name" fontSize={12} stroke="hsl(var(--muted-foreground))" />
                   <YAxis fontSize={12} stroke="hsl(var(--muted-foreground))" />
