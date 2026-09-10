@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
+import { parsePercent, percentColor } from "@/lib/percent-color";
 
 export function KpiCard({
   label,
@@ -24,6 +25,7 @@ export function KpiCard({
         : tone === "danger"
           ? "text-destructive"
           : "text-foreground";
+  const percentageStyle = unit === "%" ? percentColor(parsePercent(value)) : undefined;
 
   return (
     <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
@@ -33,7 +35,7 @@ export function KpiCard({
         </span>
         {icon ? <span className="text-muted-foreground">{icon}</span> : null}
       </div>
-      <div className={`mt-2 text-3xl font-semibold tabular-nums ${toneClass}`}>
+      <div className={`mt-2 text-3xl font-semibold tabular-nums ${toneClass}`} style={percentageStyle}>
         {value}
         {unit ? <span className="ml-1 text-base font-normal text-muted-foreground">{unit}</span> : null}
       </div>
