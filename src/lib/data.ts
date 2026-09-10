@@ -31,10 +31,7 @@ export function useDailyRecords(from?: string, to?: string) {
       const productIds = Array.from(new Set((data ?? []).map((r) => r.product_id).filter((id): id is string => !!id)));
       const productsById = new Map<string, string>();
       if (productIds.length) {
-        const { data: productRows, error: productError } = await supabase
-          .from("products")
-          .select("id,code")
-          .in("id", productIds);
+        const { data: productRows, error: productError } = await supabase.from("products").select("id,code").in("id", productIds);
         if (productError) throw productError;
         (productRows ?? []).forEach((p) => productsById.set(p.id, p.code));
       }
@@ -57,12 +54,7 @@ export function useWeeklyRecords() {
     queryFn: async () => {
       const { data, error } = await supabase.from("weekly_records").select("*").eq("approval_status", "approved").order("iso_year", { ascending: false }).order("iso_week", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        yield_pct: Number(r.yield_pct),
-        auto_quality_score: r.auto_quality_score === null ? null : Number(r.auto_quality_score),
-        final_quality_score: r.final_quality_score === null ? null : Number(r.final_quality_score),
-      })) as unknown as WeeklyRecord[];
+      return (data ?? []).map((r) => ({ ...r, yield_pct: Number(r.yield_pct), auto_quality_score: r.auto_quality_score === null ? null : Number(r.auto_quality_score), final_quality_score: r.final_quality_score === null ? null : Number(r.final_quality_score) })) as unknown as WeeklyRecord[];
     },
   });
 }
@@ -89,6 +81,7 @@ export function useProducts() {
   });
 }
 
+/** Compatibility-shaped norm list backed entirely by Product Profiles. */
 export function useProductNorms() {
   const profiles = useQuery({
     queryKey: ["product_profiles"],
@@ -109,7 +102,8 @@ export function useProductNorms() {
     isFetching: profiles.isFetching || products.isFetching,
     isError: profiles.isError || products.isError,
     error: profiles.error ?? products.error ?? null,
-  } as typeof profiles & { data: ProductNorm[] };
+    queryKey: ["product_norms"] as const,
+  } as typeof profiles & { data: ProductNorm[]; queryKey: readonly ["product_norms"] };
 }
 
 export function useShiftEvaluations() {
@@ -144,7 +138,6 @@ export function useEmployeePerformanceSummaries() {
   const weekly = useWeeklyRecords();
   const evals = useShiftEvaluations();
   const links = useCoworkerLinks();
-
   const summaries = useMemo(() => {
     const employeeIds = new Set((employees.data ?? []).map((e) => e.id));
     const shifts = aggregateShifts(daily.data ?? [], evals.data ?? [], links.data ?? [], employees.data ?? []);
@@ -166,19 +159,10 @@ export function useEmployeePerformanceSummaries() {
     const avg = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
     return (employees.data ?? []).map((employee) => {
       const employeeShifts = byEmployee.get(employee.id) ?? [];
-      return {
-        employee_id: employee.id,
-        avg_oee: avg(employeeShifts.map((s) => s.oee).filter((v): v is number => v !== null)),
-        avg_quality: avg(qualityByEmployee.get(employee.id) ?? []),
-        help_points: employeeShifts.reduce((sum, s) => sum + (s.help ?? 0), 0),
-      };
+      return { employee_id: employee.id, avg_oee: avg(employeeShifts.map((s) => s.oee).filter((v): v is number => v !== null)), avg_quality: avg(qualityByEmployee.get(employee.id) ?? []), help_points: employeeShifts.reduce((sum, s) => sum + (s.help ?? 0), 0) };
     });
   }, [employees.data, daily.data, weekly.data, evals.data, links.data]);
-
-  return {
-    data: summaries,
-    isLoading: employees.isLoading || daily.isLoading || weekly.isLoading || evals.isLoading || links.isLoading,
-  };
+  return { data: summaries, isLoading: employees.isLoading || daily.isLoading || weekly.isLoading || evals.isLoading || links.isLoading };
 }
 
 export function useNormRemeasurements() {
@@ -187,15 +171,7 @@ export function useNormRemeasurements() {
     queryFn: async () => {
       const { data, error } = await supabase.from("norm_remeasurements").select("*").order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        ...r,
-        shifts: (r.shifts ?? []) as unknown as ProductShift[],
-        avg_oee: r.avg_oee === null ? null : Number(r.avg_oee),
-        current_norm_ha: r.current_norm_ha === null ? null : Number(r.current_norm_ha),
-        current_norm_tup: r.current_norm_tup === null ? null : Number(r.current_norm_tup),
-        result_norm_ha: r.result_norm_ha === null ? null : Number(r.result_norm_ha),
-        result_norm_tup: r.result_norm_tup === null ? null : Number(r.result_norm_tup),
-      })) as unknown as NormRemeasurement[];
+      return (data ?? []).map((r) => ({ ...r, shifts: (r.shifts ?? []) as unknown as ProductShift[], avg_oee: r.avg_oee === null ? null : Number(r.avg_oee), current_norm_ha: r.current_norm_ha === null ? null : Number(r.current_norm_ha), current_norm_tup: r.current_norm_tup === null ? null : Number(r.current_norm_tup), result_norm_ha: r.result_norm_ha === null ? null : Number(r.result_norm_ha), result_norm_tup: r.result_norm_tup === null ? null : Number(r.result_norm_tup) })) as unknown as NormRemeasurement[];
     },
   });
 }
@@ -222,17 +198,7 @@ export function useWeeklyHandlerEvaluations() {
   });
 }
 
-export type QualityAlertHistoryEntry = {
-  id: string;
-  weekly_record_id: string;
-  alert_cause: string | null;
-  alert_note: string | null;
-  operator_error: boolean | null;
-  final_quality_score: number | null;
-  alert_resolved: boolean;
-  changed_by_email: string | null;
-  created_at: string;
-};
+export type QualityAlertHistoryEntry = { id: string; weekly_record_id: string; alert_cause: string | null; alert_note: string | null; operator_error: boolean | null; final_quality_score: number | null; alert_resolved: boolean; changed_by_email: string | null; created_at: string };
 
 export function useQualityAlertHistory(weeklyRecordId?: string) {
   return useQuery({
