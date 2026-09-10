@@ -126,8 +126,18 @@ export function ProductProfileManagerV2() {
       const editableSamePair = editing && keyOfProfile(editing) === targetKey ? editing : current;
       const table = supabase.from("product_profiles") as any;
 
+      const profilePayload = {
+        profile_name: name,
+        ha_subassy: haCode,
+        h_capacity: haCapacity,
+        h_norm_per_hour: haNorm,
+        tup_subassy: tupCode,
+        t_capacity: tupCapacity,
+        t_norm_per_hour: tupNorm,
+      };
+
       if (editableSamePair && editableSamePair.valid_from === date) {
-        const { error: updateError } = await table.update({ profile_name: name, ha_subassy: haCode, h_capacity: haCapacity, h_norm_per_hour: haNorm, tup_subassy: tupCode, t_capacity: tupCapacity, t_norm_per_hour: tupNorm, ...approval() }).eq("id", editableSamePair.id);
+        const { error: updateError } = await table.update(profilePayload).eq("id", editableSamePair.id);
         if (updateError) throw updateError;
       } else {
         if (editableSamePair?.valid_to == null) {
@@ -137,7 +147,7 @@ export function ProductProfileManagerV2() {
           if (closeError) throw closeError;
         }
         const versionCount = (grouped.history.get(targetKey) ?? []).length;
-        const { error: insertError } = await table.insert({ profile_name: name, ha_subassy: haCode, h_capacity: haCapacity, h_norm_per_hour: haNorm, tup_subassy: tupCode, t_capacity: tupCapacity, t_norm_per_hour: tupNorm, valid_from: date, valid_to: null, version_no: versionCount + 1, ...approval() });
+        const { error: insertError } = await table.insert({ ...profilePayload, valid_from: date, valid_to: null, version_no: versionCount + 1 });
         if (insertError) throw insertError;
       }
 
