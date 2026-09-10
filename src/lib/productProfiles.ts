@@ -145,3 +145,56 @@ export async function applyProductProfileNorms(input: { productId: string; haNor
   });
   if (insertError) throw insertError;
 }
+
+export async function upsertProductRow(input: {
+  code: string;
+  name?: string | null;
+  capacity: number;
+  variant: "H" | "T";
+  firstSeenDate: string;
+  approvalFields?: Record<string, unknown>;
+}): Promise<Product> {
+  const code = input.code.trim();
+  if (!code) throw new Error("Product ID nesmí být prázdné.");
+  const fields = {
+    name: input.name?.trim() || null,
+    employees_per_product: input.capacity,
+    variant_type: input.variant,
+  };
+
+  const { data: existing, error: lookupError } = await supabase
+    .from("products")
+    .select("*")
+    .eq("code", code)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  if (existing) {
+    const { data, error } = await supabase.from("products").update(fields).eq("id", existing.id).select("*").single();
+    if (error) throw error;
+    return data as Product;
+  }
+
+  const { data, error } = await supabase.from("products").insert({
+    code,
+    ...fields,
+    first_seen_date: input.firstSeenDate,
+    ...input.approvalFields,
+  }).select("*").single();
+  if (!error) return data as Product;
+
+  if (error.code === "23505") {
+    const { data: racedProduct, error: raceLookupError } = await supabase
+      .from("products")
+      .select("*")
+      .eq("code", code)
+      .maybeSingle();
+    if (raceLookupError) throw raceLookupError;
+    if (racedProduct) {
+      const { data: updated, error: updateError } = await supabase.from("products").update(fields).eq("id", racedProduct.id).select("*").single();
+      if (updateError) throw updateError;
+      return updated as Product;
+    }
+  }
+  throw error;
+}

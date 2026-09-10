@@ -245,12 +245,11 @@ function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null 
   let used = 0;
   hourly.forEach((row, i) => {
     const norm = firstNum(row, ["norm_per_hour", "norm", "hourly_norm"]);
-    const availability = firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]);
-    if (norm === null || availability === null || availability <= 0) return;
-    const fullNorm = norm / (availability / 100);
-    if (!Number.isFinite(fullNorm) || fullNorm <= 0) return;
-    total += fullNorm * weights[i];
-    used += weights[i];
+    if (norm === null || norm <= 0) return;
+    const weight = weights[i] ?? 1;
+    if (weight <= 0) return;
+    total += norm * weight;
+    used += weight;
   });
   return used > 0 ? total : null;
 }
@@ -314,20 +313,28 @@ function resolveAiProviders(): AiProvider[] {
   return providers;
 }
 async function callAi(provider: AiProvider, imageDataUrl: string, instruction: string, system = SYSTEM): Promise<Record<string, unknown>> {
-  const res = await fetch(provider.url, {
-    method: "POST",
-    headers: provider.headers,
-    body: JSON.stringify({
-      model: provider.model,
-      temperature: 0,
-      max_tokens: 7000,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] },
-      ],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(provider.url, {
+      method: "POST",
+      headers: provider.headers,
+      body: JSON.stringify({
+        model: provider.model,
+        temperature: 0,
+        max_tokens: 7000,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] },
+        ],
+      }),
+    });
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    const error = new Error(`AI:síťová chyba:${detail}`);
+    (error as Error & { status?: number }).status = undefined;
+    throw error;
+  }
   if (!res.ok) {
     const body = await res.text();
     const error = new Error(`AI:${res.status}:${body.slice(0, 300)}`);
@@ -397,7 +404,7 @@ async function runStage(stage: OcrStage, imageDataUrl: string): Promise<OcrResul
     } catch (e) {
       const error = e as Error & { status?: number };
       attempts.push(`${provider.kind}:${error.status ?? "error"}`);
-      if (error.status !== 402 && error.status !== 429) break;
+      if (error.status !== 402 && error.status !== 429 && error.status !== undefined) break;
     }
   }
   if (!primary || !primaryProvider) {
@@ -414,7 +421,7 @@ async function runStage(stage: OcrStage, imageDataUrl: string): Promise<OcrResul
       } catch (e) {
         const error = e as Error & { status?: number };
         attempts.push(`worker-${provider.kind}:${error.status ?? "error"}`);
-        if (error.status !== 402 && error.status !== 429) break;
+        if (error.status !== 402 && error.status !== 429 && error.status !== undefined) break;
       }
     }
   } else if (stage === "products" && !normalizeProducts(primary).length && providers.length > 1) {
@@ -507,13 +514,11 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       } catch (e) {
         const error = e as Error & { status?: number };
         attempts.push(`${provider.kind}:${error.status ?? "error"}`);
-        if (error.status !== 402 && error.status !== 429) break;
+        if (error.status !== 402 && error.status !== 429 && error.status !== undefined) break;
       }
     }
     if (!primary || !primaryProvider) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
 
-    // Always perform a dedicated worker pass. It is deliberately independent
-    // of Product ID existence and independent of the first pass completeness.
     const workerProviders = [primaryProvider, ...providers.filter((p) => p !== primaryProvider)];
     for (const provider of workerProviders) {
       try {
@@ -523,7 +528,7 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
       } catch (e) {
         const error = e as Error & { status?: number };
         attempts.push(`worker-${provider.kind}:${error.status ?? "error"}`);
-        if (error.status !== 402 && error.status !== 429) break;
+        if (error.status !== 402 && error.status !== 429 && error.status !== undefined) break;
       }
     }
 
