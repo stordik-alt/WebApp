@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Firemní značka Resideo – vektorová wordmark verze (bez rastrových assetů),
- * takže zůstává ostrá na všech rozlišeních a respektuje barvy design systému.
+ * Firemní značka Resideo – výrazný symbol R s vnitřním stínováním,
+ * navržený pro tmavé navy prostředí i světlý režim.
  */
 export function ResideoLogo({
   className,
@@ -15,20 +15,21 @@ export function ResideoLogo({
   /** `light` = tmavé pozadí (sidebar), `dark` = světlé pozadí (mobilní hlavička). */
   variant?: "light" | "dark";
 }) {
-  return (
-    <span className={cn("flex items-center gap-2.5", className)}>
-      <span
-        aria-hidden
-        className={cn(
-          "flex shrink-0 items-center justify-center rounded-[20px] font-bold text-sidebar-primary-foreground",
-          compact
-            ? "h-16 w-16 text-[30px] ring-1 ring-sidebar-primary/35 shadow-[0_0_30px_-8px_hsl(var(--sidebar-primary)),inset_0_0_22px_hsl(var(--sidebar-primary)/0.12)]"
-            : "h-10 w-10 rounded-xl text-lg shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.8)]",
-        )}
-        style={{ backgroundImage: "var(--gradient-brand)" }}
-      >
+  const symbol = (
+    <span
+      aria-hidden
+      className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-primary/70 bg-[linear-gradient(145deg,hsl(var(--primary)/0.2),hsl(var(--sidebar-background)/0.96)_52%,hsl(var(--primary)/0.08))] shadow-[0_0_0_1px_hsl(var(--primary)/0.08),0_10px_28px_-8px_hsl(var(--primary)/0.75),inset_0_1px_0_hsl(0_0%_100%_/_0.08),inset_0_-10px_18px_hsl(0_0%_0%_/_0.24)]"
+    >
+      <span className="absolute inset-[5px] rounded-[14px] bg-[radial-gradient(circle_at_35%_25%,hsl(var(--primary)/0.22),transparent_42%),linear-gradient(160deg,hsl(var(--primary)/0.12),transparent_65%)] shadow-[inset_0_2px_7px_hsl(0_0%_0%_/_0.28)]" />
+      <span className="relative z-10 text-[29px] font-black leading-none tracking-[-0.06em] text-primary drop-shadow-[0_2px_5px_hsl(var(--primary)/0.45)]">
         R
       </span>
+    </span>
+  );
+
+  return (
+    <span className={cn("flex items-center gap-3", className)}>
+      {symbol}
       {compact ? null : (
         <span className="flex flex-col leading-none">
           <span
@@ -41,11 +42,11 @@ export function ResideoLogo({
           </span>
           <span
             className={cn(
-              "mt-1 text-[10px] uppercase tracking-[0.18em]",
-              variant === "light" ? "text-sidebar-foreground/55" : "text-muted-foreground",
+              "mt-1 text-[10px] font-medium tracking-tight",
+              variant === "light" ? "text-sidebar-foreground/60" : "text-muted-foreground",
             )}
           >
-            Výkonnost operátorů
+            Monitoring výkonu
           </span>
         </span>
       )}
