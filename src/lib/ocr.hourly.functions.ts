@@ -39,7 +39,6 @@ export type HourlyStageResult = {
 };
 
 type AiProvider = { name: string; url: string; model: string; headers: Record<string, string> };
-
 type AiError = Error & { status?: number; provider?: string; detail?: string };
 
 function providers(): AiProvider[] {
@@ -63,8 +62,6 @@ function text(value: unknown): string { return String(value ?? "").trim(); }
 function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const value = num(row[key]); if (value !== null) return value; } return null; }
 function firstText(row: Record<string, unknown>, keys: string[]): string { for (const key of keys) { const value = text(row[key]); if (value) return value; } return ""; }
 
-// Keep provider error details useful for debugging, but never expose headers,
-// request bodies, API keys, or arbitrary response payloads to the browser.
 function providerErrorDetail(body: string): string {
   const fallback = body.replace(/\s+/g, " ").trim();
   if (!fallback) return "prázdná odpověď";
@@ -78,38 +75,25 @@ function providerErrorDetail(body: string): string {
     }
     const message = parsed.message ?? parsed.detail;
     if (message) return String(message).slice(0, 600);
-  } catch {
-    // Some gateways return plain text instead of JSON.
-  }
+  } catch {}
   return fallback.slice(0, 600);
 }
 
 function aiError(message: string, provider: AiProvider, status?: number, detail?: string): AiError {
   const error = new Error(message) as AiError;
-  error.status = status;
-  error.provider = provider.name;
-  error.detail = detail;
+  error.status = status; error.provider = provider.name; error.detail = detail;
   return error;
 }
 
-// Product codes are machine identifiers, so matching must tolerate OCR-added
-// spaces/case differences (for example "H_R32346264-005" vs "H_R32346264 - 005").
 function normalize(value: string | null): string { return (value ?? "").trim().toLowerCase().replace(/\s+/g, ""); }
 
 function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[] {
-  if (context.profiles?.length) return context.profiles;
-  return (context.products ?? []).map((p) => ({ id: p.product_code, ha_subassy: p.product_code, h_capacity: p.capacity, h_norm_per_hour: p.norm_per_hour, tup_subassy: null, t_capacity: null, t_norm_per_hour: null }));
+  return context.profiles ?? [];
 }
 
 async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> {
-  // Product Profiles already stored in Supabase are the source of truth.
-  // Do not require the profile to have been created by the current import.
   const contextProfiles = context.profiles ?? [];
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  // Load the persistent profile set instead of doing an exact SQL match on the
-  // OCR/context code. This makes existing profiles available even when OCR
-  // inserted spaces or when HA/TUP share the same subassembly code.
   const { data, error } = await supabaseAdmin
     .from("product_profiles")
     .select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour");
@@ -118,8 +102,6 @@ async function loadExistingProfiles(context: HourlyStageContext): Promise<Produc
   const dbProfiles = (data ?? []) as ProductProfileContext[];
   if (!dbProfiles.length) return contextProfiles;
 
-  // Merge context with the persistent profiles. Database values win when
-  // present; sequence 1 may still fill a missing value in an older row.
   const merged: ProductProfileContext[] = [];
   const usedDb = new Set<number>();
   for (const contextProfile of contextProfiles) {
@@ -145,12 +127,7 @@ async function loadExistingProfiles(context: HourlyStageContext): Promise<Produc
       t_norm_per_hour: dbProfile.t_norm_per_hour ?? contextProfile.t_norm_per_hour,
     });
   }
-
-  // Include profiles that were not present in sequence 1 as well. The hourly
-  // OCR can then resolve an existing Product Profile directly from its code.
-  dbProfiles.forEach((profile, index) => {
-    if (!usedDb.has(index)) merged.push(profile);
-  });
+  dbProfiles.forEach((profile, index) => { if (!usedDb.has(index)) merged.push(profile); });
   return merged;
 }
 
@@ -161,8 +138,8 @@ async function callAi(provider: AiProvider, imageDataUrl: string, context: Hourl
     `HA/subassy=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
     `TUP/subassy=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
   ].join(" | ")).join("\n");
-  const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nKONTEXT Z 1. A 2. SEKQUENCE – JE ZÁVAZNÝ:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na směně: ${context.operator_count}\n\nPřečti pro KAŽDOU skutečně viditelnou hodinu:\n- hour\n- product_code = skutečný kód/podsestava ze sloupce produktu\n- role = HA nebo TUP, pouze pokud je role/provoz na screenshotu čitelný; jinak null\n- actual_output = skutečný hodinový výstup linky ze sloupce Reálný\n- performance_pct a availability_pct pouze pokud jsou ve screenshotu čitelné\n\nNORMU ANI KAPACITU NEODVOZUJ ZE SCREENSHOTU. Pro výpočet použij výhradně existující Product Profile z databáze, případně profil předaný v kontextu 1. sekvence.\nPOČET OPERÁTORŮ VŽDY POUŽIJ VÝHRADNĚ Z 2. SEKQUENCE A PŘEDPOKLÁDEJ, ŽE SE BĚHEM SMĚNY NEMĚNÍ.\nPokud je stejná podsestava použita pro HA i TUP, nesmíš podle prefixu kódu rozhodnout roli; použij pouze skutečně čitelný kontext role.\n\nVrať pouze JSON. Nevymýšlej hodnoty.\nSkutečné OEE pak aplikace vypočítá přesně jako:\nOEE = (skutečný hodinový výstup / norma z Product Profile) * ((kapacita z Product Profile / skutečný počet operátorů) * 100)\nVýpočet se nesmí opírat o OCR výkon.`;
-  const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile z 1. sekvence/databáze a počet operátorů z 2. sekvence jsou externí kontext a mají absolutní přednost. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","role":"HA | TUP | null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
+  const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nKONTEXT Z 1. A 2. SEKQUENCE – JE ZÁVAZNÝ:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na směně: ${context.operator_count}\n\nPřečti pro KAŽDOU skutečně viditelnou hodinu:\n- hour\n- product_code = skutečný kód/podsestava ze sloupce produktu\n- role = HA nebo TUP, pouze pokud je role/provoz na screenshotu čitelný; jinak null\n- actual_output = skutečný hodinový výstup linky ze sloupce Reálný\n- performance_pct a availability_pct pouze pokud jsou ve screenshotu čitelné\n\nNORMU ANI KAPACITU NEODVOZUJ ZE SCREENSHOTU. Pro výpočet použij výhradně existující Product Profile z databáze.\nPOČET OPERÁTORŮ VŽDY POUŽIJ VÝHRADNĚ Z 2. SEKQUENCE A PŘEDPOKLÁDEJ, ŽE SE BĚHEM SMĚNY NEMĚNÍ.\nPokud je stejná podsestava použita pro HA i TUP, nesmíš podle prefixu kódu rozhodnout roli; použij pouze skutečně čitelný kontext role.\n\nVrať pouze JSON. Nevymýšlej hodnoty.\nSkutečné OEE pak aplikace vypočítá přesně jako:\nOEE = (skutečný hodinový výstup / norma z Product Profile) * ((kapacita z Product Profile / skutečný počet operátorů) * 100)\nVýpočet se nesmí opírat o OCR výkon.`;
+  const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile z databáze a počet operátorů z 2. sekvence jsou externí kontext a mají absolutní přednost. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","role":"HA | TUP | null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
   let res: Response;
   try {
     res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) });
@@ -170,35 +147,14 @@ async function callAi(provider: AiProvider, imageDataUrl: string, context: Hourl
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw aiError(`${provider.name}: nepodařilo se spojit s AI službou.`, provider, undefined, detail);
   }
-
   let body = "";
-  try {
-    body = await res.text();
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    throw aiError(`${provider.name}: nepodařilo se přečíst odpověď AI.`, provider, res.status, detail);
-  }
-
-  if (!res.ok) {
-    const detail = providerErrorDetail(body);
-    throw aiError(`${provider.name}: HTTP ${res.status}`, provider, res.status, detail);
-  }
-
+  try { body = await res.text(); } catch (cause) { const detail = cause instanceof Error ? cause.message : String(cause); throw aiError(`${provider.name}: nepodařilo se přečíst odpověď AI.`, provider, res.status, detail); }
+  if (!res.ok) throw aiError(`${provider.name}: HTTP ${res.status}`, provider, res.status, providerErrorDetail(body));
   let json: { choices?: { message?: { content?: string } }[] };
-  try {
-    json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    throw aiError(`${provider.name}: odpověď není platný JSON.`, provider, res.status, detail);
-  }
-
+  try { json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] }; } catch (cause) { const detail = cause instanceof Error ? cause.message : String(cause); throw aiError(`${provider.name}: odpověď není platný JSON.`, provider, res.status, detail); }
   const content = json.choices?.[0]?.message?.content ?? "";
   if (!content.trim()) throw aiError(`${provider.name}: odpověď neobsahuje AI obsah.`, provider, res.status, "prázdný choices[0].message.content");
-  try {
-    return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>;
-  } catch {
-    throw aiError(`${provider.name}: AI vrátila neplatný JSON obsah.`, provider, res.status, content.slice(0, 600));
-  }
+  try { return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>; } catch { throw aiError(`${provider.name}: AI vrátila neplatný JSON obsah.`, provider, res.status, content.slice(0, 600)); }
 }
 
 function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] { for (const key of ["hourly_metrics", "hours", "hourly", "metrics"]) { if (Array.isArray(parsed[key])) return parsed[key] as Record<string, unknown>[]; } return []; }
@@ -220,32 +176,20 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" })
   .validator((input: { imageDataUrl: string; context: HourlyStageContext }) => {
     if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek.");
     if (!input.context || !Number.isInteger(input.context.operator_count) || input.context.operator_count < 1) throw new Error("3. sekvence potřebuje skutečný počet operátorů z 2. sekvence.");
-    if (!Array.isArray(input.context.profiles) && !Array.isArray(input.context.products)) throw new Error("3. sekvence potřebuje Product Profile nebo kontext z 1. sekvence.");
+    if (!Array.isArray(input.context.profiles)) throw new Error("3. sekvence potřebuje Product Profile z databáze.");
     return input;
   })
   .handler(async ({ data }): Promise<HourlyStageResult> => {
     const dbProfiles = await loadExistingProfiles(data.context);
     const resolvedContext: HourlyStageContext = { ...data.context, profiles: dbProfiles };
-    const usableProfile = normalizedProfiles(resolvedContext).some((profile) =>
-      (profile.h_norm_per_hour != null && profile.h_capacity != null) ||
-      (profile.t_norm_per_hour != null && profile.t_capacity != null),
-    );
+    const usableProfile = normalizedProfiles(resolvedContext).some((profile) => (profile.h_norm_per_hour != null && profile.h_capacity != null) || (profile.t_norm_per_hour != null && profile.t_capacity != null));
     if (!usableProfile) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
     const attempts: string[] = []; let parsed: Record<string, unknown> | null = null;
     for (const provider of providers()) {
-      try {
-        parsed = await callAi(provider, data.imageDataUrl, resolvedContext);
-        break;
-      } catch (e) {
-        const error = e as AiError;
-        const status = error.status != null ? `HTTP ${error.status}` : "síťová chyba";
-        const detail = error.detail ? `: ${error.detail}` : "";
-        attempts.push(`${provider.name} – ${status}${detail}`);
-      }
+      try { parsed = await callAi(provider, data.imageDataUrl, resolvedContext); break; }
+      catch (e) { const error = e as AiError; const status = error.status != null ? `HTTP ${error.status}` : "síťová chyba"; const detail = error.detail ? `: ${error.detail}` : ""; attempts.push(`${provider.name} – ${status}${detail}`); }
     }
-    if (!parsed) {
-      throw new Error(`AI OCR se nepodařilo dokončit. Pokusy: ${attempts.join("; ")}`);
-    }
+    if (!parsed) throw new Error(`AI OCR se nepodařilo dokončit. Pokusy: ${attempts.join("; ")}`);
     const raw = rawHourly(parsed);
     const hourly_metrics: HourlyStageMetric[] = raw.map((row) => {
       const product_code = firstText(row, ["product_code", "product"]) || null;
