@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { DailyRecord, Employee, WeeklyRecord } from "./metrics";
 import type { Product, ProductNorm } from "./products";
+import { profileNorms, type ProductProfile } from "./productProfiles";
 import { aggregateShifts, type ShiftEvaluation } from "./shifts";
 import type { NormRemeasurement, ProductShift } from "./remeasure";
 
@@ -27,10 +28,6 @@ export function useDailyRecords(from?: string, to?: string) {
       const { data, error } = await q;
       if (error) throw error;
 
-      // Import ze screenshotu ukládá kanonický Product ID do product_id.
-      // Denní data ale historicky zobrazovala pouze textové pole product,
-      // které může obsahovat staré OCR označení. Vždy proto doplň product
-      // z aktuálního Product ID; starý text použij jen jako fallback.
       const productIds = Array.from(new Set((data ?? []).map((r) => r.product_id).filter((id): id is string => !!id)));
       const productsById = new Map<string, string>();
       if (productIds.length) {
@@ -85,9 +82,6 @@ export function useProducts() {
   return useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      // Import musí znát i Product ID, které je právě založené jako návrh
-      // (approval_status = pending). Jinak OCR mylně vyhodnotí existující
-      // Product ID jako nový produkt a nabídne jeho založení znovu.
       const { data, error } = await supabase.from("products").select("*").order("code");
       if (error) throw error;
       return (data ?? []) as unknown as Product[];
@@ -96,14 +90,26 @@ export function useProducts() {
 }
 
 export function useProductNorms() {
-  return useQuery({
-    queryKey: ["product_norms"],
+  const profiles = useQuery({
+    queryKey: ["product_profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("product_norms").select("*").eq("approval_status", "approved").order("valid_from", { ascending: false });
+      const { data, error } = await (supabase.from("product_profiles") as any)
+        .select("*")
+        .order("valid_from", { ascending: false })
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as unknown as ProductNorm[];
+      return (data ?? []) as ProductProfile[];
     },
   });
+  const products = useProducts();
+  return {
+    ...profiles,
+    data: profileNorms(profiles.data ?? [], products.data ?? []),
+    isLoading: profiles.isLoading || products.isLoading,
+    isFetching: profiles.isFetching || products.isFetching,
+    isError: profiles.isError || products.isError,
+    error: profiles.error ?? products.error ?? null,
+  } as typeof profiles & { data: ProductNorm[] };
 }
 
 export function useShiftEvaluations() {
@@ -132,7 +138,6 @@ export function useShiftAggregates(from?: string, to?: string) {
   };
 }
 
-/** Souhrn historických metrik zaměstnance pro přehled zaměstnanců. */
 export function useEmployeePerformanceSummaries() {
   const employees = useEmployees();
   const daily = useDailyRecords();
