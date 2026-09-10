@@ -1,0 +1,18 @@
+:root {
+  --primary: 166 72% 38%;
+  --accent: 166 38% 92%;
+  --accent-foreground: 166 45% 25%;
+  --ring: 166 72% 38%;
+  --sidebar-primary: 166 68% 52%;
+  --sidebar-ring: 166 68% 52%;
+  --chart-1: 166 72% 38%;
+}
+
+.dark {
+  --primary: 166 82% 63%;
+  --accent: 166 25% 21%;
+  --ring: 166 82% 63%;
+  --sidebar-primary: 166 82% 63%;
+  --sidebar-ring: 166 82% 63%;
+  --chart-1: 166 82% 63%;
+}
