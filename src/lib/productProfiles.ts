@@ -70,15 +70,15 @@ export async function applyProductProfileNorms(input: {
   if (productError) throw productError;
   if (!product) throw new Error("Produkt pro přeměření nebyl nalezen.");
 
-  const code = normalizeCode(product.code);
-  const { data: current, error: profileError } = await (supabase.from("product_profiles") as any)
+  const wantedCode = normalizeCode(product.code);
+  const { data: candidates, error: profileError } = await (supabase.from("product_profiles") as any)
     .select("*")
     .is("valid_to", null)
-    .or(`ha_subassy.eq.${code},tup_subassy.eq.${code}`)
-    .order("valid_from", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("valid_from", { ascending: false });
   if (profileError) throw profileError;
+  const current = (candidates ?? []).find((profile: ProductProfile) =>
+    normalizeCode(profile.ha_subassy) === wantedCode || normalizeCode(profile.tup_subassy) === wantedCode,
+  );
   if (!current) throw new Error(`Pro produkt ${product.code} neexistuje Product Profile.`);
 
   const nextHa = input.haNorm != null ? Number(input.haNorm) : Number(current.h_norm_per_hour);
@@ -87,16 +87,10 @@ export async function applyProductProfileNorms(input: {
     throw new Error("Nové normy musí být kladná čísla.");
   }
 
-  const normalizedHa = normalizeCode(current.ha_subassy);
-  const normalizedTup = normalizeCode(current.tup_subassy);
-  if (code !== normalizedHa && code !== normalizedTup) throw new Error("Product Profile neobsahuje daný Product ID.");
-
   if (current.valid_from === input.validFrom) {
-    const payload: Record<string, unknown> = {
-      h_norm_per_hour: nextHa,
-      t_norm_per_hour: nextTup,
-    };
-    const { error } = await (supabase.from("product_profiles") as any).update(payload).eq("id", current.id);
+    const { error } = await (supabase.from("product_profiles") as any)
+      .update({ h_norm_per_hour: nextHa, t_norm_per_hour: nextTup })
+      .eq("id", current.id);
     if (error) throw error;
     return;
   }
