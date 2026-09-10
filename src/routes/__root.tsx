@@ -14,6 +14,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { AuthProvider } from "@/lib/auth";
 import { themeInitScript } from "@/lib/use-theme";
 import appCss from "../styles.css?url";
+import mintCss from "../mint-theme.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -102,6 +103,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "stylesheet",
+        href: mintCss,
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
