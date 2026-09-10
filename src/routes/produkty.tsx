@@ -24,11 +24,8 @@ function openProductProfileEditor(productCode: string) {
   if (!wanted) return;
   const editButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter((button) => button.textContent?.includes("Upravit"));
   const target = editButtons.find((button) => {
-    let node: HTMLElement | null = button;
-    for (let depth = 0; node && depth < 12; depth += 1, node = node.parentElement) {
-      if (node.textContent?.toLowerCase().includes(wanted)) return true;
-    }
-    return false;
+    const profileCard = button.closest("div.overflow-hidden.rounded-xl.border");
+    return Boolean(profileCard?.textContent?.toLowerCase().includes(wanted));
   });
   if (target) {
     target.click();
