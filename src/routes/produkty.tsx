@@ -31,19 +31,19 @@ function ProductsPage() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("1");
-  const [busy, setBusy] = useState(false);
 
   const addProduct = useMutation({
     mutationFn: async () => {
       const employeeCount = Number(capacity);
-      if (!code.trim()) throw new Error("Zadejte Product ID.");
+      const productCode = code.trim();
+      if (!productCode) throw new Error("Zadejte Product ID.");
       if (!Number.isInteger(employeeCount) || employeeCount < 1) throw new Error("Kapacita musí být celé číslo alespoň 1.");
       const { error } = await supabase.from("products").insert({
-        code: code.trim(),
+        code: productCode,
         name: name.trim() || null,
         employees_per_product: employeeCount,
         first_seen_date: new Date().toISOString().slice(0, 10),
-        variant_type: /^T_/i.test(code.trim()) ? "T" : "H",
+        variant_type: /^T_/i.test(productCode) ? "T" : "H",
         ...approval(),
       });
       if (error) throw error;
@@ -68,45 +68,20 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const createProfileProduct = async (codeValue: string, nameValue: string, capacityValue: number, variant: "H" | "T") => {
-    const existing = products.find((p) => p.code.trim().toLowerCase() === codeValue.trim().toLowerCase());
-    if (existing) return existing;
-    const { data, error } = await supabase.from("products").insert({
-      code: codeValue.trim(),
-      name: nameValue.trim() || null,
-      employees_per_product: capacityValue,
-      first_seen_date: new Date().toISOString().slice(0, 10),
-      variant_type: variant,
-      ...approval(),
-    }).select("*").single();
-    if (error) throw error;
-    return data;
-  };
-
   return (
     <AppShell title="Produkty a normy" subtitle="Product Profiles jsou zdrojem pravdy pro HA/TUP Product ID, normy, kapacity a jejich verzování.">
       <div className="grid min-w-0 gap-6">
-        <ProductProfileManager onProductsCreated={async (profile) => {
-          setBusy(true);
-          try {
-            await createProfileProduct(profile.haCode, profile.name, profile.haCapacity, "H");
-            await createProfileProduct(profile.tupCode, profile.name, profile.tupCapacity, "T");
-            qc.invalidateQueries({ queryKey: ["products"] });
-            qc.invalidateQueries({ queryKey: ["product_profiles"] });
-          } finally {
-            setBusy(false);
-          }
-        }} />
+        <ProductProfileManager />
 
         <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
           <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Samostatný produkt</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Pro produkty mimo HA/TUP profilu.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Pro produkt mimo společný HA/TUP profil.</p>
             <div className="mt-4 grid gap-3">
               <div className="grid gap-1.5"><Label>Product ID</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="H_... nebo T_..." /></div>
               <div className="grid gap-1.5"><Label>Název</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
               <div className="grid gap-1.5"><Label>Kapacita operátorů</Label><Input type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} /></div>
-              <Button className="h-11" disabled={addProduct.isPending || busy || !code.trim()} onClick={() => addProduct.mutate()}><Plus className="h-4 w-4" /> Přidat produkt</Button>
+              <Button className="h-11" disabled={addProduct.isPending || !code.trim()} onClick={() => addProduct.mutate()}><Plus className="h-4 w-4" /> Přidat produkt</Button>
             </div>
           </Card>
 
@@ -119,7 +94,7 @@ function ProductsPage() {
                     <div className="truncate text-sm font-medium">{product.code}{product.name ? <span className="text-muted-foreground"> – {product.name}</span> : null}</div>
                     <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground"><span>Kapacita: {product.employees_per_product ?? 1}</span><span>první výskyt {product.first_seen_date}</span></div>
                   </div>
-                  <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => toast.info("Úpravy norem a kapacit provádějte v Product Profile nahoře.")}><Pencil className="mr-1 h-4 w-4" /> Upravit</Button><Switch checked={product.active} onCheckedChange={() => toggleActive.mutate(product)} /></div>
+                  <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => document.getElementById("product-profile-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Pencil className="mr-1 h-4 w-4" /> Upravit profil</Button><Switch checked={product.active} onCheckedChange={() => toggleActive.mutate(product)} /></div>
                 </div>
               ))}
             </div>
