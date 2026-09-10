@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Pencil, Plus, Save, X } from "lucide-react";
@@ -63,10 +63,6 @@ export function ProductProfileManagerV2() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (!expanded && profiles.length) setExpanded(`profile:${keyOfProfile(profiles[0])}`);
-  }, [profiles, expanded]);
 
   const productsByCode = useMemo(() => {
     const map = new Map<string, Product>();
