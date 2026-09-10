@@ -15,6 +15,17 @@ import { Badge } from "@/components/ui/badge";
 type Family = { id: string; name: string; h_product_id: string | null; t_product_id: string | null };
 type ProfileDraft = { name: string; hCode: string; tCode: string; hNorm: string; tNorm: string; hCapacity: string; tCapacity: string };
 type ProfileNorm = ProductNorm & { approval_status?: string | null; submitted_by?: string | null };
+type ProductProfile = {
+  id: string;
+  ha_subassy: string | null;
+  h_capacity: number | null;
+  h_norm_per_hour: number | null;
+  tup_subassy: string | null;
+  t_capacity: number | null;
+  t_norm_per_hour: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
 const emptyForm: ProfileDraft = { name: "", hCode: "", tCode: "", hNorm: "", tNorm: "", hCapacity: "1", tCapacity: "1" };
 
 export function ProductFamilyManager() {
@@ -24,6 +35,7 @@ export function ProductFamilyManager() {
   const { data: norms = [] } = useProductNorms();
   const [families, setFamilies] = useState<Family[]>([]);
   const [allNorms, setAllNorms] = useState<ProfileNorm[]>([]);
+  const [profiles, setProfiles] = useState<ProductProfile[]>([]);
   const [resolvedProducts, setResolvedProducts] = useState<Product[]>([]);
   const [form, setForm] = useState<ProfileDraft>(emptyForm);
   const [editing, setEditing] = useState<Family | null>(null);
@@ -31,9 +43,10 @@ export function ProductFamilyManager() {
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [{ data: familyData, error: familyError }, { data: normData, error: normError }] = await Promise.all([
+    const [{ data: familyData, error: familyError }, { data: normData, error: normError }, { data: profileData, error: profileError }] = await Promise.all([
       (supabase.from("product_families") as any).select("id,name,h_product_id,t_product_id").order("name"),
       supabase.from("product_norms").select("*").order("valid_from", { ascending: false }).order("created_at", { ascending: false }),
+      (supabase.from("product_profiles") as any).select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,created_at,updated_at"),
     ]);
     if (familyError) {
       if (!/does not exist|relation/i.test(familyError.message)) toast.error(`Nepodařilo se načíst produktové profily: ${familyError.message}`);
@@ -43,8 +56,19 @@ export function ProductFamilyManager() {
       toast.error(`Nepodařilo se načíst normy Product ID: ${normError.message}`);
       return;
     }
+    if (profileError) {
+      toast.error(`Nepodařilo se načíst zdrojové profily Product ID: ${profileError.message}`);
+      return;
+    }
     setFamilies((familyData ?? []) as Family[]);
     setAllNorms((normData ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as ProfileNorm[]);
+    setProfiles((profileData ?? []).map((p) => ({
+      ...p,
+      h_capacity: p.h_capacity === null ? null : Number(p.h_capacity),
+      h_norm_per_hour: p.h_norm_per_hour === null ? null : Number(p.h_norm_per_hour),
+      t_capacity: p.t_capacity === null ? null : Number(p.t_capacity),
+      t_norm_per_hour: p.t_norm_per_hour === null ? null : Number(p.t_norm_per_hour),
+    })) as ProductProfile[]);
   };
 
   useEffect(() => { void load(); }, []);
@@ -87,7 +111,29 @@ export function ProductFamilyManager() {
         const pendingB = b.approval_status === "pending" ? 1 : 0;
         return pendingB - pendingA || b.valid_from.localeCompare(a.valid_from) || b.created_at.localeCompare(a.created_at);
       });
-    return candidates[0] ?? currentNorm(visibleNorms, productId, operation);
+
+    const direct = candidates[0] ?? currentNorm(visibleNorms, productId, operation);
+    if (direct) return direct;
+
+    const family = families.find((item) => item.h_product_id === productId || item.t_product_id === productId);
+    const profile = family ? profiles.find((item) => item.id === family.id) : profiles.find((item) => item.id === productId);
+    if (!profile) return undefined;
+
+    const value = operation === "HA" ? profile.h_norm_per_hour : profile.t_norm_per_hour;
+    if (value === null || value === undefined || value <= 0) return undefined;
+
+    return {
+      id: `profile:${profile.id}:${operation}`,
+      product_id: productId,
+      operation,
+      norm_per_hour: Number(value),
+      valid_from: today,
+      valid_to: null,
+      source: "product_profile",
+      confirmed: true,
+      note: "Norma načtená přímo z Product Profile",
+      created_at: profile.updated_at ?? profile.created_at ?? today,
+    } as ProfileNorm;
   };
 
   const reset = () => {
@@ -134,10 +180,11 @@ export function ProductFamilyManager() {
 
   const saveNorm = async (productId: string, operation: "HA" | "TUP", value: number, date: string) => {
     const current = profileNorm(productId, operation);
-    if (current && Number(current.norm_per_hour) === value) return;
+    const currentIsStoredNorm = !!current && current.source !== "product_profile";
+    if (currentIsStoredNorm && Number(current.norm_per_hour) === value) return;
 
     const approvalFields = approval();
-    const canUpdateCurrent = !!current && (
+    const canUpdateCurrent = currentIsStoredNorm && (
       approvalFields.approval_status === "approved" || current.approval_status === "pending"
     );
 
@@ -154,7 +201,7 @@ export function ProductFamilyManager() {
       return;
     }
 
-    if (current && current.approval_status === "approved") {
+    if (currentIsStoredNorm && current.approval_status === "approved") {
       const previousDay = new Date(`${date}T00:00:00Z`);
       previousDay.setUTCDate(previousDay.getUTCDate() - 1);
       const { error } = await supabase.from("product_norms").update({ valid_to: previousDay.toISOString().slice(0, 10) }).eq("id", current.id);
@@ -261,6 +308,18 @@ export function ProductFamilyManager() {
 
       await saveNorm(hProduct.id, "HA", hNorm, date);
       await saveNorm(tProduct.id, "TUP", tNorm, date);
+
+      if (!familyId) throw new Error("Nepodařilo se získat ID Product profilu.");
+      const { error: profileWriteError } = await (supabase.from("product_profiles") as any).upsert({
+        id: familyId,
+        ha_subassy: hCode,
+        h_capacity: hCapacity,
+        h_norm_per_hour: hNorm,
+        tup_subassy: tCode,
+        t_capacity: tCapacity,
+        t_norm_per_hour: tNorm,
+      }, { onConflict: "id" });
+      if (profileWriteError) throw profileWriteError;
 
       await (supabase.from("product_relationships") as any).delete().eq("target_product_id", tProduct.id).eq("relationship_type", "HA_TO_TUP");
       const { error: linkError } = await (supabase.from("product_relationships") as any).insert({
