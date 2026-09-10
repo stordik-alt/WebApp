@@ -15,15 +15,21 @@ export const Route = createFileRoute("/ke-schvaleni")({
   component: ApprovalPage,
 });
 
-type PendingTable = "daily_records" | "shift_evaluations" | "weekly_records" | "products" | "product_norms" | "quality_alert_history";
-const TABLE_LABEL: Record<PendingTable, string> = { daily_records: "Denní záznam", shift_evaluations: "Výpomoc (směna)", weekly_records: "Týdenní Yield", products: "Produkt", product_norms: "Norma", quality_alert_history: "Vyšetření Quality Alertu" };
+type PendingTable = "daily_records" | "shift_evaluations" | "weekly_records" | "products" | "quality_alert_history";
+const TABLE_LABEL: Record<PendingTable, string> = {
+  daily_records: "Denní záznam",
+  shift_evaluations: "Výpomoc (směna)",
+  weekly_records: "Týdenní Yield",
+  products: "Produkt",
+  quality_alert_history: "Vyšetření Quality Alertu",
+};
 type PendingRow = { table: PendingTable; id: string; created_at: string; data: Record<string, unknown> };
 
 function usePending() {
   return useQuery({
     queryKey: ["pending"],
     queryFn: async (): Promise<PendingRow[]> => {
-      const tables: PendingTable[] = ["daily_records", "shift_evaluations", "weekly_records", "products", "product_norms", "quality_alert_history"];
+      const tables: PendingTable[] = ["daily_records", "shift_evaluations", "weekly_records", "products", "quality_alert_history"];
       const out: PendingRow[] = [];
       for (const t of tables) {
         const { data, error } = await supabase.from(t).select("*").eq("approval_status", "pending").order("created_at", { ascending: false });
@@ -45,7 +51,6 @@ function summary(row: PendingRow, empName: (id: unknown) => string) {
     case "shift_evaluations": return `${d.work_date} · směna ${d.shift} · ${empName(d.employee_id)} · výpomoc ${d.help_score}`;
     case "weekly_records": return `${d.iso_year}/T${d.iso_week} · ${empName(d.employee_id)} · Yield ${d.yield_pct} %`;
     case "products": return `${d.code} ${d.name ? `– ${d.name}` : ""}`;
-    case "product_norms": return `${d.operation} · ${d.norm_per_hour} ks/h · platnost od ${d.valid_from}`;
     case "quality_alert_history": return `Příčina: ${d.alert_cause ?? "–"} · finální score ${d.final_quality_score ?? "–"}`;
   }
 }
@@ -56,7 +61,6 @@ function ApprovalPage() {
   const { data: rows = [], isLoading, error } = usePending();
   const { data: employees = [] } = useEmployees();
   const [selected, setSelected] = useState<PendingRow | null>(null);
-  const [rejectionReason, setRejectionReason] = useState("");
   const empName = (id: unknown) => employees.find((e) => e.id === id)?.full_name ?? "?";
 
   const decide = useMutation({
@@ -77,14 +81,13 @@ function ApprovalPage() {
         if (we) throw we;
       }
     },
-    onSuccess: (_, variables) => { setSelected(null); setRejectionReason(""); qc.invalidateQueries({ queryKey: ["pending"] }); qc.invalidateQueries(); toast.success(variables.approve ? "Záznam byl schválen a zařazen do statistik." : "Záznam byl zamítnut."); },
+    onSuccess: (_, variables) => { setSelected(null); qc.invalidateQueries({ queryKey: ["pending"] }); qc.invalidateQueries(); toast.success(variables.approve ? "Záznam byl schválen a zařazen do statistik." : "Záznam byl zamítnut."); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const reject = (row: PendingRow) => {
     const reason = window.prompt("Uveďte důvod zamítnutí:", "");
     if (!reason?.trim()) return;
-    setRejectionReason(reason.trim());
     decide.mutate({ row, approve: false, reason: reason.trim() });
   };
 

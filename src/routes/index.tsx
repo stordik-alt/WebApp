@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { tooltipStyle } from "@/lib/chart-theme";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -31,7 +31,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
-import { avg, effectiveQuality, fmt } from "@/lib/metrics";
+import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -50,18 +50,38 @@ function Dashboard() {
   const { shifts: allShifts } = useShiftAggregates();
   const { data: weekly = [] } = useWeeklyRecords();
 
+  const today = new Date();
+  const defaultTo = today.toISOString().slice(0, 10);
+  const defaultFromDate = new Date(today);
+  defaultFromDate.setDate(defaultFromDate.getDate() - 29);
+  const defaultFrom = defaultFromDate.toISOString().slice(0, 10);
+  const [fromDate, setFromDate] = useState(defaultFrom);
+  const [toDate, setToDate] = useState(defaultTo);
+
   const last30 = useMemo(() => {
-    const limit = new Date();
-    limit.setDate(limit.getDate() - 30);
-    const iso = limit.toISOString().slice(0, 10);
-    return allShifts.filter((d) => d.work_date >= iso);
-  }, [allShifts]);
+    if (!fromDate && !toDate) return allShifts;
+    return allShifts.filter((d) => {
+      if (fromDate && d.work_date < fromDate) return false;
+      if (toDate && d.work_date > toDate) return false;
+      return true;
+    });
+  }, [allShifts, fromDate, toDate]);
+
+  const weeklyInRange = useMemo(() => {
+    if (!fromDate && !toDate) return weekly;
+    return weekly.filter((w) => {
+      const monday = isoWeekMonday(w.iso_year, w.iso_week).toISOString().slice(0, 10);
+      if (fromDate && monday < fromDate) return false;
+      if (toDate && monday > toDate) return false;
+      return true;
+    });
+  }, [weekly, fromDate, toDate]);
 
   const avgOee = avg(last30.map((d) => d.oee).filter((v): v is number => v !== null));
   const avgHelp = avg(last30.map((d) => d.help).filter((v): v is number => v !== null));
-  const qualityValues = weekly.map(effectiveQuality).filter((v): v is number => v !== null);
+  const qualityValues = weeklyInRange.map(effectiveQuality).filter((v): v is number => v !== null);
   const avgQuality = avg(qualityValues);
-  const openAlerts = weekly.filter((w) => w.is_alert && !w.alert_resolved);
+  const openAlerts = weeklyInRange.filter((w) => w.is_alert && !w.alert_resolved);
   const activeEmployees = employees.filter((e) => e.active);
 
   const oeeTrend = useMemo(() => {
@@ -106,7 +126,7 @@ function Dashboard() {
   }, [last30]);
 
   const periodLabel = useMemo(() => {
-    if (!last30.length) return "Posledních 30 dní";
+    if (!last30.length) return "Vyberte období";
     const dates = last30.map((d) => d.work_date).sort();
     const from = dates[0]?.slice(5).replace("-", ". ") ?? "";
     const to = dates.at(-1)?.slice(5).replace("-", ". ") ?? "";
@@ -115,15 +135,46 @@ function Dashboard() {
 
   const empName = (id: string) => employees.find((e) => e.id === id)?.full_name ?? "?";
 
+  const resetPeriod = () => {
+    setFromDate(defaultFrom);
+    setToDate(defaultTo);
+  };
+
   return (
     <AppShell
       title="Dashboard"
       subtitle="Řídicí centrum výrobního výkonu"
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="hidden items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-3 py-2 text-xs text-muted-foreground shadow-sm sm:flex">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <span>{periodLabel}</span>
+          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm">
+            <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
+            <label className="sr-only" htmlFor="dashboard-from-date">Datum od</label>
+            <input
+              id="dashboard-from-date"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-[118px] bg-transparent text-xs font-medium text-foreground outline-none"
+              aria-label="Datum od"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <label className="sr-only" htmlFor="dashboard-to-date">Datum do</label>
+            <input
+              id="dashboard-to-date"
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-[118px] bg-transparent text-xs font-medium text-foreground outline-none"
+              aria-label="Datum do"
+            />
+            <button
+              type="button"
+              onClick={resetPeriod}
+              className="rounded-lg px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              30 dní
+            </button>
           </div>
           <Button asChild variant="outline">
             <Link to="/denni-data">Zadat denní data</Link>
@@ -187,7 +238,7 @@ function Dashboard() {
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
         <Card className="relative overflow-hidden p-5 shadow-[var(--shadow-card)]">
-          <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action="Posledních 30 dní" />
+          <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
           <div className="mt-4 h-72">
             {oeeTrend.length === 0 ? (
               <EmptyChart />
