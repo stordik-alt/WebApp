@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Pencil, Plus, Save } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Plus, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProducts } from "@/lib/data";
 import { useApprovalFields } from "@/lib/auth";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type ProductProfile = {
   id: string;
@@ -127,7 +127,7 @@ export function ProductProfileManagerV2() {
     const tupCapacity = Number(draft.tupCapacity);
     if (!name) throw new Error("Zadejte název Product Profile.");
     if (!/^H_/i.test(haCode)) throw new Error("HA Product ID musí začínat H_.");
-    if (!/^T_/i.test(tupCode)) throw new Error("TUP Product ID musí začínat T_.");
+    if (!tupCode) throw new Error("Zadejte TUP Product ID.");
     if (!Number.isFinite(haNorm) || haNorm <= 0 || !Number.isFinite(tupNorm) || tupNorm <= 0) throw new Error("Zadejte platnou normu pro HA i TUP.");
     if (!Number.isInteger(haCapacity) || haCapacity < 1 || !Number.isInteger(tupCapacity) || tupCapacity < 1) throw new Error("Kapacita musí být celé číslo alespoň 1.");
 
@@ -181,26 +181,22 @@ export function ProductProfileManagerV2() {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_profiles"] });
       toast.success(editing ? "Product Profile byl upraven." : "Product Profile byl založen.");
-      setDialogOpen(false);
-      setEditing(null);
-      setDraft(emptyDraft);
+      reset();
     } finally {
       setBusy(false);
     }
   };
 
+  const reset = () => {
+    setDialogOpen(false);
+    setEditing(null);
+    setDraft(emptyDraft);
+  };
+
   return <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
-        <Save className="h-4 w-4 text-primary" />
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product Profiles</h2>
-          <p className="text-xs text-muted-foreground">Jediný zdroj pro HA/TUP Product ID, normy, kapacitu a historii verzí. Product Families se zde nepoužívají.</p>
-        </div>
-      </div>
-      <Button type="button" size="lg" className="shrink-0" onClick={openNew}>
-        <Plus className="h-4 w-4" /> Nový Product Profile
-      </Button>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-2"><Save className="h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product Profiles</h2><p className="text-xs text-muted-foreground">Jediný zdroj pro HA/TUP Product ID, normy, kapacitu a historii verzí. Product Families se zde nepoužívají.</p></div></div>
+      <Button type="button" onClick={openNew}><Plus className="h-4 w-4" /> Nový Product Profile</Button>
     </div>
 
     {isError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">Product Profiles se nepodařilo načíst: {(error as Error)?.message ?? "neznámá chyba"}</div> : null}
@@ -227,33 +223,25 @@ export function ProductProfileManagerV2() {
     </div>
 
     <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-      <DialogContent className="h-[94vh] w-[96vw] max-w-5xl overflow-y-auto p-0">
-        <DialogHeader className="border-b px-6 py-5">
+      <DialogContent className="max-h-[92vh] w-[calc(100%-1.5rem)] max-w-5xl overflow-y-auto sm:w-[calc(100%-3rem)]">
+        <DialogHeader>
           <DialogTitle>{editing ? "Upravit Product Profile" : "Nový Product Profile"}</DialogTitle>
-          <DialogDescription>{editing ? "Upravíte aktuální profil. Při změně s platností od dnešního dne vznikne nová verze podle pravidel verzování." : "Zadejte HA/TUP Product ID, normy a kapacity pro nový Product Profile."}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-5 p-6">
-          <div className="rounded-xl border bg-muted/20 p-5">
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="grid gap-2 md:col-span-2"><Label>Název profilu</Label><Input autoFocus value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Např. Henry Ford 3596" /></div>
-              <div className="grid gap-2"><Label>HA Product ID</Label><Input value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
-              <div className="grid gap-2"><Label>TUP Product ID</Label><Input value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="T_..." /></div>
-              <div className="grid gap-2"><Label>HA norma (ks/h)</Label><Input type="number" step="0.1" min="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>TUP norma (ks/h)</Label><Input type="number" step="0.1" min="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>HA kapacita</Label><Input type="number" step="1" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>TUP kapacita</Label><Input type="number" step="1" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
-            </div>
-          </div>
+        <div className="grid gap-4 py-2">
+          <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">TUP Product ID nemusí začínat T_. Může mít stejný formát jako HA Product ID, tedy například H_....</div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-lg border p-4"><div className="mb-1 font-semibold">HA verze</div><p className="text-xs text-muted-foreground">Kód začíná H_. Norma v ks/h a kapacita jsou povinné.</p></div>
-            <div className="rounded-lg border p-4"><div className="mb-1 font-semibold">TUP verze</div><p className="text-xs text-muted-foreground">Kód začíná T_. Norma v ks/h a kapacita jsou povinné.</p></div>
+            <div className="grid gap-1.5 md:col-span-2"><Label>Název profilu</Label><Input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Např. Henry Ford 3596" /></div>
+            <div className="grid gap-1.5"><Label>HA Product ID</Label><Input value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
+            <div className="grid gap-1.5"><Label>HA norma (ks/h)</Label><Input type="number" step="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label>HA kapacita</Label><Input type="number" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label>TUP Product ID</Label><Input value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="H_... nebo jiný kód" /></div>
+            <div className="grid gap-1.5"><Label>TUP norma (ks/h)</Label><Input type="number" step="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label>TUP kapacita</Label><Input type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
           </div>
         </div>
-        <DialogFooter className="border-t px-6 py-4">
-          <Button type="button" variant="outline" disabled={busy} onClick={closeDialog}>Zrušit</Button>
-          <Button type="button" disabled={busy} onClick={() => void save().catch((e: Error) => toast.error(e.message))}>
-            {editing ? <><Save className="h-4 w-4" /> Uložit verzi</> : <><Plus className="h-4 w-4" /> Založit profil</>}
-          </Button>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={busy} onClick={closeDialog}><X className="h-4 w-4" /> Zrušit</Button>
+          <Button type="button" disabled={busy} onClick={() => void save().catch((e: Error) => toast.error(e.message))}>{editing ? <><Save className="h-4 w-4" /> Uložit verzi</> : <><Plus className="h-4 w-4" /> Založit profil</>}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
