@@ -41,10 +41,10 @@ const HA = {
   panel: "border-cyan-400/25 bg-cyan-400/[0.045]",
 };
 const TUP = {
-  label: "text-fuchsia-300",
-  badge: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
-  value: "text-fuchsia-200",
-  panel: "border-fuchsia-400/25 bg-fuchsia-400/[0.045]",
+  label: "text-red-300",
+  badge: "border-red-400/40 bg-red-400/10 text-red-300",
+  value: "text-red-200",
+  panel: "border-red-400/25 bg-red-400/[0.045]",
 };
 
 export function ProductProfileManagerV2() {
@@ -221,10 +221,10 @@ export function ProductProfileManagerV2() {
                 <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{profile.profile_name ?? profile.ha_subassy ?? "Product Profile"}</span><Badge variant="outline">v{profile.version_no}</Badge></div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
                   <span className={`rounded-md border px-2 py-1 ${HA.badge}`}><span className="font-semibold">HA</span> <span className={HA.value}>{profile.ha_subassy ?? "–"}</span></span>
-                  <span className={`rounded-md border px-2 py-1 ${TUP.badge}`}><span className="font-semibold">TUP</span> <span className={TUP.value}>{profile.tup_subassy ?? "–"}</span></span>
                   <span className={`rounded-md border px-2 py-1 ${HA.panel}`}><span className={HA.label}>Norma</span> <span className={`font-semibold ${HA.value}`}>{profile.h_norm_per_hour ?? "–"} ks/h</span></span>
-                  <span className={`rounded-md border px-2 py-1 ${TUP.panel}`}><span className={TUP.label}>Norma</span> <span className={`font-semibold ${TUP.value}`}>{profile.t_norm_per_hour ?? "–"} ks/h</span></span>
                   <span className={`rounded-md border px-2 py-1 ${HA.panel}`}><span className={HA.label}>Kap.</span> <span className={`font-semibold ${HA.value}`}>{profile.h_capacity ?? "–"}</span></span>
+                  <span className={`rounded-md border px-2 py-1 ${TUP.badge}`}><span className="font-semibold">TUP</span> <span className={TUP.value}>{profile.tup_subassy ?? "–"}</span></span>
+                  <span className={`rounded-md border px-2 py-1 ${TUP.panel}`}><span className={TUP.label}>Norma</span> <span className={`font-semibold ${TUP.value}`}>{profile.t_norm_per_hour ?? "–"} ks/h</span></span>
                   <span className={`rounded-md border px-2 py-1 ${TUP.panel}`}><span className={TUP.label}>Kap.</span> <span className={`font-semibold ${TUP.value}`}>{profile.t_capacity ?? "–"}</span></span>
                 </div>
               </div>
@@ -234,8 +234,8 @@ export function ProductProfileManagerV2() {
           </div>
           {open && <div className="border-t bg-muted/10 p-4"><div className="grid gap-4 md:grid-cols-2">
             <div className={`rounded-lg border p-4 ${HA.panel}`}><div className="mb-3 flex items-center justify-between"><div className={`font-semibold ${HA.label}`}>HA verze</div><Badge className={HA.badge}>HA</Badge></div><div className="grid gap-3"><div><Label className={HA.label}>Product ID</Label><Input className={`mt-1 border-cyan-400/30 ${HA.value}`} value={profile.ha_subassy ?? "–"} readOnly /></div><div><Label className={HA.label}>Norma ks/h</Label><Input className={`mt-1 border-cyan-400/30 ${HA.value}`} value={profile.h_norm_per_hour == null ? "–" : String(profile.h_norm_per_hour)} readOnly /></div><div><Label className={HA.label}>Kapacita operátorů</Label><Input className={`mt-1 border-cyan-400/30 ${HA.value}`} value={profile.h_capacity == null ? "–" : String(profile.h_capacity)} readOnly /></div></div></div>
-            <div className={`rounded-lg border p-4 ${TUP.panel}`}><div className="mb-3 flex items-center justify-between"><div className={`font-semibold ${TUP.label}`}>TUP verze</div><Badge className={TUP.badge}>TUP</Badge></div><div className="grid gap-3"><div><Label className={TUP.label}>Product ID</Label><Input className={`mt-1 border-fuchsia-400/30 ${TUP.value}`} value={profile.tup_subassy ?? "–"} readOnly /></div><div><Label className={TUP.label}>Norma ks/h</Label><Input className={`mt-1 border-fuchsia-400/30 ${TUP.value}`} value={profile.t_norm_per_hour == null ? "–" : String(profile.t_norm_per_hour)} readOnly /></div><div><Label className={TUP.label}>Kapacita operátorů</Label><Input className={`mt-1 border-fuchsia-400/30 ${TUP.value}`} value={profile.t_capacity == null ? "–" : String(profile.t_capacity)} readOnly /></div></div></div>
-          </div><div className="mt-4 rounded-lg border bg-background"><div className="border-b px-4 py-3 text-sm font-semibold">Historie verzí ({history.length})</div><div className="divide-y">{history.map((version) => <div key={version.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><Badge variant="outline">v{version.version_no}</Badge><span>HA {version.h_norm_per_hour ?? "–"} ks/h · TUP {version.t_norm_per_hour ?? "–"} ks/h</span><span className="text-xs text-muted-foreground">{version.valid_from} – {version.valid_to ?? "nyní"}</span></div>)}</div></div></div>}
+            <div className={`rounded-lg border p-4 ${TUP.panel}`}><div className="mb-3 flex items-center justify-between"><div className={`font-semibold ${TUP.label}`}>TUP verze</div><Badge className={TUP.badge}>TUP</Badge></div><div className="grid gap-3"><div><Label className={TUP.label}>Product ID</Label><Input className={`mt-1 border-red-400/30 ${TUP.value}`} value={profile.tup_subassy ?? "–"} readOnly /></div><div><Label className={TUP.label}>Norma ks/h</Label><Input className={`mt-1 border-red-400/30 ${TUP.value}`} value={profile.t_norm_per_hour == null ? "–" : String(profile.t_norm_per_hour)} readOnly /></div><div><Label className={TUP.label}>Kapacita operátorů</Label><Input className={`mt-1 border-red-400/30 ${TUP.value}`} value={profile.t_capacity == null ? "–" : String(profile.t_capacity)} readOnly /></div></div></div>
+          </div><div className="mt-4 rounded-lg border bg-background"><div className="border-b px-4 py-3 text-sm font-semibold">Historie verzí ({history.length})</div><div className="divide-y">{history.map((version) => <div key={version.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><Badge variant="outline">v{version.version_no}</Badge><span>HA {version.ha_subassy ?? "–"} · {version.h_norm_per_hour ?? "–"} ks/h · kap. {version.h_capacity ?? "–"}</span><span className={`font-medium ${TUP.label}`}>TUP</span><span>{version.tup_subassy ?? "–"} · {version.t_norm_per_hour ?? "–"} ks/h · kap. {version.t_capacity ?? "–"}</span><span className="text-xs text-muted-foreground">{version.valid_from} – {version.valid_to ?? "nyní"}</span></div>)}</div></div></div>}
         </div>;
       })}
       {!isLoading && !isError && grouped.current.length === 0 ? <div className="rounded-lg border p-4 text-sm text-muted-foreground">Zatím nejsou založené žádné Product Profiles.</div> : null}
@@ -253,9 +253,9 @@ export function ProductProfileManagerV2() {
             <div className="grid gap-1.5"><Label className={HA.label}>HA Product ID</Label><Input className="border-cyan-400/30" value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
             <div className="grid gap-1.5"><Label className={HA.label}>HA norma (ks/h)</Label><Input className="border-cyan-400/30" type="number" step="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
             <div className="grid gap-1.5"><Label className={HA.label}>HA kapacita</Label><Input className="border-cyan-400/30" type="number" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
-            <div className="grid gap-1.5"><Label className={TUP.label}>TUP Product ID</Label><Input className="border-fuchsia-400/30" value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="H_... nebo jiný kód" /></div>
-            <div className="grid gap-1.5"><Label className={TUP.label}>TUP norma (ks/h)</Label><Input className="border-fuchsia-400/30" type="number" step="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
-            <div className="grid gap-1.5"><Label className={TUP.label}>TUP kapacita</Label><Input className="border-fuchsia-400/30" type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label className={TUP.label}>TUP Product ID</Label><Input className="border-red-400/30" value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="H_... nebo jiný kód" /></div>
+            <div className="grid gap-1.5"><Label className={TUP.label}>TUP norma (ks/h)</Label><Input className="border-red-400/30" type="number" step="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label className={TUP.label}>TUP kapacita</Label><Input className="border-red-400/30" type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
           </div>
         </div>
         <DialogFooter>
