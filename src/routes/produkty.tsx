@@ -30,15 +30,16 @@ export const Route = createFileRoute("/produkty")({
 
 type Relationship = { id: string; source_product_id: string; target_product_id: string; relationship_type: string };
 
+type UiProductNorm = ProductNorm & { approval_status?: string | null; submitted_by?: string | null; approved_by?: string | null; approved_at?: string | null };
+
 function ProductsPage() {
   const qc = useQueryClient();
   const approval = useApprovalFields();
   const { data: products = [] } = useProducts();
   const { data: norms = [] } = useProductNorms();
-  // The generic hook intentionally exposes only approved norms for metrics.
-  // This editor must also show pending Team Leader changes and every historical
-  // version, so load the complete product_norms table separately.
-  const { data: allNorms = [], isError: allNormsError } = useQuery({
+  // Metrics use only approved norms; the product editor must display the
+  // complete history, including pending Team Leader versions.
+  const { data: allNorms = [] } = useQuery({
     queryKey: ["product_norms", "all"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -47,13 +48,10 @@ function ProductsPage() {
         .order("valid_from", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []).map((n) => ({
-        ...n,
-        norm_per_hour: Number(n.norm_per_hour),
-      })) as ProductNorm[];
+      return (data ?? []).map((n) => ({ ...n, norm_per_hour: Number(n.norm_per_hour) })) as UiProductNorm[];
     },
   });
-  const visibleNorms = allNorms.length > 0 ? allNorms : norms;
+  const visibleNorms: UiProductNorm[] = allNorms.length > 0 ? allNorms : (norms as UiProductNorm[]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
@@ -68,10 +66,6 @@ function ProductsPage() {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [relationshipTarget, setRelationshipTarget] = useState("");
   const [relationshipSearch, setRelationshipSearch] = useState("");
-
-  if (allNormsError) {
-    toast.error("Nepodařilo se načíst kompletní historii norem. Zobrazuji schválené normy.");
-  }
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["products"] });
@@ -260,7 +254,7 @@ function ProductsPage() {
         </div>
         <div className="grid min-w-0 gap-6">
           <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Produkty ({products.length})</div><div className="divide-y divide-border">{products.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné produkty.</p> : products.map((p) => { const ha = currentNorm(visibleNorms, p.id, "HA"); const tup = currentNorm(visibleNorms, p.id, "TUP"); return <div key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3"><div className="min-w-0"><div className="truncate text-sm font-medium">{p.code} {p.name ? <span className="text-muted-foreground">– {p.name}</span> : null}</div><div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground"><Badge variant="secondary">HA: {ha ? `${fmt(ha.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="secondary">TUP: {tup ? `${fmt(tup.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="outline">Kapacita: {p.employees_per_product ?? 1}</Badge><span>první výskyt {p.first_seen_date}</span></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => startEdit(p)}><Pencil className="mr-1 h-4 w-4" /> Upravit</Button><Switch checked={p.active} onCheckedChange={() => toggleActive.mutate(p)} /></div></div>; })}</div></div>
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Historie norem ({visibleNorms.length})</div><div className="divide-y divide-border">{visibleNorms.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné normy.</p> : visibleNorms.map((n) => { const p = products.find((x) => x.id === n.product_id); return <div key={n.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><span className="font-medium">{p?.code ?? "?"}</span><Badge variant="outline">{n.operation}</Badge><span className="tabular-nums">{fmt(n.norm_per_hour, 0)} ks/h</span><span className="text-xs text-muted-foreground">platnost {n.valid_from} – {n.valid_to ?? "nyní"} · zdroj {n.source}{"approval_status" in n && n.approval_status === "pending" ? " · čeká na schválení" : ""}</span></div>; })}</div></div>
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Historie norem ({visibleNorms.length})</div><div className="divide-y divide-border">{visibleNorms.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné normy.</p> : visibleNorms.map((n) => { const p = products.find((x) => x.id === n.product_id); return <div key={n.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><span className="font-medium">{p?.code ?? "?"}</span><Badge variant="outline">{n.operation}</Badge><span className="tabular-nums">{fmt(n.norm_per_hour, 0)} ks/h</span><span className="text-xs text-muted-foreground">platnost {n.valid_from} – {n.valid_to ?? "nyní"} · zdroj {n.source}{n.approval_status === "pending" ? " · čeká na schválení" : ""}</span></div>; })}</div></div>
         </div>
       </div>
     </div>
