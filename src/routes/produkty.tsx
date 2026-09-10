@@ -19,6 +19,24 @@ export const Route = createFileRoute("/produkty")({
   component: ProductsPage,
 });
 
+function openProductProfileEditor(productCode: string) {
+  const wanted = productCode.trim().toLowerCase();
+  if (!wanted) return;
+  const editButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter((button) => button.textContent?.includes("Upravit"));
+  const target = editButtons.find((button) => {
+    let node: HTMLElement | null = button;
+    for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
+      if (node.textContent?.toLowerCase().includes(wanted)) return true;
+    }
+    return false;
+  });
+  if (target) {
+    target.click();
+    return;
+  }
+  toast.error(`Product Profile pro ${productCode} nebyl nalezen.`);
+}
+
 function ProductsPage() {
   const qc = useQueryClient();
   const { data: products = [] } = useProducts();
@@ -42,7 +60,7 @@ function ProductsPage() {
             {products.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Produkty se vytvářejí pouze přes Product Profile.</p> : products.map((product) => (
               <div key={product.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3">
                 <div className="min-w-0"><div className="truncate text-sm font-medium">{product.code}{product.name ? <span className="text-muted-foreground"> – {product.name}</span> : null}</div><div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground"><span>Kapacita: {product.employees_per_product ?? 1}</span><span>první výskyt {product.first_seen_date}</span></div></div>
-                <div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled>Spravováno přes Product Profile</Button><Switch checked={product.active} onCheckedChange={() => toggleActive.mutate(product)} /></div>
+                <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => openProductProfileEditor(product.code)}>Spravováno přes Product Profile</Button><Switch checked={product.active} onCheckedChange={() => toggleActive.mutate(product)} /></div>
               </div>
             ))}
           </div>
