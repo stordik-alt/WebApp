@@ -25,7 +25,7 @@ function openProductProfileEditor(productCode: string) {
   const editButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).filter((button) => button.textContent?.includes("Upravit"));
   const target = editButtons.find((button) => {
     let node: HTMLElement | null = button;
-    for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
+    for (let depth = 0; node && depth < 12; depth += 1, node = node.parentElement) {
       if (node.textContent?.toLowerCase().includes(wanted)) return true;
     }
     return false;
