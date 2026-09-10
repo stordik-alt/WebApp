@@ -27,7 +27,6 @@ export function useDailyRecords(from?: string, to?: string) {
       if (to) q = q.lte("work_date", to);
       const { data, error } = await q;
       if (error) throw error;
-
       const productIds = Array.from(new Set((data ?? []).map((r) => r.product_id).filter((id): id is string => !!id)));
       const productsById = new Map<string, string>();
       if (productIds.length) {
@@ -35,7 +34,6 @@ export function useDailyRecords(from?: string, to?: string) {
         if (productError) throw productError;
         (productRows ?? []).forEach((p) => productsById.set(p.id, p.code));
       }
-
       return (data ?? []).map((r) => ({
         ...r,
         product: r.product_id ? (productsById.get(r.product_id) ?? r.product ?? null) : (r.product ?? null),
@@ -81,29 +79,20 @@ export function useProducts() {
   });
 }
 
-/** Compatibility-shaped norm list backed entirely by Product Profiles. */
+/** Existing ProductNorm API backed by the Product Profile source of truth. */
 export function useProductNorms() {
-  const profiles = useQuery({
-    queryKey: ["product_profiles"],
-    queryFn: async () => {
-      const { data, error } = await (supabase.from("product_profiles") as any)
-        .select("*")
-        .order("valid_from", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as ProductProfile[];
+  return useQuery({
+    queryKey: ["product_norms"],
+    queryFn: async (): Promise<ProductNorm[]> => {
+      const [{ data: profiles, error: profileError }, { data: products, error: productError }] = await Promise.all([
+        (supabase.from("product_profiles") as any).select("*").order("valid_from", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("products").select("*").order("code"),
+      ]);
+      if (profileError) throw profileError;
+      if (productError) throw productError;
+      return profileNorms((profiles ?? []) as ProductProfile[], (products ?? []) as unknown as Product[]);
     },
   });
-  const products = useProducts();
-  return {
-    ...profiles,
-    data: profileNorms(profiles.data ?? [], products.data ?? []),
-    isLoading: profiles.isLoading || products.isLoading,
-    isFetching: profiles.isFetching || products.isFetching,
-    isError: profiles.isError || products.isError,
-    error: profiles.error ?? products.error ?? null,
-    queryKey: ["product_norms"] as const,
-  } as typeof profiles & { data: ProductNorm[]; queryKey: readonly ["product_norms"] };
 }
 
 export function useShiftEvaluations() {
@@ -123,13 +112,7 @@ export function useShiftAggregates(from?: string, to?: string) {
   const links = useCoworkerLinks();
   const emp = useEmployees();
   const shifts = useMemo(() => aggregateShifts(daily.data ?? [], evals.data ?? [], links.data ?? [], emp.data ?? []), [daily.data, evals.data, links.data, emp.data]);
-  return {
-    shifts,
-    records: daily.data ?? [],
-    evaluations: evals.data ?? [],
-    links: links.data ?? [],
-    isLoading: daily.isLoading || evals.isLoading || links.isLoading || emp.isLoading,
-  };
+  return { shifts, records: daily.data ?? [], evaluations: evals.data ?? [], links: links.data ?? [], isLoading: daily.isLoading || evals.isLoading || links.isLoading || emp.isLoading };
 }
 
 export function useEmployeePerformanceSummaries() {
