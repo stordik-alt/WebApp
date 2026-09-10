@@ -58,28 +58,13 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="shrink-0 border-b border-sidebar-border/70 px-5 pb-4 pt-5">
-      <div className="flex items-center justify-between gap-3">
-        <ResideoLogo />
-        <span className="rounded-full border border-sidebar-border bg-sidebar-accent/50 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/55">Production OS</span>
-      </div>
-      <div className="mt-3 text-[11px] leading-relaxed text-sidebar-foreground/50">Výrobní monitoring a hodnocení pracovníků</div>
-      <UserBadge />
-    </div>
-  );
-}
-
-function UserBadge() {
-  const { profile, role } = useAuth();
-  const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
-  return (
-    <div className="mt-4 flex items-center gap-3 rounded-2xl border border-sidebar-border bg-sidebar-accent/45 px-3 py-2.5">
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground shadow-[0_0_24px_-10px_hsl(var(--sidebar-primary))]">
-        {(name || profile?.email || "U").slice(0, 1).toUpperCase()}
-      </div>
-      <div className="min-w-0">
-        <div className="truncate text-xs font-semibold text-sidebar-foreground">{name || profile?.email || "Uživatel"}</div>
-        <div className="mt-0.5 text-[10px] text-sidebar-foreground/50">{roleLabel(role)}</div>
+    <div className="shrink-0 border-b border-sidebar-border/70 px-5 pb-5 pt-5">
+      <div className="flex items-start gap-3">
+        <ResideoLogo compact />
+        <div className="min-w-0 pt-0.5">
+          <div className="text-base font-bold tracking-tight text-sidebar-foreground">Resideo</div>
+          <div className="mt-1 text-[11px] font-medium text-sidebar-foreground/55">Monitoring výkonu</div>
+        </div>
       </div>
     </div>
   );
