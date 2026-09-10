@@ -83,20 +83,24 @@ where not exists (
     and pp.valid_to is null
 );
 
--- Ensure the existing profile rows have a useful display name when possible.
+-- Ensure existing profile rows have a useful display name when possible.
+-- Use scalar subqueries here instead of referencing the target alias inside
+-- a JOIN condition; PostgreSQL rejects that form with 42P01.
 update public.product_profiles pp
 set profile_name = coalesce(
   pp.profile_name,
-  hp.name,
-  tp.name,
+  (select p.name from public.products p
+   where lower(regexp_replace(coalesce(p.code, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g'))
+   order by p.id
+   limit 1),
+  (select p.name from public.products p
+   where lower(regexp_replace(coalesce(p.code, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g'))
+   order by p.id
+   limit 1),
   nullif(pp.ha_subassy, ''),
   nullif(pp.tup_subassy, '')
 )
-from public.products hp
-left join public.products tp
-  on lower(regexp_replace(coalesce(tp.code, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g'))
-where lower(regexp_replace(coalesce(hp.code, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g'))
-  and pp.profile_name is null;
+where pp.profile_name is null;
 
 -- Keep Product Profiles readable to authenticated users. The application now
 -- treats this table as the source of truth for HA/TUP pairing, both norms and capacities.
