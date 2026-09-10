@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type ProductProfile = {
   id: string;
@@ -61,6 +62,7 @@ export function ProductProfileManagerV2() {
   const [editing, setEditing] = useState<ProductProfile | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!expanded && profiles.length) setExpanded(`profile:${keyOfProfile(profiles[0])}`);
@@ -87,6 +89,12 @@ export function ProductProfileManagerV2() {
     return { current: Array.from(current.values()), history };
   }, [profiles]);
 
+  const openNew = () => {
+    setEditing(null);
+    setDraft(emptyDraft);
+    setDialogOpen(true);
+  };
+
   const startEdit = (profile: ProductProfile) => {
     setEditing(profile);
     setDraft({
@@ -99,10 +107,15 @@ export function ProductProfileManagerV2() {
       tupCapacity: profile.t_capacity == null ? "1" : String(profile.t_capacity),
     });
     setExpanded(`profile:${keyOfProfile(profile)}`);
-    window.requestAnimationFrame(() => document.getElementById("product-profile-form")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    setDialogOpen(true);
   };
 
-  const reset = () => { setEditing(null); setDraft(emptyDraft); };
+  const closeDialog = () => {
+    if (busy) return;
+    setDialogOpen(false);
+    setEditing(null);
+    setDraft(emptyDraft);
+  };
 
   const save = async () => {
     const name = draft.name.trim();
@@ -168,26 +181,26 @@ export function ProductProfileManagerV2() {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["product_profiles"] });
       toast.success(editing ? "Product Profile byl upraven." : "Product Profile byl založen.");
-      reset();
+      setDialogOpen(false);
+      setEditing(null);
+      setDraft(emptyDraft);
     } finally {
       setBusy(false);
     }
   };
 
   return <Card className="min-w-0 overflow-hidden p-4 sm:p-5">
-    <div className="mb-4 flex items-center gap-2"><Save className="h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product Profiles</h2><p className="text-xs text-muted-foreground">Jediný zdroj pro HA/TUP Product ID, normy, kapacitu a historii verzí. Product Families se zde nepoužívají.</p></div></div>
-    <div id="product-profile-form" className="mb-5 rounded-xl border bg-muted/20 p-4">
-      <div className="mb-3 text-sm font-semibold">{editing ? "Úprava Product Profile" : "Nový Product Profile"}</div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="grid gap-1.5 md:col-span-2 xl:col-span-4"><Label>Název profilu</Label><Input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Např. Henry Ford 3596" /></div>
-        <div className="grid gap-1.5"><Label>HA Product ID</Label><Input value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
-        <div className="grid gap-1.5"><Label>HA norma (ks/h)</Label><Input type="number" step="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
-        <div className="grid gap-1.5"><Label>HA kapacita</Label><Input type="number" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
-        <div className="grid gap-1.5"><Label>TUP Product ID</Label><Input value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="T_..." /></div>
-        <div className="grid gap-1.5"><Label>TUP norma (ks/h)</Label><Input type="number" step="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
-        <div className="grid gap-1.5"><Label>TUP kapacita</Label><Input type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
-        <div className="flex items-end gap-2 md:col-span-2 xl:col-span-4"><Button type="button" disabled={busy} onClick={() => void save().catch((e: Error) => toast.error(e.message))}>{editing ? <><Save className="h-4 w-4" /> Uložit verzi</> : <><Plus className="h-4 w-4" /> Založit profil</>}</Button>{editing && <Button type="button" variant="outline" onClick={reset}>Zrušit</Button>}</div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <Save className="h-4 w-4 text-primary" />
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product Profiles</h2>
+          <p className="text-xs text-muted-foreground">Jediný zdroj pro HA/TUP Product ID, normy, kapacitu a historii verzí. Product Families se zde nepoužívají.</p>
+        </div>
       </div>
+      <Button type="button" size="lg" className="shrink-0" onClick={openNew}>
+        <Plus className="h-4 w-4" /> Nový Product Profile
+      </Button>
     </div>
 
     {isError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">Product Profiles se nepodařilo načíst: {(error as Error)?.message ?? "neznámá chyba"}</div> : null}
@@ -212,5 +225,37 @@ export function ProductProfileManagerV2() {
       })}
       {!isLoading && !isError && grouped.current.length === 0 ? <div className="rounded-lg border p-4 text-sm text-muted-foreground">Zatím nejsou založené žádné Product Profiles.</div> : null}
     </div>
+
+    <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
+      <DialogContent className="h-[94vh] w-[96vw] max-w-5xl overflow-y-auto p-0">
+        <DialogHeader className="border-b px-6 py-5">
+          <DialogTitle>{editing ? "Upravit Product Profile" : "Nový Product Profile"}</DialogTitle>
+          <DialogDescription>{editing ? "Upravíte aktuální profil. Při změně s platností od dnešního dne vznikne nová verze podle pravidel verzování." : "Zadejte HA/TUP Product ID, normy a kapacity pro nový Product Profile."}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-5 p-6">
+          <div className="rounded-xl border bg-muted/20 p-5">
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="grid gap-2 md:col-span-2"><Label>Název profilu</Label><Input autoFocus value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Např. Henry Ford 3596" /></div>
+              <div className="grid gap-2"><Label>HA Product ID</Label><Input value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
+              <div className="grid gap-2"><Label>TUP Product ID</Label><Input value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="T_..." /></div>
+              <div className="grid gap-2"><Label>HA norma (ks/h)</Label><Input type="number" step="0.1" min="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
+              <div className="grid gap-2"><Label>TUP norma (ks/h)</Label><Input type="number" step="0.1" min="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
+              <div className="grid gap-2"><Label>HA kapacita</Label><Input type="number" step="1" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
+              <div className="grid gap-2"><Label>TUP kapacita</Label><Input type="number" step="1" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border p-4"><div className="mb-1 font-semibold">HA verze</div><p className="text-xs text-muted-foreground">Kód začíná H_. Norma v ks/h a kapacita jsou povinné.</p></div>
+            <div className="rounded-lg border p-4"><div className="mb-1 font-semibold">TUP verze</div><p className="text-xs text-muted-foreground">Kód začíná T_. Norma v ks/h a kapacita jsou povinné.</p></div>
+          </div>
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
+          <Button type="button" variant="outline" disabled={busy} onClick={closeDialog}>Zrušit</Button>
+          <Button type="button" disabled={busy} onClick={() => void save().catch((e: Error) => toast.error(e.message))}>
+            {editing ? <><Save className="h-4 w-4" /> Uložit verzi</> : <><Plus className="h-4 w-4" /> Založit profil</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </Card>;
 }
