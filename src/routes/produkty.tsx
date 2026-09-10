@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Link2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductNorms, useProducts } from "@/lib/data";
-import { currentNorm, getNormHistory, recalculatePerformance, recalculateOeeForEmployees, type Product } from "@/lib/products";
+import { currentNorm, getNormHistory, recalculatePerformance, recalculateOeeForEmployees, type Product, type ProductNorm } from "@/lib/products";
 import { fmt } from "@/lib/metrics";
 import { AppShell } from "@/components/AppShell";
 import { ProductFamilyManager } from "@/components/ProductFamilyManager";
@@ -35,6 +35,25 @@ function ProductsPage() {
   const approval = useApprovalFields();
   const { data: products = [] } = useProducts();
   const { data: norms = [] } = useProductNorms();
+  // The generic hook intentionally exposes only approved norms for metrics.
+  // This editor must also show pending Team Leader changes and every historical
+  // version, so load the complete product_norms table separately.
+  const { data: allNorms = [], isError: allNormsError } = useQuery({
+    queryKey: ["product_norms", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_norms")
+        .select("*")
+        .order("valid_from", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((n) => ({
+        ...n,
+        norm_per_hour: Number(n.norm_per_hour),
+      })) as ProductNorm[];
+    },
+  });
+  const visibleNorms = allNorms.length > 0 ? allNorms : norms;
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
@@ -50,9 +69,14 @@ function ProductsPage() {
   const [relationshipTarget, setRelationshipTarget] = useState("");
   const [relationshipSearch, setRelationshipSearch] = useState("");
 
+  if (allNormsError) {
+    toast.error("Nepodařilo se načíst kompletní historii norem. Zobrazuji schválené normy.");
+  }
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["products"] });
     qc.invalidateQueries({ queryKey: ["product_norms"] });
+    qc.invalidateQueries({ queryKey: ["product_norms", "all"] });
     qc.invalidateQueries({ queryKey: ["daily"] });
   };
 
@@ -68,8 +92,8 @@ function ProductsPage() {
     setEditProduct(p);
     window.requestAnimationFrame(() => document.getElementById("edit-product-card")?.scrollIntoView({ behavior: "smooth", block: "center" }));
     setEditCapacity(String(p.employees_per_product ?? 1));
-    const ha = currentNorm(norms, p.id, "HA");
-    const tup = currentNorm(norms, p.id, "TUP");
+    const ha = currentNorm(visibleNorms, p.id, "HA");
+    const tup = currentNorm(visibleNorms, p.id, "TUP");
     setEditHaNorm(ha ? String(ha.norm_per_hour) : "");
     setEditTupNorm(tup ? String(tup.norm_per_hour) : "");
     setRelationshipTarget("");
@@ -140,7 +164,7 @@ function ProductsPage() {
         if (item.value === "") continue;
         const value = Number(item.value);
         if (!Number.isFinite(value) || value <= 0) throw new Error(`Neplatná norma ${item.operation}.`);
-        const current = currentNorm(norms, editProduct.id, item.operation);
+        const current = currentNorm(visibleNorms, editProduct.id, item.operation);
         if (current && Number(current.norm_per_hour) === value) continue;
         if (current) { const { error } = await supabase.from("product_norms").update({ valid_to: validFrom }).eq("id", current.id); if (error) throw error; }
         const { error } = await supabase.from("product_norms").insert({ product_id: editProduct.id, operation: item.operation, norm_per_hour: value, valid_from: validFrom, source: "manual", confirmed: true, note: item.operation === "HA" ? "Norma celé HA linky" : null, ...approval() });
@@ -159,7 +183,7 @@ function ProductsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const existing = selected ? currentNorm(norms, selected.id, operation) : undefined;
+  const existing = selected ? currentNorm(visibleNorms, selected.id, operation) : undefined;
   const normNum = normValue === "" ? null : Number(normValue);
   const isChange = !!existing && normNum !== null && Number(existing.norm_per_hour) !== normNum;
 
@@ -167,8 +191,11 @@ function ProductsPage() {
     mutationFn: async () => {
       if (!selected || normNum === null) throw new Error("Vyberte produkt a zadejte normu.");
       if (existing && Number(existing.norm_per_hour) === normNum) throw new Error("Stejná norma už platí – nová verze není potřeba.");
-      const oldNormHistory = getNormHistory(norms, selected.id, operation);
-      if (existing) { const { error } = await supabase.from("product_norms").update({ valid_to: validFrom }).eq("id", existing.id); if (error) throw error; }
+      const oldNormHistory = getNormHistory(visibleNorms, selected.id, operation);
+      if (existing) {
+        const { error } = await supabase.from("product_norms").update({ valid_to: validFrom }).eq("id", existing.id);
+        if (error) throw error;
+      }
       const { error } = await supabase.from("product_norms").insert({ product_id: selected.id, operation, norm_per_hour: normNum, valid_from: validFrom, source: "manual", confirmed: true, note: operation === "HA" ? "Norma celé HA linky" : null, ...approval() });
       if (error) throw error;
       const { data: productData } = await supabase.from("products").select("employees_per_product").eq("id", selected.id).single();
@@ -232,8 +259,8 @@ function ProductsPage() {
           </Card> : null}
         </div>
         <div className="grid min-w-0 gap-6">
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Produkty ({products.length})</div><div className="divide-y divide-border">{products.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné produkty.</p> : products.map((p) => { const ha = currentNorm(norms, p.id, "HA"); const tup = currentNorm(norms, p.id, "TUP"); return <div key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3"><div className="min-w-0"><div className="truncate text-sm font-medium">{p.code} {p.name ? <span className="text-muted-foreground">– {p.name}</span> : null}</div><div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground"><Badge variant="secondary">HA: {ha ? `${fmt(ha.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="secondary">TUP: {tup ? `${fmt(tup.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="outline">Kapacita: {p.employees_per_product ?? 1}</Badge><span>první výskyt {p.first_seen_date}</span></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => startEdit(p)}><Pencil className="mr-1 h-4 w-4" /> Upravit</Button><Switch checked={p.active} onCheckedChange={() => toggleActive.mutate(p)} /></div></div>; })}</div></div>
-          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Historie norem ({norms.length})</div><div className="divide-y divide-border">{norms.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné normy.</p> : norms.map((n) => { const p = products.find((x) => x.id === n.product_id); return <div key={n.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><span className="font-medium">{p?.code ?? "?"}</span><Badge variant="outline">{n.operation}</Badge><span className="tabular-nums">{fmt(n.norm_per_hour, 0)} ks/h</span><span className="text-xs text-muted-foreground">platnost {n.valid_from} – {n.valid_to ?? "nyní"} · zdroj {n.source}</span></div>; })}</div></div>
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Produkty ({products.length})</div><div className="divide-y divide-border">{products.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné produkty.</p> : products.map((p) => { const ha = currentNorm(visibleNorms, p.id, "HA"); const tup = currentNorm(visibleNorms, p.id, "TUP"); return <div key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3"><div className="min-w-0"><div className="truncate text-sm font-medium">{p.code} {p.name ? <span className="text-muted-foreground">– {p.name}</span> : null}</div><div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground"><Badge variant="secondary">HA: {ha ? `${fmt(ha.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="secondary">TUP: {tup ? `${fmt(tup.norm_per_hour, 0)} ks/h` : "–"}</Badge><Badge variant="outline">Kapacita: {p.employees_per_product ?? 1}</Badge><span>první výskyt {p.first_seen_date}</span></div></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => startEdit(p)}><Pencil className="mr-1 h-4 w-4" /> Upravit</Button><Switch checked={p.active} onCheckedChange={() => toggleActive.mutate(p)} /></div></div>; })}</div></div>
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"><div className="border-b border-border px-4 py-3 text-sm font-semibold">Historie norem ({visibleNorms.length})</div><div className="divide-y divide-border">{visibleNorms.length === 0 ? <p className="p-4 text-sm text-muted-foreground">Zatím žádné normy.</p> : visibleNorms.map((n) => { const p = products.find((x) => x.id === n.product_id); return <div key={n.id} className="flex flex-wrap items-center gap-2 p-3 text-sm"><span className="font-medium">{p?.code ?? "?"}</span><Badge variant="outline">{n.operation}</Badge><span className="tabular-nums">{fmt(n.norm_per_hour, 0)} ks/h</span><span className="text-xs text-muted-foreground">platnost {n.valid_from} – {n.valid_to ?? "nyní"} · zdroj {n.source}{"approval_status" in n && n.approval_status === "pending" ? " · čeká na schválení" : ""}</span></div>; })}</div></div>
         </div>
       </div>
     </div>
