@@ -1,206 +1,37 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export type ProductProfileContext = {
-  id?: string;
-  ha_subassy: string | null;
-  h_capacity: number | null;
-  h_norm_per_hour: number | null;
-  tup_subassy: string | null;
-  t_capacity: number | null;
-  t_norm_per_hour: number | null;
-};
-
-export type HourlyStageContext = {
-  profiles?: ProductProfileContext[];
-  products?: Array<{ product_code: string; norm_per_hour: number | null; capacity: number | null }>;
-  operator_count: number;
-};
-
-export type HourlyStageMetric = {
-  hour: number | null;
-  product_code: string | null;
-  role: "HA" | "TUP" | null;
-  actual_output: number | null;
-  performance_pct: number | null;
-  availability_pct: number | null;
-  norm_per_hour: number | null;
-  capacity: number | null;
-  operator_count: number;
-  actual_oee_pct: number | null;
-};
-
-export type HourlyStageResult = {
-  hourly_metrics: HourlyStageMetric[];
-  predicted_shift_output: number | null;
-  actual_shift_oee_pct: number | null;
-  operator_count: number;
-  raw?: string;
-};
+export type ProductProfileContext = { id?: string; ha_subassy: string | null; h_capacity: number | null; h_norm_per_hour: number | null; tup_subassy: string | null; t_capacity: number | null; t_norm_per_hour: number | null };
+export type HourlyStageContext = { profiles?: ProductProfileContext[]; products?: Array<{ product_code: string; norm_per_hour: number | null; capacity: number | null }>; operator_count: number };
+export type HourlyStageMetric = { hour: number | null; product_code: string | null; role: "HA" | "TUP" | null; actual_output: number | null; performance_pct: number | null; availability_pct: number | null; norm_per_hour: number | null; capacity: number | null; operator_count: number; actual_oee_pct: number | null };
+export type HourlyStageResult = { hourly_metrics: HourlyStageMetric[]; predicted_shift_output: number | null; actual_shift_oee_pct: number | null; operator_count: number; raw?: string };
 
 type AiProvider = { name: string; url: string; model: string; headers: Record<string, string> };
 type AiError = Error & { status?: number; provider?: string; detail?: string };
+function providers(): AiProvider[] { const result: AiProvider[] = []; const key = process.env.OPENROUTER_API_KEY; if (key) result.push({ name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", model: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` } }); const lovableKey = process.env.LOVABLE_API_KEY; if (lovableKey) result.push({ name: "Lovable AI", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } }); if (!result.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY)."); return result; }
+function num(v: unknown): number | null { if (v === null || v === undefined || v === "") return null; if (typeof v === "number") return Number.isFinite(v) ? v : null; let s = String(v).trim().replace(/\s/g, "").replace(/%/g, ""); if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/[^\d.\-]/g, ""); const n = Number(s); return Number.isFinite(n) ? n : null; }
+function text(v: unknown): string { return String(v ?? "").trim(); }
+function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const n = num(row[key]); if (n !== null) return n; } return null; }
+function firstText(row: Record<string, unknown>, keys: string[]): string { for (const key of keys) { const v = text(row[key]); if (v) return v; } return ""; }
+function normalize(v: string | null): string { return (v ?? "").trim().toLowerCase().replace(/\s+/g, ""); }
+function providerErrorDetail(body: string): string { const fallback = body.replace(/\s+/g, " ").trim(); if (!fallback) return "prázdná odpověď"; try { const parsed = JSON.parse(body) as Record<string, unknown>; const error = parsed.error; if (error && typeof error === "object") { const e = error as Record<string, unknown>; const parts = [e.message, e.code, e.type, e.status].filter((x) => x != null && String(x).trim()); if (parts.length) return parts.map(String).join(" | ").slice(0, 600); } const message = parsed.message ?? parsed.detail; if (message) return String(message).slice(0, 600); } catch {} return fallback.slice(0, 600); }
+function aiError(message: string, provider: AiProvider, status?: number, detail?: string): AiError { const e = new Error(message) as AiError; e.status = status; e.provider = provider.name; e.detail = detail; return e; }
 
-function providers(): AiProvider[] {
-  const result: AiProvider[] = [];
-  const openrouterKey = process.env.OPENROUTER_API_KEY;
-  if (openrouterKey) result.push({ name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", model: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${openrouterKey}` } });
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  if (lovableKey) result.push({ name: "Lovable AI", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } });
-  if (!result.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY).");
-  return result;
-}
+async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> { const contextProfiles = context.profiles ?? []; const { supabaseAdmin } = await import("@/integrations/supabase/client.server"); const { data, error } = await supabaseAdmin.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour"); if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`); const dbProfiles = (data ?? []) as ProductProfileContext[]; if (!dbProfiles.length) return contextProfiles; const merged: ProductProfileContext[] = []; const used = new Set<number>(); for (const cp of contextProfiles) { const codes = [cp.ha_subassy, cp.tup_subassy].map(normalize).filter(Boolean); const index = dbProfiles.findIndex((p, i) => !used.has(i) && [p.ha_subassy, p.tup_subassy].map(normalize).some((c) => c && codes.includes(c))); if (index < 0) { merged.push(cp); continue; } used.add(index); const db = dbProfiles[index]; merged.push({ ...cp, ...db, ha_subassy: db.ha_subassy ?? cp.ha_subassy, h_capacity: db.h_capacity ?? cp.h_capacity, h_norm_per_hour: db.h_norm_per_hour ?? cp.h_norm_per_hour, tup_subassy: db.tup_subassy ?? cp.tup_subassy, t_capacity: db.t_capacity ?? cp.t_capacity, t_norm_per_hour: db.t_norm_per_hour ?? cp.t_norm_per_hour }); } dbProfiles.forEach((p, i) => { if (!used.has(i)) merged.push(p); }); return merged; }
 
-function num(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  let s = String(value).trim().replace(/\s/g, "").replace(/%/g, "");
-  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/[^\d.\-]/g, "");
-  const n = Number(s); return Number.isFinite(n) ? n : null;
-}
-function text(value: unknown): string { return String(value ?? "").trim(); }
-function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const value = num(row[key]); if (value !== null) return value; } return null; }
-function firstText(row: Record<string, unknown>, keys: string[]): string { for (const key of keys) { const value = text(row[key]); if (value) return value; } return ""; }
+async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> { const profiles = context.profiles ?? []; const contextLines = profiles.map((p) => `- profil ${p.id ?? ""} | HA=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h | TUP=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`).join("\n"); const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nZÁVAZNÝ KONTEXT:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů: ${context.operator_count}\n\nPro KAŽDOU skutečně viditelnou hodinu přečti hour, product_code, role pouze pokud je čitelná, actual_output ze sloupce Reálný, performance_pct a availability_pct pouze pokud jsou skutečně čitelné. NORMU ANI KAPACITU NIKDY NEODVOZUJ ZE SCREENSHOTU; použij pouze Product Profile z databáze. Pokud stejný kód existuje jako HA i TUP, nerozhoduj roli podle prefixu.\n\nOEE se počítá jako Availability × Performance × Quality. Screenshot neposkytuje reject/good-count data, proto je Quality pro tento import 100 %. Skutečný OEE se určí z reálného výstupu proti teoretickému výstupu za plánovaný výrobní čas, s kapacitou Product Profile a skutečným počtem operátorů. OCR Výkon se nesmí použít jako náhrada za skutečný výstup.\nNevymýšlej hodnoty. Vrať pouze JSON.`; const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile a počet operátorů jsou externí kontext a mají absolutní přednost. Vrať pouze JSON {\"hourly_metrics\":[{\"hour\":číslo nebo null,\"product_code\":\"kód nebo null\",\"role\":\"HA | TUP | null\",\"actual_output\":číslo nebo null,\"performance_pct\":číslo nebo null,\"availability_pct\":číslo nebo null}]}.`; let res: Response; try { res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) }); } catch (cause) { throw aiError(`${provider.name}: nepodařilo se spojit s AI službou.`, provider, undefined, cause instanceof Error ? cause.message : String(cause)); } let body = ""; try { body = await res.text(); } catch (cause) { throw aiError(`${provider.name}: nepodařilo se přečíst odpověď AI.`, provider, res.status, cause instanceof Error ? cause.message : String(cause)); } if (!res.ok) throw aiError(`${provider.name}: HTTP ${res.status}`, provider, res.status, providerErrorDetail(body)); let json: { choices?: { message?: { content?: string } }[] }; try { json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] }; } catch (cause) { throw aiError(`${provider.name}: odpověď není platný JSON.`, provider, res.status, cause instanceof Error ? cause.message : String(cause)); } const content = json.choices?.[0]?.message?.content ?? ""; if (!content.trim()) throw aiError(`${provider.name}: odpověď neobsahuje AI obsah.`, provider, res.status, "prázdný obsah"); try { return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>; } catch { throw aiError(`${provider.name}: AI vrátila neplatný JSON obsah.`, provider, res.status, content.slice(0, 600)); } }
 
-function providerErrorDetail(body: string): string {
-  const fallback = body.replace(/\s+/g, " ").trim();
-  if (!fallback) return "prázdná odpověď";
-  try {
-    const parsed = JSON.parse(body) as Record<string, unknown>;
-    const error = parsed.error;
-    if (error && typeof error === "object") {
-      const e = error as Record<string, unknown>;
-      const parts = [e.message, e.code, e.type, e.status].filter((value) => value !== undefined && value !== null && String(value).trim());
-      if (parts.length) return parts.map(String).join(" | ").slice(0, 600);
-    }
-    const message = parsed.message ?? parsed.detail;
-    if (message) return String(message).slice(0, 600);
-  } catch {}
-  return fallback.slice(0, 600);
-}
+function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] { for (const key of ["hourly_metrics", "hours", "hourly", "metrics"]) if (Array.isArray(parsed[key])) return parsed[key] as Record<string, unknown>[]; return []; }
+function normalizeRole(v: unknown): "HA" | "TUP" | null { const s = text(v).toLowerCase(); if (s === "ha" || s.includes("ha")) return "HA"; if (s === "tup" || s.includes("tup")) return "TUP"; return null; }
+function profileVariant(p: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) { const c = normalize(code); const h = normalize(p.ha_subassy) === c; const t = normalize(p.tup_subassy) === c; if (role === "HA" && h) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (role === "TUP" && t) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; if (h && !t) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (t && !h) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; return null; }
+function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
+function effectiveWeights(count: number): number[] { if (count <= 0) return []; if (count === 1) return [(480 - 10 - 30 - 5) / 60]; const w = Array.from({ length: count }, () => 1); w[0] -= 10 / 60; w[count - 1] -= 5 / 60; if (count >= 3) w[Math.floor(count / 2)] -= 30 / 60; return w; }
 
-function aiError(message: string, provider: AiProvider, status?: number, detail?: string): AiError {
-  const error = new Error(message) as AiError;
-  error.status = status; error.provider = provider.name; error.detail = detail;
-  return error;
-}
-
-function normalize(value: string | null): string { return (value ?? "").trim().toLowerCase().replace(/\s+/g, ""); }
-
-function normalizedProfiles(context: HourlyStageContext): ProductProfileContext[] {
-  return context.profiles ?? [];
-}
-
-async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> {
-  const contextProfiles = context.profiles ?? [];
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("product_profiles")
-    .select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour");
-  if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`);
-
-  const dbProfiles = (data ?? []) as ProductProfileContext[];
-  if (!dbProfiles.length) return contextProfiles;
-
-  const merged: ProductProfileContext[] = [];
-  const usedDb = new Set<number>();
-  for (const contextProfile of contextProfiles) {
-    const contextCodes = [contextProfile.ha_subassy, contextProfile.tup_subassy].map(normalize).filter(Boolean);
-    const dbIndex = dbProfiles.findIndex((p, index) => {
-      if (usedDb.has(index)) return false;
-      return [p.ha_subassy, p.tup_subassy].map(normalize).some((code) => code && contextCodes.includes(code));
-    });
-    if (dbIndex < 0) {
-      merged.push(contextProfile);
-      continue;
-    }
-    usedDb.add(dbIndex);
-    const dbProfile = dbProfiles[dbIndex];
-    merged.push({
-      ...contextProfile,
-      ...dbProfile,
-      ha_subassy: dbProfile.ha_subassy ?? contextProfile.ha_subassy,
-      h_capacity: dbProfile.h_capacity ?? contextProfile.h_capacity,
-      h_norm_per_hour: dbProfile.h_norm_per_hour ?? contextProfile.h_norm_per_hour,
-      tup_subassy: dbProfile.tup_subassy ?? contextProfile.tup_subassy,
-      t_capacity: dbProfile.t_capacity ?? contextProfile.t_capacity,
-      t_norm_per_hour: dbProfile.t_norm_per_hour ?? contextProfile.t_norm_per_hour,
-    });
-  }
-  dbProfiles.forEach((profile, index) => { if (!usedDb.has(index)) merged.push(profile); });
-  return merged;
-}
-
-async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> {
-  const profiles = normalizedProfiles(context);
-  const contextLines = profiles.map((p) => [
-    `- profil ${p.id ?? ""}`,
-    `HA/subassy=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
-    `TUP/subassy=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`,
-  ].join(" | ")).join("\n");
-  const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nKONTEXT Z 1. A 2. SEKQUENCE – JE ZÁVAZNÝ:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na směně: ${context.operator_count}\n\nPřečti pro KAŽDOU skutečně viditelnou hodinu:\n- hour\n- product_code = skutečný kód/podsestava ze sloupce produktu\n- role = HA nebo TUP, pouze pokud je role/provoz na screenshotu čitelný; jinak null\n- actual_output = skutečný hodinový výstup linky ze sloupce Reálný\n- performance_pct a availability_pct pouze pokud jsou ve screenshotu čitelné\n\nNORMU ANI KAPACITU NEODVOZUJ ZE SCREENSHOTU. Pro výpočet použij výhradně existující Product Profile z databáze.\nPOČET OPERÁTORŮ VŽDY POUŽIJ VÝHRADNĚ Z 2. SEKQUENCE A PŘEDPOKLÁDEJ, ŽE SE BĚHEM SMĚNY NEMĚNÍ.\nPokud je stejná podsestava použita pro HA i TUP, nesmíš podle prefixu kódu rozhodnout roli; použij pouze skutečně čitelný kontext role.\n\nVrať pouze JSON. Nevymýšlej hodnoty.\nSkutečné OEE pak aplikace vypočítá přesně jako:\nOEE = (skutečný hodinový výstup / norma z Product Profile) * ((kapacita z Product Profile / skutečný počet operátorů) * 100)\nVýpočet se nesmí opírat o OCR výkon.`;
-  const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš pouze hodinovou tabulku. Product Profile z databáze a počet operátorů z 2. sekvence jsou externí kontext a mají absolutní přednost. Vrať pouze JSON ve tvaru {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","role":"HA | TUP | null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
-  let res: Response;
-  try {
-    res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) });
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    throw aiError(`${provider.name}: nepodařilo se spojit s AI službou.`, provider, undefined, detail);
-  }
-  let body = "";
-  try { body = await res.text(); } catch (cause) { const detail = cause instanceof Error ? cause.message : String(cause); throw aiError(`${provider.name}: nepodařilo se přečíst odpověď AI.`, provider, res.status, detail); }
-  if (!res.ok) throw aiError(`${provider.name}: HTTP ${res.status}`, provider, res.status, providerErrorDetail(body));
-  let json: { choices?: { message?: { content?: string } }[] };
-  try { json = JSON.parse(body) as { choices?: { message?: { content?: string } }[] }; } catch (cause) { const detail = cause instanceof Error ? cause.message : String(cause); throw aiError(`${provider.name}: odpověď není platný JSON.`, provider, res.status, detail); }
-  const content = json.choices?.[0]?.message?.content ?? "";
-  if (!content.trim()) throw aiError(`${provider.name}: odpověď neobsahuje AI obsah.`, provider, res.status, "prázdný choices[0].message.content");
-  try { return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>; } catch { throw aiError(`${provider.name}: AI vrátila neplatný JSON obsah.`, provider, res.status, content.slice(0, 600)); }
-}
-
-function rawHourly(parsed: Record<string, unknown>): Record<string, unknown>[] { for (const key of ["hourly_metrics", "hours", "hourly", "metrics"]) { if (Array.isArray(parsed[key])) return parsed[key] as Record<string, unknown>[]; } return []; }
-function profileVariant(profile: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) {
-  const codeNorm = normalize(code); const haMatch = normalize(profile.ha_subassy) === codeNorm; const tupMatch = normalize(profile.tup_subassy) === codeNorm;
-  if (role === "HA" && haMatch) return { norm: profile.h_norm_per_hour, capacity: profile.h_capacity };
-  if (role === "TUP" && tupMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
-  if (haMatch && !tupMatch) return { norm: profile.h_norm_per_hour, capacity: profile.h_capacity };
-  if (tupMatch && !haMatch) return { norm: profile.t_norm_per_hour, capacity: profile.t_capacity };
-  return null;
-}
-function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const profile of normalizedProfiles(context)) { const variant = profileVariant(profile, code, role); if (variant) return variant; } return null; }
-function actualOutput(row: Record<string, unknown>): number | null { return firstNum(row, ["actual_output", "actual", "realny", "real", "reálný"]); }
-function normalizeRole(value: unknown): "HA" | "TUP" | null { const s = text(value).toLowerCase(); if (s === "ha" || s.includes("ha")) return "HA"; if (s === "tup" || s.includes("tup")) return "TUP"; return null; }
-function effectiveWeights(count: number): number[] { if (count <= 0) return []; const weights = Array.from({ length: count }, () => 1); if (count === 1) { weights[0] = (8 * 60 - 10 - 30 - 5) / 60; return weights; } weights[0] -= 10 / 60; weights[count - 1] -= 5 / 60; if (count >= 3) weights[Math.floor(count / 2)] -= 30 / 60; return weights; }
-
-export const extractHourlyWithContext = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((input: { imageDataUrl: string; context: HourlyStageContext }) => {
-    if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek.");
-    if (!input.context || !Number.isInteger(input.context.operator_count) || input.context.operator_count < 1) throw new Error("3. sekvence potřebuje skutečný počet operátorů z 2. sekvence.");
-    if (!Array.isArray(input.context.profiles)) throw new Error("3. sekvence potřebuje Product Profile z databáze.");
-    return input;
-  })
-  .handler(async ({ data }): Promise<HourlyStageResult> => {
-    const dbProfiles = await loadExistingProfiles(data.context);
-    const resolvedContext: HourlyStageContext = { ...data.context, profiles: dbProfiles };
-    const usableProfile = normalizedProfiles(resolvedContext).some((profile) => (profile.h_norm_per_hour != null && profile.h_capacity != null) || (profile.t_norm_per_hour != null && profile.t_capacity != null));
-    if (!usableProfile) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
-    const attempts: string[] = []; let parsed: Record<string, unknown> | null = null;
-    for (const provider of providers()) {
-      try { parsed = await callAi(provider, data.imageDataUrl, resolvedContext); break; }
-      catch (e) { const error = e as AiError; const status = error.status != null ? `HTTP ${error.status}` : "síťová chyba"; const detail = error.detail ? `: ${error.detail}` : ""; attempts.push(`${provider.name} – ${status}${detail}`); }
-    }
-    if (!parsed) throw new Error(`AI OCR se nepodařilo dokončit. Pokusy: ${attempts.join("; ")}`);
-    const raw = rawHourly(parsed);
-    const hourly_metrics: HourlyStageMetric[] = raw.map((row) => {
-      const product_code = firstText(row, ["product_code", "product"]) || null;
-      const role = normalizeRole(firstText(row, ["role", "position", "operation", "pozice"]));
-      const variant = findVariant(resolvedContext, product_code, role); const norm_per_hour = variant?.norm ?? null; const capacity = variant?.capacity ?? null; const actual_output = actualOutput(row);
-      const actual_oee_pct = actual_output !== null && norm_per_hour !== null && norm_per_hour > 0 && capacity !== null && capacity > 0 ? (actual_output / norm_per_hour) * ((capacity / data.context.operator_count) * 100) : null;
-      return { hour: firstNum(row, ["hour", "hodina"]), product_code, role, actual_output, performance_pct: firstNum(row, ["performance_pct", "performance", "vykon", "výkon"]), availability_pct: firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]), norm_per_hour, capacity, operator_count: data.context.operator_count, actual_oee_pct };
-    });
-    const weights = effectiveWeights(hourly_metrics.length); let weightedActual = 0; let weightedExpected = 0; let weightedNorm = 0;
-    hourly_metrics.forEach((metric, index) => { if (metric.actual_output === null || metric.norm_per_hour === null || metric.norm_per_hour <= 0) return; if (metric.capacity === null || metric.capacity <= 0) return; const weight = weights[index] ?? 1; const expectedAtCurrentStaffing = metric.norm_per_hour * (data.context.operator_count / metric.capacity); weightedActual += metric.actual_output * weight; weightedExpected += expectedAtCurrentStaffing * weight; weightedNorm += metric.norm_per_hour * weight; });
-    const actual_shift_oee_pct = weightedExpected > 0 ? weightedActual / weightedExpected * 100 : null;
-    const predicted_shift_output = weightedNorm > 0 ? weightedNorm : null;
-    return { hourly_metrics, predicted_shift_output, actual_shift_oee_pct, operator_count: data.context.operator_count, raw: JSON.stringify({ ...parsed, stage: 3, context: resolvedContext, attempts }) };
-  });
+export const extractHourlyWithContext = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { imageDataUrl: string; context: HourlyStageContext }) => { if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek."); if (!input.context || !Number.isInteger(input.context.operator_count) || input.context.operator_count < 1) throw new Error("3. sekvence potřebuje skutečný počet operátorů z 2. sekvence."); if (!Array.isArray(input.context.profiles)) throw new Error("3. sekvence potřebuje Product Profile z databáze."); return input; }).handler(async ({ data }): Promise<HourlyStageResult> => {
+  const dbProfiles = await loadExistingProfiles(data.context); const context: HourlyStageContext = { ...data.context, profiles: dbProfiles }; const usable = (context.profiles ?? []).some((p) => (p.h_norm_per_hour != null && p.h_capacity != null) || (p.t_norm_per_hour != null && p.t_capacity != null)); if (!usable) throw new Error("Pro rozpoznané Product ID nebyl nalezen žádný Product Profile s normou a kapacitou.");
+  const attempts: string[] = []; let parsed: Record<string, unknown> | null = null; for (const provider of providers()) { try { parsed = await callAi(provider, data.imageDataUrl, context); break; } catch (e) { const err = e as AiError; attempts.push(`${err.provider ?? "AI"} – ${err.status != null ? `HTTP ${err.status}` : "síťová chyba"}${err.detail ? `: ${err.detail}` : ""}`); } } if (!parsed) throw new Error(`AI OCR se nepodařilo dokončit. Pokusy: ${attempts.join("; ")}`);
+  const raw = rawHourly(parsed); const hourly_metrics: HourlyStageMetric[] = raw.map((row) => { const product_code = firstText(row, ["product_code", "product"]) || null; const role = normalizeRole(firstText(row, ["role", "position", "operation", "pozice"])); const variant = findVariant(context, product_code, role); const norm_per_hour = variant?.norm ?? null; const capacity = variant?.capacity ?? null; const actual_output = firstNum(row, ["actual_output", "actual", "realny", "real", "reálný"]); const performance_pct = firstNum(row, ["performance_pct", "performance", "vykon", "výkon"]); const availability_pct = firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]); return { hour: firstNum(row, ["hour", "hodina"]), product_code, role, actual_output, performance_pct, availability_pct, norm_per_hour, capacity, operator_count: data.context.operator_count, actual_oee_pct: null }; });
+  const weights = effectiveWeights(hourly_metrics.length); let actualTotal = 0; let idealTotal = 0; let usedWeight = 0; hourly_metrics.forEach((m, i) => { if (m.actual_output == null || m.norm_per_hour == null || m.norm_per_hour <= 0 || m.capacity == null || m.capacity <= 0) return; const weight = weights[i] ?? 1; if (weight <= 0) return; const staffingFactor = data.context.operator_count / m.capacity; const ideal = m.norm_per_hour * staffingFactor * weight; actualTotal += m.actual_output * weight; idealTotal += ideal; usedWeight += weight; const availability = m.availability_pct != null && m.availability_pct >= 0 && m.availability_pct <= 100 ? m.availability_pct : null; const runtimeIdeal = availability != null ? ideal * (availability / 100) : null; if (runtimeIdeal && runtimeIdeal > 0) m.performance_pct = Math.min(100, (m.actual_output * weight / runtimeIdeal) * 100); m.actual_oee_pct = ideal > 0 ? Math.min(100, (m.actual_output * weight / ideal) * 100) : null; });
+  const actual_shift_oee_pct = idealTotal > 0 ? Math.min(100, actualTotal / idealTotal * 100) : null; const predicted_shift_output = usedWeight > 0 ? hourly_metrics.reduce((sum, m, i) => { if (m.norm_per_hour == null || m.capacity == null || m.capacity <= 0) return sum; const weight = weights[i] ?? 1; return sum + m.norm_per_hour * (data.context.operator_count / m.capacity) * weight; }, 0) : null;
+  return { hourly_metrics, predicted_shift_output, actual_shift_oee_pct, operator_count: data.context.operator_count, raw: JSON.stringify({ ...parsed, stage: 3, context, calculation: { planned_production_hours: 7.25, quality_pct: 100, actual_output: actualTotal, theoretical_output: idealTotal }, attempts }) };
+});
