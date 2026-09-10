@@ -245,12 +245,11 @@ function predictedShiftOutput(hourly: Record<string, unknown>[]): number | null 
   let used = 0;
   hourly.forEach((row, i) => {
     const norm = firstNum(row, ["norm_per_hour", "norm", "hourly_norm"]);
-    const availability = firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]);
-    if (norm === null || availability === null || availability <= 0) return;
-    const fullNorm = norm / (availability / 100);
-    if (!Number.isFinite(fullNorm) || fullNorm <= 0) return;
-    total += fullNorm * weights[i];
-    used += weights[i];
+    if (norm === null || norm <= 0) return;
+    const weight = weights[i] ?? 1;
+    if (weight <= 0) return;
+    total += norm * weight;
+    used += weight;
   });
   return used > 0 ? total : null;
 }
@@ -520,8 +519,6 @@ export const extractDailyFromScreenshot = createServerFn({ method: "POST" })
     }
     if (!primary || !primaryProvider) throw new Error(`AI služba je dočasně nedostupná (${attempts.join(" → ")}). Zkuste to prosím za chvíli.`);
 
-    // Always perform a dedicated worker pass. It is deliberately independent
-    // of Product ID existence and independent of the first pass completeness.
     const workerProviders = [primaryProvider, ...providers.filter((p) => p !== primaryProvider)];
     for (const provider of workerProviders) {
       try {
