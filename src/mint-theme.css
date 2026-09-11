@@ -16,3 +16,21 @@
   --sidebar-ring: 166 82% 63%;
   --chart-1: 166 82% 63%;
 }
+
+/* Daily KPI semantics: counts stay neutral; percentage metrics use traffic-light meaning. */
+.dark .grid.gap-3.sm\:grid-cols-2.xl\:grid-cols-4 > .card:nth-child(1) .mt-2.text-2xl {
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .grid.gap-3.sm\:grid-cols-2.xl\:grid-cols-4 > .card:nth-child(3) .mt-2.text-2xl.text-cyan-300 {
+  color: hsl(152 55% 52%) !important;
+}
+
+/* Keep the same semantic colors in light mode, with stronger contrast. */
+html:not(.dark) .grid.gap-3.sm\:grid-cols-2.xl\:grid-cols-4 > .card:nth-child(1) .mt-2.text-2xl {
+  color: hsl(var(--foreground)) !important;
+}
+
+html:not(.dark) .grid.gap-3.sm\:grid-cols-2.xl\:grid-cols-4 > .card:nth-child(3) .mt-2.text-2xl.text-cyan-300 {
+  color: hsl(158 49% 28%) !important;
+}
