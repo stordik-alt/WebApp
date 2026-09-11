@@ -24,7 +24,7 @@ export const Route = createFileRoute("/uzivatele")({
         content: "Správa účtů, rolí a propojení uživatelů se zaměstnanci ve výrobě.",
       },
       { property: "og:title", content: "Uživatelé a přístupy" },
-      { property: "og:description", content: "Přidělování rolí správce, Team Leader a operátor." },
+      { property: "og:description", content: "Přidělování rolí správce, Team Leader, operátor a Tester." },
     ],
   }),
   component: UsersPage,
@@ -98,7 +98,7 @@ function UsersPage() {
   const waiting = users.filter((u) => !u.role);
 
   return (
-    <AppShell title="Uživatelé a přístupy" subtitle="Role, schválení registrací a propojení se zaměstnanci">
+    <AppShell title="Uživatelé a přístupy" subtitle="Role, schválení registrací a propojení se zaměstnanci ve výrobě">
       <div className="grid gap-4">
         <Card className="p-4">
           <div className="text-sm font-medium text-foreground">Nové registrace</div>
@@ -110,7 +110,7 @@ function UsersPage() {
         </Card>
 
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="border-b border-border text-left text-muted-foreground">
               <tr>
                 <th className="p-3">Uživatel</th>
@@ -159,6 +159,7 @@ function UsersPage() {
                           <SelectItem value="operator">Operátor</SelectItem>
                           <SelectItem value="team_leader">Team Leader</SelectItem>
                           <SelectItem value="admin">Správce</SelectItem>
+                          <SelectItem value="tester">Tester</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
