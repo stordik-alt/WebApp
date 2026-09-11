@@ -120,7 +120,7 @@ export async function applyProductProfileNorms(input: { productId: string; haNor
   if (!current) throw new Error(`Pro produkt ${product.code} neexistuje Product Profile.`);
 
   const nextHa = input.haNorm != null ? Number(input.haNorm) : Number(current.h_norm_per_hour);
-  const nextTup = input.tupNorm != null ? Number(input.t_norm_per_hour) : Number(current.t_norm_per_hour);
+  const nextTup = input.tupNorm != null ? Number(input.tupNorm) : Number(current.t_norm_per_hour);
   if (!Number.isFinite(nextHa) || nextHa <= 0 || !Number.isFinite(nextTup) || nextTup <= 0) throw new Error("Nové normy musí být kladná čísla.");
 
   if (current.valid_from === input.validFrom) {
