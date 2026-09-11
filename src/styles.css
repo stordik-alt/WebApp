@@ -201,3 +201,25 @@ input::placeholder, textarea::placeholder { color: hsl(var(--muted-foreground) /
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
 .px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
 .py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+
+/* Light-mode cleanup for the Employees KPI strip. Keep the existing dark mode untouched. */
+html:not(.dark) .rounded-xl.bg-slate-950\/40 {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground));
+  box-shadow: var(--shadow-card) !important;
+}
+html:not(.dark) .rounded-xl.bg-slate-950\/40 .text-muted-foreground {
+  color: hsl(var(--foreground) / 0.72) !important;
+}
+
+/* Light-mode qualification badges: stronger contrast while retaining HA/TUP color coding. */
+html:not(.dark) .bg-cyan-400\/10.text-cyan-300 {
+  background-color: hsl(190 60% 94%) !important;
+  border-color: hsl(190 55% 42% / 0.5) !important;
+  color: hsl(190 70% 25%) !important;
+}
+html:not(.dark) .bg-fuchsia-400\/10.text-fuchsia-300 {
+  background-color: hsl(290 48% 95%) !important;
+  border-color: hsl(290 45% 48% / 0.45) !important;
+  color: hsl(290 55% 30%) !important;
+}
