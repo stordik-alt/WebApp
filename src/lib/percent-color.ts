@@ -6,11 +6,11 @@ export function percentColor(value: number | null | undefined): CSSProperties | 
   const hue = normalized * 1.2;
   const lightSaturation = 68;
   const lightLightness = 34;
-  const darkSaturation = 82;
-  const darkLightness = 64;
+  const darkSaturation = 78;
+  const darkLightness = 58;
   return {
     color: `light-dark(hsl(${hue} ${lightSaturation}% ${lightLightness}%), hsl(${hue} ${darkSaturation}% ${darkLightness}%))`,
-    textShadow: `0 0 14px light-dark(transparent, hsl(${hue} ${darkSaturation}% ${darkLightness}% / 0.22))`,
+    textShadow: `0 0 8px light-dark(transparent, hsl(${hue} ${darkSaturation}% ${darkLightness}% / 0.12))`,
   };
 }
 
