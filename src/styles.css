@@ -223,3 +223,112 @@ html:not(.dark) .bg-fuchsia-400\/10.text-fuchsia-300 {
   border-color: hsl(290 45% 48% / 0.45) !important;
   color: hsl(290 55% 30%) !important;
 }
+
+/* Final light-mode design system pass. Dark mode values above remain unchanged. */
+html:not(.dark) {
+  --primary: 158 49% 28%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 158 49% 28%;
+  --success: 158 49% 28%;
+  --sidebar: 220 28% 98%;
+  --sidebar-foreground: 222 35% 18%;
+  --sidebar-primary: 158 49% 28%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 158 34% 94%;
+  --sidebar-accent-foreground: 158 48% 24%;
+  --sidebar-border: 220 18% 86%;
+  --sidebar-ring: 158 49% 28%;
+}
+
+html:not(.dark) .bg-slate-950\/40,
+html:not(.dark) .bg-slate-950\/60 {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground));
+}
+html:not(.dark) .bg-slate-950\/40,
+html:not(.dark) .bg-slate-950\/60,
+html:not(.dark) .bg-card\/90,
+html:not(.dark) .bg-card\/70 {
+  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
+}
+
+html:not(.dark) table thead {
+  background: hsl(158 30% 94%) !important;
+}
+html:not(.dark) table thead th {
+  color: hsl(var(--foreground) / 0.82) !important;
+  font-weight: 600;
+  border-bottom-color: hsl(158 24% 78%) !important;
+}
+html:not(.dark) table tbody tr {
+  border-bottom-color: hsl(var(--border) / 0.9) !important;
+}
+html:not(.dark) .text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html:not(.dark) .text-cyan-300 { color: hsl(190 70% 25%) !important; }
+html:not(.dark) .text-sky-300 { color: hsl(195 78% 30%) !important; }
+html:not(.dark) .text-fuchsia-300 { color: hsl(290 55% 30%) !important; }
+html:not(.dark) .text-emerald-300 { color: hsl(158 49% 28%) !important; }
+html:not(.dark) .text-lime-300 { color: hsl(92 60% 30%) !important; }
+html:not(.dark) .text-amber-300 { color: hsl(32 78% 32%) !important; }
+html:not(.dark) .text-rose-300 { color: hsl(345 68% 38%) !important; }
+html:not(.dark) .text-purple-300 { color: hsl(270 52% 35%) !important; }
+
+html:not(.dark) .bg-cyan-400\/10 { background-color: hsl(190 60% 94%) !important; }
+html:not(.dark) .bg-sky-400\/10 { background-color: hsl(195 60% 94%) !important; }
+html:not(.dark) .bg-fuchsia-400\/10 { background-color: hsl(290 48% 95%) !important; }
+html:not(.dark) .bg-emerald-400\/10 { background-color: hsl(158 34% 93%) !important; }
+html:not(.dark) .bg-lime-400\/10 { background-color: hsl(92 42% 94%) !important; }
+html:not(.dark) .bg-rose-400\/10 { background-color: hsl(345 60% 95%) !important; }
+html:not(.dark) .bg-amber-400\/10 { background-color: hsl(32 70% 94%) !important; }
+
+html:not(.dark) .border-cyan-400\/35 { border-color: hsl(190 55% 42% / 0.6) !important; }
+html:not(.dark) .border-fuchsia-400\/35 { border-color: hsl(290 45% 48% / 0.55) !important; }
+html:not(.dark) .border-cyan-400\/30 { border-color: hsl(190 55% 42% / 0.55) !important; }
+html:not(.dark) .border-fuchsia-400\/30 { border-color: hsl(290 45% 48% / 0.5) !important; }
+html:not(.dark) .border-rose-400\/30 { border-color: hsl(345 68% 38% / 0.35) !important; }
+html:not(.dark) .border-rose-400\/35 { border-color: hsl(345 68% 38% / 0.45) !important; }
+html:not(.dark) .border-emerald-400\/30 { border-color: hsl(158 49% 28% / 0.35) !important; }
+
+html:not(.dark) .shadow-\[0_0_30px_hsl\(190_90\%_55\%\/0\.05\)\],
+html:not(.dark) .shadow-\[0_0_30px_hsl\(320_90\%_60\%\/0\.05\)\],
+html:not(.dark) .shadow-\[0_0_30px_hsl\(155_80\%_55\%\/0\.05\)\],
+html:not(.dark) .shadow-\[0_0_30px_hsl\(200_90\%_60\%\/0\.05\)\] {
+  box-shadow: var(--shadow-card) !important;
+}
+
+html:not(.dark) [aria-busy="true"],
+html:not(.dark) .loading-state {
+  color: hsl(var(--muted-foreground)) !important;
+  background: hsl(var(--muted) / 0.35) !important;
+}
+
+html:not(.dark) input:focus,
+html:not(.dark) select:focus,
+html:not(.dark) textarea:focus,
+html:not(.dark) [data-slot="select-trigger"]:focus-visible,
+html:not(.dark) button:focus-visible {
+  border-color: hsl(var(--primary) / 0.55) !important;
+}
+
+html:not(.dark) .rounded-md.border.bg-cyan-400\/10,
+html:not(.dark) .rounded-md.bg-cyan-400\/10 {
+  background-color: hsl(190 60% 94%) !important;
+  color: hsl(190 70% 25%) !important;
+}
+html:not(.dark) .rounded-md.border.bg-fuchsia-400\/10,
+html:not(.dark) .rounded-md.bg-fuchsia-400\/10 {
+  background-color: hsl(290 48% 95%) !important;
+  color: hsl(290 55% 30%) !important;
+}
+
+html:not(.dark) [data-app-title="Dashboard"] .bg-success\/10 { background-color: hsl(158 30% 93%) !important; }
+html:not(.dark) [data-app-title="Dashboard"] .bg-primary\/10 { background-color: hsl(158 30% 94%) !important; }
+html:not(.dark) [data-app-title="Dashboard"] .bg-purple-400\/10,
+html:not(.dark) [data-app-title="Dashboard"] .bg-violet-400\/10 { background-color: hsl(270 48% 95%) !important; }
+html:not(.dark) [data-app-title="Dashboard"] .bg-sky-400\/10,
+html:not(.dark) [data-app-title="Dashboard"] .bg-blue-400\/10 { background-color: hsl(195 55% 94%) !important; }
+
+html:not(.dark) .bg-background\/80 { background-color: hsl(var(--background) / 0.92) !important; }
