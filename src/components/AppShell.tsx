@@ -8,8 +8,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth, roleLabel, type AppRole } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
-const ALL: AppRole[] = ["admin", "team_leader", "operator"];
-const STAFF: AppRole[] = ["admin", "team_leader"];
+const ALL: AppRole[] = ["admin", "team_leader", "operator", "tester"];
+const STAFF: AppRole[] = ["admin", "team_leader", "tester"];
+const ADMIN_VIEW: AppRole[] = ["admin", "tester"];
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: STAFF },
   { to: "/moje-vysledky", label: "Moje výsledky", icon: BarChart3, roles: ["operator" as AppRole] },
@@ -24,8 +25,8 @@ const NAV = [
   { to: "/analyza", label: "Analýza / IPI", icon: Activity, roles: STAFF },
   { to: "/hodnoceni", label: "Hodnocení handlerů", icon: Award, roles: STAFF },
   { to: "/zebricek", label: "Žebříček", icon: Trophy, roles: STAFF },
-  { to: "/ke-schvaleni", label: "Ke schválení", icon: ShieldCheck, roles: ["admin" as AppRole] },
-  { to: "/uzivatele", label: "Uživatelé", icon: UserCog, roles: ["admin" as AppRole] },
+  { to: "/ke-schvaleni", label: "Ke schválení", icon: ShieldCheck, roles: ADMIN_VIEW },
+  { to: "/uzivatele", label: "Uživatelé", icon: UserCog, roles: ADMIN_VIEW },
   { to: "/o-aplikaci", label: "O aplikaci", icon: Info, roles: ALL },
 ] as const;
 
@@ -85,8 +86,9 @@ function SignOutButton() {
 
 export function AppShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { isTester } = useAuth();
   return (
-    <div data-app-title={title} className="min-h-screen bg-background text-foreground">
+    <div data-app-title={title} data-read-only={isTester ? "true" : "false"} className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_75%_-10%,hsl(var(--primary)/0.09),transparent_30%),radial-gradient(circle_at_10%_20%,hsl(var(--primary)/0.035),transparent_28%)]" />
       <style>{`
         html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/40,
@@ -124,6 +126,7 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
         html:not(.dark) .bg-red-400\\/10 { background-color: hsl(345 60% 95%) !important; }
         html:not(.dark) .border-red-400\\/40 { border-color: hsl(345 55% 46% / 0.55) !important; }
         html:not(.dark) .border-cyan-400\\/40 { border-color: hsl(190 55% 42% / 0.62) !important; }
+        [data-read-only="true"] [data-testid="write-action"] { display: none !important; }
       `}</style>
       <aside className="fixed inset-y-0 left-0 z-40 hidden min-h-0 w-[270px] flex-col border-r border-sidebar-border/70 bg-sidebar/95 text-sidebar-foreground shadow-[20px_0_60px_-48px_black] backdrop-blur-xl lg:flex">
         <Brand />
@@ -144,11 +147,14 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
               </Sheet>
               <div className="min-w-0">
                 <div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">Production monitoring</div>
-                <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
+                  {isTester ? <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">Tester · pouze čtení</span> : null}
+                </div>
                 {subtitle ? <p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p> : null}
               </div>
             </div>
-            {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+            {!isTester && actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
           </div>
         </header>
         <main className="mx-auto min-w-0 max-w-[1600px] flex-1 px-4 pb-6 pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-8"><RouteGuard>{children}</RouteGuard></main>

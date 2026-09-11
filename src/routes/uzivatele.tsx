@@ -1,10 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -14,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useEmployees } from "@/lib/data";
 import { roleLabel, type AppRole } from "@/lib/auth";
+import { createTesterUser } from "@/lib/admin-user.functions";
 
 export const Route = createFileRoute("/uzivatele")({
   head: () => ({
@@ -24,7 +37,7 @@ export const Route = createFileRoute("/uzivatele")({
         content: "Správa účtů, rolí a propojení uživatelů se zaměstnanci ve výrobě.",
       },
       { property: "og:title", content: "Uživatelé a přístupy" },
-      { property: "og:description", content: "Přidělování rolí správce, Team Leader a operátor." },
+      { property: "og:description", content: "Přidělování rolí správce, Team Leader, operátor a Tester." },
     ],
   }),
   component: UsersPage,
@@ -67,6 +80,31 @@ function UsersPage() {
   const qc = useQueryClient();
   const { data: users = [], isLoading } = useUsers();
   const { data: employees = [] } = useEmployees();
+  const [testerOpen, setTesterOpen] = useState(false);
+  const [testerEmail, setTesterEmail] = useState("");
+  const [testerPassword, setTesterPassword] = useState("tester");
+  const [testerFirstName, setTesterFirstName] = useState("Tester");
+  const [testerLastName, setTesterLastName] = useState("");
+
+  const createTester = useMutation({
+    mutationFn: () =>
+      createTesterUser({
+        data: {
+          email: testerEmail,
+          password: testerPassword,
+          firstName: testerFirstName,
+          lastName: testerLastName,
+        },
+      }),
+    onSuccess: ({ email }) => {
+      qc.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success(`Tester účet ${email} byl vytvořen.`);
+      setTesterOpen(false);
+      setTesterEmail("");
+      setTesterPassword("tester");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const setRole = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
@@ -98,19 +136,62 @@ function UsersPage() {
   const waiting = users.filter((u) => !u.role);
 
   return (
-    <AppShell title="Uživatelé a přístupy" subtitle="Role, schválení registrací a propojení se zaměstnanci">
+    <AppShell title="Uživatelé a přístupy" subtitle="Role, schválení registrací a propojení se zaměstnanci ve výrobě">
       <div className="grid gap-4">
         <Card className="p-4">
-          <div className="text-sm font-medium text-foreground">Nové registrace</div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {waiting.length === 0
-              ? "Žádné účty nečekají na přidělení role."
-              : `${waiting.length} účet(ů) čeká na přidělení role. Bez role uživatel nevidí žádná data.`}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-foreground">Nové registrace</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {waiting.length === 0
+                  ? "Žádné účty nečekají na přidělení role."
+                  : `${waiting.length} účet(ů) čeká na přidělení role. Bez role uživatel nevidí žádná data.`}
+              </p>
+            </div>
+            <Dialog open={testerOpen} onOpenChange={setTesterOpen}>
+              <DialogTrigger asChild>
+                <Button>Vytvořit Tester účet</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nový Tester účet</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Účet se vytvoří přímo v Supabase Auth, okamžitě dostane roli Tester a bude pouze pro čtení.
+                  </p>
+                  <div className="grid gap-2">
+                    <Label htmlFor="tester-email">E-mail</Label>
+                    <Input id="tester-email" type="email" value={testerEmail} onChange={(e) => setTesterEmail(e.target.value)} placeholder="tester@firma.cz" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="tester-password">Heslo</Label>
+                    <Input id="tester-password" type="password" value={testerPassword} onChange={(e) => setTesterPassword(e.target.value)} />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="tester-first-name">Jméno</Label>
+                      <Input id="tester-first-name" value={testerFirstName} onChange={(e) => setTesterFirstName(e.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="tester-last-name">Příjmení</Label>
+                      <Input id="tester-last-name" value={testerLastName} onChange={(e) => setTesterLastName(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setTesterOpen(false)}>Zrušit</Button>
+                  <Button disabled={createTester.isPending || !testerEmail || testerPassword.length < 6} onClick={() => createTester.mutate()}>
+                    {createTester.isPending ? "Vytvářím…" : "Vytvořit Tester"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </Card>
 
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="border-b border-border text-left text-muted-foreground">
               <tr>
                 <th className="p-3">Uživatel</th>
@@ -121,64 +202,35 @@ function UsersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td className="p-4 text-muted-foreground" colSpan={4}>
-                    Načítám…
-                  </td>
-                </tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={4}>Načítám…</td></tr>
               ) : users.length === 0 ? (
-                <tr>
-                  <td className="p-4 text-muted-foreground" colSpan={4}>
-                    Zatím žádné účty.
-                  </td>
-                </tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={4}>Zatím žádné účty.</td></tr>
               ) : (
                 users.map((u) => (
                   <tr key={u.id} className="border-b border-border/60 last:border-0">
                     <td className="p-3">
-                      <div className="font-medium text-foreground">
-                        {`${u.first_name} ${u.last_name}`.trim() || "(bez jména)"}
-                      </div>
-                      {!u.role ? (
-                        <Badge variant="outline" className="mt-1">
-                          {roleLabel(null)}
-                        </Badge>
-                      ) : null}
+                      <div className="font-medium text-foreground">{`${u.first_name} ${u.last_name}`.trim() || "(bez jména)"}</div>
+                      {!u.role ? <Badge variant="outline" className="mt-1">{roleLabel(null)}</Badge> : null}
                     </td>
                     <td className="p-3 text-muted-foreground">{u.email ?? "–"}</td>
                     <td className="p-3">
-                      <Select
-                        value={u.role ?? "none"}
-                        onValueChange={(role) => setRole.mutate({ id: u.id, role })}
-                      >
-                        <SelectTrigger className="w-44">
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={u.role ?? "none"} onValueChange={(role) => setRole.mutate({ id: u.id, role })}>
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Bez role</SelectItem>
                           <SelectItem value="operator">Operátor</SelectItem>
                           <SelectItem value="team_leader">Team Leader</SelectItem>
                           <SelectItem value="admin">Správce</SelectItem>
+                          <SelectItem value="tester">Tester</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
                     <td className="p-3">
-                      <Select
-                        value={u.employee_id ?? "none"}
-                        onValueChange={(v) =>
-                          setEmployee.mutate({ id: u.id, employeeId: v === "none" ? null : v })
-                        }
-                      >
-                        <SelectTrigger className="w-56">
-                          <SelectValue placeholder="Nepropojeno" />
-                        </SelectTrigger>
+                      <Select value={u.employee_id ?? "none"} onValueChange={(v) => setEmployee.mutate({ id: u.id, employeeId: v === "none" ? null : v })}>
+                        <SelectTrigger className="w-56"><SelectValue placeholder="Nepropojeno" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Nepropojeno</SelectItem>
-                          {employees.map((e) => (
-                            <SelectItem key={e.id} value={e.id}>
-                              {e.full_name}
-                            </SelectItem>
-                          ))}
+                          {employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </td>
