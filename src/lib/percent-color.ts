@@ -8,7 +8,7 @@ export function percentColor(value: number | null | undefined): CSSProperties | 
   const lightness = 64;
   return {
     color: `hsl(${hue} ${saturation}% ${lightness}%)`,
-    textShadow: `0 0 14px hsl(${hue} ${saturation}% ${lightness}% / 0.22)`,
+    textShadow: "none",
   };
 }
 
