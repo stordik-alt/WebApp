@@ -3,15 +3,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { AppShell } from "@/components/AppShell";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmployees } from "@/lib/data";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type AppRole } from "@/lib/auth";
 
 export const Route = createFileRoute("/ke-schvaleni")({
-  head: () => ({ meta: [{ title: "Ke schválení – Výkonnost operátorů" }, { name: "description", content: "Kontrola a schvalování záznamů před zápisem do statistik." }] }),
+  head: () => ({ meta: [{ title: "Ke schválení – Výkonnost operátorů" }, { name: "description", content: "Kontrola a schvalování nových účtů a záznamů před zařazením do aplikace." }] }),
   component: ApprovalPage,
 });
 
@@ -24,11 +24,12 @@ const TABLE_LABEL: Record<PendingTable, string> = {
   quality_alert_history: "Vyšetření Quality Alertu",
 };
 type PendingRow = { table: PendingTable; id: string; created_at: string; data: Record<string, unknown> };
+type PendingUser = { id: string; email: string | null; first_name: string; last_name: string; created_at: string };
 
 function usePending() {
   return useQuery({
     queryKey: ["pending"],
-    queryFn: async (): Promise<PendingRow[]> => {
+    queryFn: async (): Promise<{ rows: PendingRow[]; users: PendingUser[] }> => {
       const tables: PendingTable[] = ["daily_records", "shift_evaluations", "weekly_records", "products", "quality_alert_history"];
       const out: PendingRow[] = [];
       for (const t of tables) {
@@ -39,7 +40,25 @@ function usePending() {
           out.push({ table: t, id: String(r.id), created_at: String(r.created_at), data: r });
         }
       }
-      return out.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
+      const { data: profiles, error: profileError } = await supabase
+        .from("profiles")
+        .select("id,email,first_name,last_name,created_at")
+        .order("created_at", { ascending: false });
+      if (profileError) throw profileError;
+
+      const { data: roles, error: roleError } = await supabase.from("user_roles").select("user_id,role");
+      if (roleError) throw roleError;
+      const roleUserIds = new Set((roles ?? []).map((r) => r.user_id));
+      const users = (profiles ?? []).filter((p) => !roleUserIds.has(p.id)).map((p) => ({
+        id: p.id,
+        email: p.email,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        created_at: p.created_at,
+      }));
+
+      return { rows: out.sort((a, b) => (a.created_at < b.created_at ? 1 : -1)), users };
     },
   });
 }
@@ -58,9 +77,13 @@ function summary(row: PendingRow, empName: (id: unknown) => string) {
 function ApprovalPage() {
   const qc = useQueryClient();
   const { session, isAdmin } = useAuth();
-  const { data: rows = [], isLoading, error } = usePending();
+  const { data, isLoading, error } = usePending();
+  const rows = data?.rows ?? [];
+  const users = data?.users ?? [];
   const { data: employees = [] } = useEmployees();
   const [selected, setSelected] = useState<PendingRow | null>(null);
+  const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
+  const [userRole, setUserRole] = useState<AppRole>("operator");
   const empName = (id: unknown) => employees.find((e) => e.id === id)?.full_name ?? "?";
 
   const decide = useMutation({
@@ -85,17 +108,56 @@ function ApprovalPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const decideUser = useMutation({
+    mutationFn: async ({ user, role }: { user: PendingUser; role: AppRole }) => {
+      if (!isAdmin) throw new Error("Schvalovat účty může pouze správce.");
+      const { error } = await supabase.rpc("admin_set_role", { _user_id: user.id, _role: role });
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      setSelectedUser(null);
+      qc.invalidateQueries({ queryKey: ["pending"] });
+      qc.invalidateQueries({ queryKey: ["profiles"] });
+      toast.success(`Účet ${variables.user.email ?? ""} byl schválen jako ${variables.role === "team_leader" ? "Team Leader" : variables.role === "operator" ? "Operátor" : variables.role === "tester" ? "Tester" : "Správce"}.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rejectUser = useMutation({
+    mutationFn: async (user: PendingUser) => {
+      if (!isAdmin) throw new Error("Zamítnout účet může pouze správce.");
+      const reason = window.prompt("Uveďte důvod zamítnutí registrace:", "");
+      if (!reason?.trim()) throw new Error("Zamítnutí bylo zrušeno.");
+      const { error } = await supabase.from("profiles").delete().eq("id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["pending"] }); qc.invalidateQueries({ queryKey: ["profiles"] }); toast.success("Registrace byla zamítnuta."); },
+    onError: (e: Error) => { if (e.message !== "Zamítnutí bylo zrušeno.") toast.error(e.message); },
+  });
+
   const reject = (row: PendingRow) => {
     const reason = window.prompt("Uveďte důvod zamítnutí:", "");
     if (!reason?.trim()) return;
     decide.mutate({ row, approve: false, reason: reason.trim() });
   };
 
-  return <AppShell title="Ke schválení" subtitle="Záznamy před schválením zkontrolujte a potom schvalte nebo zamítněte">
-    {!isAdmin ? <Card className="p-6 text-center"><div className="text-base font-semibold">Přístup pouze pro správce</div><div className="mt-1 text-sm text-muted-foreground">Rozhodovat o záznamech může pouze administrátor.</div></Card> : <div className="grid gap-3">
-      <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="font-semibold">Schvalovací fronta</div><div className="text-sm text-muted-foreground">{rows.length} {rows.length === 1 ? "položka čeká" : "položek čeká"} na kontrolu</div></div><Badge variant={rows.length ? "default" : "outline"}>{rows.length ? "Čeká na kontrolu" : "Vše vyřízeno"}</Badge></Card>
-      {isLoading ? <Card className="p-4 text-sm text-muted-foreground">Načítám…</Card> : error ? <Card className="p-4 text-sm text-destructive">Nepodařilo se načíst schvalovací frontu: {(error as Error).message}</Card> : rows.length === 0 ? <Card className="p-6 text-center text-sm text-muted-foreground">Nic nečeká na schválení.</Card> : rows.map(row => <Card key={`${row.table}-${row.id}`} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{TABLE_LABEL[row.table]}</Badge><Badge variant="secondary">PENDING</Badge></div><div className="mt-2 text-sm">{summary(row, empName)}</div><div className="mt-1 text-xs text-muted-foreground">Importováno {new Date(row.created_at).toLocaleString("cs-CZ")}</div></div><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setSelected(row)}>Zobrazit detail</Button><Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ row, approve: true })}>Schválit</Button><Button size="sm" variant="destructive" disabled={decide.isPending} onClick={() => reject(row)}>Zamítnout</Button></div></Card>)}
-      {selected && <Card className="p-5"><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><Badge>{TABLE_LABEL[selected.table]}</Badge><Badge variant="secondary">PENDING</Badge></div><h2 className="mt-2 text-lg font-semibold">Detail čekajícího záznamu</h2><p className="text-sm text-muted-foreground">ID: {selected.id}</p></div><Button size="sm" variant="ghost" onClick={() => setSelected(null)}>Zavřít</Button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{Object.entries(selected.data).map(([key, value]) => <div key={key} className="rounded-lg border bg-muted/30 p-3"><div className="text-xs font-medium text-muted-foreground">{key}</div><div className="mt-1 break-words text-sm">{value == null || value === "" ? "–" : String(value)}</div></div>)}</div><div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="destructive" disabled={decide.isPending} onClick={() => reject(selected)}>Zamítnout</Button><Button disabled={decide.isPending} onClick={() => decide.mutate({ row: selected, approve: true })}>Schválit a zařadit do statistik</Button></div></Card>}
+  return <AppShell title="Ke schválení" subtitle="Nové účty a záznamy čekající na kontrolu správce">
+    {!isAdmin ? <Card className="p-6 text-center"><div className="text-base font-semibold">Přístup pouze pro správce</div><div className="mt-1 text-sm text-muted-foreground">Rozhodovat o záznamech a nových účtech může pouze administrátor.</div></Card> : <div className="grid gap-4">
+      <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="font-semibold">Schvalovací fronta</div><div className="text-sm text-muted-foreground">{users.length + rows.length} {users.length + rows.length === 1 ? "položka čeká" : "položek čeká"} na kontrolu</div></div><Badge variant={users.length + rows.length ? "default" : "outline"}>{users.length + rows.length ? "Čeká na kontrolu" : "Vše vyřízeno"}</Badge></Card>
+
+      {users.length > 0 && <div className="grid gap-3">
+        <div className="text-sm font-semibold">Nové registrace účtů</div>
+        {users.map(user => <Card key={user.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Nový účet</Badge><Badge variant="secondary">ČEKÁ NA SCHVÁLENÍ</Badge></div><div className="mt-2 font-medium">{`${user.first_name} ${user.last_name}`.trim() || "(bez jména)"}</div><div className="text-sm text-muted-foreground">{user.email ?? "–"}</div><div className="mt-1 text-xs text-muted-foreground">Registrace {new Date(user.created_at).toLocaleString("cs-CZ")}</div></div>
+          <div className="flex flex-wrap items-center gap-2"><Select value={userRole} onValueChange={(v) => setUserRole(v as AppRole)}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="operator">Operátor</SelectItem><SelectItem value="team_leader">Team Leader</SelectItem><SelectItem value="tester">Tester</SelectItem><SelectItem value="admin">Správce</SelectItem></SelectContent></Select><Button disabled={decideUser.isPending} onClick={() => decideUser.mutate({ user, role: userRole })}>Schválit účet</Button><Button variant="destructive" disabled={rejectUser.isPending} onClick={() => rejectUser.mutate(user)}>Zamítnout</Button></div>
+        </Card>)}
+      </div>}
+
+      <div className="grid gap-3">
+        <div className="text-sm font-semibold">Čekající záznamy</div>
+        {isLoading ? <Card className="p-4 text-sm text-muted-foreground">Načítám…</Card> : error ? <Card className="p-4 text-sm text-destructive">Nepodařilo se načíst schvalovací frontu: {(error as Error).message}</Card> : rows.length === 0 ? <Card className="p-6 text-center text-sm text-muted-foreground">Žádný záznam nečeká na schválení.</Card> : rows.map(row => <Card key={`${row.table}-${row.id}`} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{TABLE_LABEL[row.table]}</Badge><Badge variant="secondary">PENDING</Badge></div><div className="mt-2 text-sm">{summary(row, empName)}</div><div className="mt-1 text-xs text-muted-foreground">Importováno {new Date(row.created_at).toLocaleString("cs-CZ")}</div></div><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setSelected(row)}>Zobrazit detail</Button><Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ row, approve: true })}>Schválit</Button><Button size="sm" variant="destructive" disabled={decide.isPending} onClick={() => reject(row)}>Zamítnout</Button></div></Card>)}
+        {selected && <Card className="p-5"><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><Badge>{TABLE_LABEL[selected.table]}</Badge><Badge variant="secondary">PENDING</Badge></div><h2 className="mt-2 text-lg font-semibold">Detail čekajícího záznamu</h2><p className="text-sm text-muted-foreground">ID: {selected.id}</p></div><Button size="sm" variant="ghost" onClick={() => setSelected(null)}>Zavřít</Button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{Object.entries(selected.data).map(([key, value]) => <div key={key} className="rounded-lg border bg-muted/30 p-3"><div className="text-xs font-medium text-muted-foreground">{key}</div><div className="mt-1 break-words text-sm">{value == null || value === "" ? "–" : String(value)}</div></div>)}</div><div className="mt-5 flex flex-wrap justify-end gap-2"><Button variant="destructive" disabled={decide.isPending} onClick={() => reject(selected)}>Zamítnout</Button><Button disabled={decide.isPending} onClick={() => decide.mutate({ row: selected, approve: true })}>Schválit a zařadit do statistik</Button></div></Card>}
+      </div>
     </div>}
   </AppShell>;
 }
