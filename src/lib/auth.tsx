@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "team_leader" | "operator";
+export type AppRole = "admin" | "team_leader" | "operator" | "tester";
 
 export type AppProfile = {
   id: string;
@@ -20,6 +20,8 @@ type AuthValue = {
   isAdmin: boolean;
   isTeamLeader: boolean;
   isOperator: boolean;
+  isTester: boolean;
+  isReadOnly: boolean;
   refresh: () => Promise<void>;
 };
 
@@ -27,6 +29,7 @@ const ROLE_LABEL: Record<AppRole, string> = {
   admin: "Správce",
   team_leader: "Team Leader",
   operator: "Operátor",
+  tester: "Tester",
 };
 
 export function roleLabel(role: AppRole | null) {
@@ -74,7 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? "team_leader"
           : found.includes("operator")
             ? "operator"
-            : null,
+            : found.includes("tester")
+              ? "tester"
+              : null,
     );
     setReady(true);
   }, []);
@@ -92,6 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: role === "admin",
     isTeamLeader: role === "team_leader",
     isOperator: role === "operator",
+    isTester: role === "tester",
+    isReadOnly: role === "tester",
     refresh: () => load(session),
   };
 
