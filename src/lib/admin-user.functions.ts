@@ -34,7 +34,6 @@ export const createTesterUser = createServerFn({ method: "POST" })
     if (!created.user) throw new Error("Účet se nepodařilo vytvořit.");
 
     const userId = created.user.id;
-
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert({
@@ -51,7 +50,7 @@ export const createTesterUser = createServerFn({ method: "POST" })
 
     const { error: roleInsertError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: userId, role: "tester" });
+      .insert({ user_id: userId, role: "tester" as never });
 
     if (roleInsertError) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
