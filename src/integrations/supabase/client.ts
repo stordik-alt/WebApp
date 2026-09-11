@@ -23,14 +23,22 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
     headers.set('apikey', supabaseKey);
 
-    // Product IDs are canonical and unique. Treat repeated inserts as updates
-    // so stale client caches cannot surface a 409 during import/profile creation.
+    // Product IDs are canonical and unique. Product creation happens from more than one UI path
+    // and can race with a stale client cache, so product POSTs use code as the conflict key.
     const requestUrl = typeof input === 'string' ? input : input.url;
     const requestMethod = (init?.method ?? (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET')).toUpperCase();
     if (requestMethod === 'POST' && /\/rest\/v1\/products(?:\?|$)/.test(requestUrl)) {
       const prefer = headers.get('Prefer');
       if (!prefer?.includes('resolution=merge-duplicates')) {
         headers.set('Prefer', prefer ? `${prefer}, resolution=merge-duplicates` : 'resolution=merge-duplicates');
+      }
+
+      // PostgREST needs the conflict column explicitly; without it, merge-duplicates
+      // can still target the primary key and a duplicate products.code raises 23505/409.
+      if (typeof input === 'string') {
+        const url = new URL(input);
+        if (!url.searchParams.has('on_conflict')) url.searchParams.set('on_conflict', 'code');
+        return fetch(url.toString(), { ...init, headers });
       }
     }
 
