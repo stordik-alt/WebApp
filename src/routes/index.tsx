@@ -185,8 +185,8 @@ function Dashboard() {
         </div>
       }
     >
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/15 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.17),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.12),transparent_32%),hsl(var(--card)/0.9)] p-4 shadow-[var(--shadow-card)] backdrop-blur sm:p-5">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--primary)/0.75),transparent)]" />
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-4 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-5">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl lg:pr-4">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
