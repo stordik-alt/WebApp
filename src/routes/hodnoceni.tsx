@@ -248,10 +248,15 @@ function HandlerEvaluationPage() {
       }
     >
       <div className="mb-4 rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-card)]">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Průměrné skóre:</span>
-          <span className="text-2xl font-bold">
-            {avgScore !== null ? `${avgScore}` : "–"}
+        <div className="flex min-h-[68px] items-center justify-between gap-6">
+          <div>
+            <span className="text-sm font-medium text-muted-foreground">Průměrné skóre</span>
+            <span className="mt-1 block text-2xl font-bold tabular-nums">
+              {avgScore !== null ? avgScore : "–"}
+            </span>
+          </div>
+          <span className="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground">
+            {evaluations.length ? `${evaluations.length} hodnocení` : "Bez dat"}
           </span>
         </div>
       </div>
@@ -270,20 +275,20 @@ function HandlerEvaluationPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+              <TableRow aria-busy="true">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                   Načítání…
                 </TableCell>
               </TableRow>
             ) : evaluations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                   Zatím žádné hodnocení.
                 </TableCell>
               </TableRow>
             ) : (
               evaluations.map((ev) => (
-                <TableRow key={ev.id} className="">
+                <TableRow key={ev.id}>
                   <TableCell>{ev.work_date}</TableCell>
                   <TableCell>
                     {employeeNames.get(ev.employee_id) || "Neznámý"}
