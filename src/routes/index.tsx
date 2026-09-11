@@ -196,10 +196,10 @@ function Dashboard() {
             <p className="mt-1 text-sm text-muted-foreground">Jedním pohledem vidíte OEE, kvalitu, lidi i signály, které vyžadují pozornost.</p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[420px]">
-            <MiniSignal icon={<CircleCheck className="h-4 w-4" />} label="Provoz" value={`${last30.length} směn`} tone="success" />
+            <MiniSignal icon={<CircleCheck className="h-4 w-4" />} label="Provoz" value="V provozu" tone="success" />
             <MiniSignal icon={<AlertTriangle className="h-4 w-4" />} label="Quality alerty" value={openAlerts.length} tone={openAlerts.length ? "warning" : "success"} />
-            <MiniSignal icon={<Boxes className="h-4 w-4" />} label="Produkty" value="Aktivní" />
-            <MiniSignal icon={<Users className="h-4 w-4" />} label="Lidé" value={activeEmployees.length} />
+            <MiniSignal icon={<Boxes className="h-4 w-4" />} label="Produkty" value="Aktivní" to="/produkty" />
+            <MiniSignal icon={<Users className="h-4 w-4" />} label="Lidé" value={activeEmployees.length} to="/zamestnanci" />
           </div>
         </div>
       </div>
@@ -353,16 +353,39 @@ function Dashboard() {
   );
 }
 
-function MiniSignal({ icon, label, value, tone = "default" }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: "default" | "success" | "warning" }) {
+function MiniSignal({
+  icon,
+  label,
+  value,
+  tone = "default",
+  to,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "success" | "warning";
+  to?: "/produkty" | "/zamestnanci";
+}) {
   const toneClass = tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-primary";
-  return (
-    <div className="rounded-xl border border-border/70 bg-background/30 px-3 py-2.5">
+  const className = "group block rounded-xl border border-border/70 bg-background/30 px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60";
+
+  const content = (
+    <>
       <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${toneClass}`}>
         {icon}{label}
       </div>
-      <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
-    </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-sm font-semibold text-foreground">
+        <span>{value}</span>
+        {to ? <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" /> : null}
+      </div>
+    </>
   );
+
+  if (to) {
+    return <Link to={to} className={className} aria-label={`Otevřít sekci ${label.toLowerCase()}`}>{content}</Link>;
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function CardHeaderRow({ title, icon, action }: { title: string; icon: React.ReactNode; action: string }) {
