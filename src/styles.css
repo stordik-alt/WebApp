@@ -111,9 +111,9 @@
   --shadow-md: 0 16px 38px hsl(0 0% 0% / 0.30), 0 3px 10px hsl(0 0% 0% / 0.17);
   --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.21), 0 14px 34px hsl(0 0% 0% / 0.17);
   --neon-border: 183 70% 52%;
-  --neon-border-alpha: 0.42;
-  --neon-ring-alpha: 0.14;
-  --neon-shadow: 0 0 18px hsl(var(--neon-border) / 0.08), 0 0 34px hsl(275 40% 60% / 0.045);
+  --neon-border-alpha: 0.28;
+  --neon-ring-alpha: 0.07;
+  --neon-shadow: 0 0 10px hsl(var(--neon-border) / 0.045), 0 8px 22px hsl(0 0% 0% / 0.16);
 }
 
 @theme inline {
@@ -224,7 +224,7 @@ html:not(.dark) .bg-fuchsia-400\/10.text-fuchsia-300 {
   color: hsl(290 55% 30%) !important;
 }
 
-/* Final light-mode design system pass. Dark mode values above remain unchanged. */
+/* Final light-mode design system pass. */
 html:not(.dark) {
   --primary: 158 49% 28%;
   --primary-foreground: 0 0% 100%;
@@ -332,3 +332,67 @@ html:not(.dark) [data-app-title="Dashboard"] .bg-sky-400\/10,
 html:not(.dark) [data-app-title="Dashboard"] .bg-blue-400\/10 { background-color: hsl(195 55% 94%) !important; }
 
 html:not(.dark) .bg-background\/80 { background-color: hsl(var(--background) / 0.92) !important; }
+
+/* Dark-mode refinement: keep the neon identity, but make it controlled rather than glowing everywhere. */
+html.dark .text-lime-300 { color: hsl(92 60% 55%) !important; text-shadow: none !important; }
+html.dark .text-emerald-300 { color: hsl(152 55% 52%) !important; text-shadow: none !important; }
+html.dark .text-cyan-200 { color: hsl(188 72% 64%) !important; }
+html.dark .text-cyan-300 { color: hsl(188 68% 58%) !important; }
+html.dark .text-sky-300 { color: hsl(195 68% 58%) !important; }
+html.dark .text-fuchsia-300 { color: hsl(290 55% 65%) !important; }
+html.dark .text-rose-300 { color: hsl(345 66% 66%) !important; }
+html.dark .text-amber-200 { color: hsl(38 82% 64%) !important; }
+html.dark .text-amber-300 { color: hsl(38 78% 60%) !important; }
+html.dark .text-purple-300 { color: hsl(270 50% 66%) !important; }
+
+html.dark .bg-cyan-400\/10 { background-color: hsl(188 45% 15% / 0.78) !important; }
+html.dark .bg-fuchsia-400\/10 { background-color: hsl(290 38% 16% / 0.78) !important; }
+html.dark .bg-emerald-400\/10 { background-color: hsl(152 40% 15% / 0.78) !important; }
+html.dark .bg-sky-400\/10 { background-color: hsl(195 42% 15% / 0.78) !important; }
+html.dark .bg-rose-400\/10 { background-color: hsl(345 42% 16% / 0.8) !important; }
+html.dark .bg-amber-400\/10 { background-color: hsl(38 44% 16% / 0.8) !important; }
+
+html.dark .border-cyan-400\/30,
+html.dark .border-cyan-400\/35,
+html.dark .border-cyan-400\/40,
+html.dark .border-cyan-400\/50 { border-color: hsl(188 66% 52% / 0.28) !important; }
+html.dark .border-fuchsia-400\/25,
+html.dark .border-fuchsia-400\/30,
+html.dark .border-fuchsia-400\/35,
+html.dark .border-fuchsia-400\/40 { border-color: hsl(290 58% 62% / 0.24) !important; }
+html.dark .border-rose-400\/30,
+html.dark .border-rose-400\/35,
+html.dark .border-rose-400\/40 { border-color: hsl(345 66% 62% / 0.26) !important; }
+html.dark .border-emerald-400\/30 { border-color: hsl(152 55% 54% / 0.24) !important; }
+
+html.dark .bg-slate-950\/20 { background-color: hsl(223 44% 11% / 0.78) !important; }
+html.dark .bg-slate-950\/40,
+html.dark .bg-slate-950\/45,
+html.dark .bg-slate-950\/60 { background-color: hsl(223 40% 12.5%) !important; }
+html.dark .bg-slate-900\/35,
+html.dark .bg-slate-900\/45,
+html.dark .bg-slate-900\/55,
+html.dark .bg-slate-900\/70,
+html.dark .bg-slate-900\/80 { background-color: hsl(223 34% 15.5%) !important; }
+html.dark .bg-card\/70 { background-color: hsl(var(--card) / 0.86) !important; }
+html.dark .bg-card\/90 { background-color: hsl(var(--card) / 0.94) !important; }
+
+html.dark table thead { background: hsl(223 30% 18%) !important; }
+html.dark table tbody tr { border-bottom-color: hsl(223 24% 24%) !important; }
+html.dark table tbody tr:hover { background: hsl(183 28% 14% / 0.5) !important; }
+
+html.dark [aria-busy="true"],
+html.dark .loading-state { color: hsl(218 20% 74%) !important; background: hsl(223 26% 16% / 0.65) !important; }
+
+/* Dark mode primary action: controlled mint instead of hot pink/red utility buttons. */
+html.dark .bg-rose-500 { background-color: hsl(169 72% 45%) !important; color: hsl(223 45% 9%) !important; box-shadow: 0 8px 18px hsl(169 72% 45% / 0.16) !important; }
+html.dark .hover\:bg-rose-400:hover { background-color: hsl(169 72% 51%) !important; }
+
+/* Dark mode charts: improve readability without adding more glow. */
+html.dark .recharts-cartesian-grid-horizontal line,
+html.dark .recharts-cartesian-grid-vertical line { stroke: hsl(218 18% 45% / 0.18) !important; }
+html.dark .recharts-cartesian-axis-tick-value,
+html.dark .recharts-cartesian-axis-line { fill: hsl(218 22% 67%) !important; stroke: hsl(218 18% 45% / 0.34) !important; }
+
+/* Dark mode dashboard chart gradient bars: reduce decorative color extremes. */
+html.dark [data-app-title="Dashboard"] .recharts-bar-rectangle path { filter: saturate(0.78) brightness(0.92); }
