@@ -88,7 +88,6 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
   return (
     <div data-app-title={title} className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_75%_-10%,hsl(var(--primary)/0.09),transparent_30%),radial-gradient(circle_at_10%_20%,hsl(var(--primary)/0.035),transparent_28%)]" />
-      <style>{`[data-app-title="Zaměstnanci"] main > div > div.grid > div.rounded-xl,[data-app-title="Zaměstnanci"] main > div > div.rounded-xl{border-color:transparent !important;}[data-app-title="Zaměstnanci"] main > div > div.rounded-xl{box-shadow:none !important;}`}</style>
       <aside className="fixed inset-y-0 left-0 z-40 hidden min-h-0 w-[270px] flex-col border-r border-sidebar-border/70 bg-sidebar/95 text-sidebar-foreground shadow-[20px_0_60px_-48px_black] backdrop-blur-xl lg:flex">
         <Brand />
         <NavList />
