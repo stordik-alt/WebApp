@@ -248,16 +248,21 @@ function HandlerEvaluationPage() {
       }
     >
       <div className="mb-4 rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-card)]">
-        <div className="flex min-h-[68px] items-center justify-between gap-6">
+        <div className="flex items-center justify-between gap-6">
           <div>
             <span className="text-sm font-medium text-muted-foreground">Průměrné skóre</span>
-            <span className="mt-1 block text-2xl font-bold tabular-nums">
-              {avgScore !== null ? avgScore : "–"}
-            </span>
+            <div className="mt-1 flex items-baseline gap-3">
+              <span className="text-2xl font-bold tabular-nums">
+                {avgScore !== null ? avgScore : "–"}
+              </span>
+              <span className="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground">
+                {evaluations.length ? `${evaluations.length} hodnocení` : "Bez dat"}
+              </span>
+            </div>
+            {!evaluations.length ? (
+              <p className="mt-1 text-xs text-muted-foreground">Zatím nejsou k dispozici žádná hodnocení.</p>
+            ) : null}
           </div>
-          <span className="rounded-full border border-border/80 bg-muted/55 px-3 py-1 text-xs font-medium text-muted-foreground">
-            {evaluations.length ? `${evaluations.length} hodnocení` : "Bez dat"}
-          </span>
         </div>
       </div>
 
@@ -276,13 +281,13 @@ function HandlerEvaluationPage() {
           <TableBody>
             {isLoading ? (
               <TableRow aria-busy="true">
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                  Načítání…
+                <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Načítání…</span>
                 </TableCell>
               </TableRow>
             ) : evaluations.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
                   Zatím žádné hodnocení.
                 </TableCell>
               </TableRow>
