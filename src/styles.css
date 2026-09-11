@@ -57,6 +57,12 @@
   --shadow-sm: 0 1px 2px hsl(222 35% 15% / 0.05), 0 1px 3px hsl(222 35% 15% / 0.03);
   --shadow-md: 0 12px 32px hsl(222 35% 15% / 0.08), 0 2px 8px hsl(222 35% 15% / 0.04);
   --shadow-card: 0 1px 2px hsl(222 35% 15% / 0.04), 0 10px 30px hsl(222 35% 15% / 0.045);
+
+  /* Global neon frame tokens — change these once to retheme all panels. */
+  --neon-border: 183 70% 45%;
+  --neon-border-alpha: 0.42;
+  --neon-ring-alpha: 0.14;
+  --neon-shadow: 0 0 18px hsl(var(--neon-border) / 0.08), 0 0 34px hsl(275 40% 55% / 0.045);
 }
 
 .dark {
@@ -104,6 +110,10 @@
   --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.22), 0 1px 3px hsl(0 0% 0% / 0.15);
   --shadow-md: 0 16px 38px hsl(0 0% 0% / 0.30), 0 3px 10px hsl(0 0% 0% / 0.17);
   --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.21), 0 14px 34px hsl(0 0% 0% / 0.17);
+  --neon-border: 183 70% 52%;
+  --neon-border-alpha: 0.42;
+  --neon-ring-alpha: 0.14;
+  --neon-shadow: 0 0 18px hsl(var(--neon-border) / 0.08), 0 0 34px hsl(275 40% 60% / 0.045);
 }
 
 @theme inline {
@@ -165,6 +175,20 @@ button, a, input, select, textarea { transition: background-color 160ms ease, bo
 .shadow-sm { box-shadow: var(--shadow-sm) !important; }
 .shadow-md { box-shadow: var(--shadow-md) !important; }
 .card { background: hsl(var(--card)); color: hsl(var(--card-foreground)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+
+/* Shared frame for legacy table/panel wrappers that do not use the Card component. */
+.rounded-lg.border.border-border.bg-card,
+.rounded-xl.border.border-border.bg-card,
+.rounded-2xl.border.border-border.bg-card,
+.rounded-lg.border.border-border\/80.bg-slate-950\/40,
+.rounded-2xl.border.border-border\/80.bg-slate-950\/40,
+.rounded-xl.bg-card\/90 {
+  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
+  box-shadow: var(--neon-shadow), var(--shadow-card) !important;
+  outline: 1px solid hsl(var(--neon-border) / var(--neon-ring-alpha));
+  outline-offset: 0;
+}
+
 table thead { background: hsl(var(--muted) / 0.55); }
 table tbody tr { border-color: hsl(var(--border) / 0.72); }
 table tbody tr:hover { background: hsl(var(--accent) / 0.48); }
