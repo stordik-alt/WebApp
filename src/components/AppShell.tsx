@@ -88,7 +88,43 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
   return (
     <div data-app-title={title} className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_75%_-10%,hsl(var(--primary)/0.09),transparent_30%),radial-gradient(circle_at_10%_20%,hsl(var(--primary)/0.035),transparent_28%)]" />
-      <style>{`[data-app-title="Zaměstnanci"] main > div > div.grid > div.rounded-xl,[data-app-title="Zaměstnanci"] main > div > div.rounded-xl{border-color:transparent !important;}[data-app-title="Zaměstnanci"] main > div > div.rounded-xl{box-shadow:none !important;}`}</style>
+      <style>{`
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/40,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/45,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/60,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/20,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/35,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/45,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/55,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/70 {
+          background-color: hsl(var(--card)) !important;
+          color: hsl(var(--foreground));
+        }
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/35,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/45,
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-950\\/20 {
+          background-color: hsl(var(--background)) !important;
+        }
+        html:not(.dark) [data-app-title="Denní data"] .bg-slate-900\\/55 {
+          background-color: hsl(var(--accent)) !important;
+        }
+        html:not(.dark) [data-app-title="Denní data"] .text-cyan-200,
+        html:not(.dark) [data-app-title="Denní data"] .text-amber-200 {
+          color: hsl(var(--foreground) / 0.8) !important;
+        }
+        html:not(.dark) [data-app-title="Denní data"] .bg-rose-500.text-slate-950 {
+          background-color: hsl(var(--primary)) !important;
+          color: hsl(var(--primary-foreground)) !important;
+          box-shadow: 0 8px 20px hsl(var(--primary) / 0.16) !important;
+        }
+        html:not(.dark) .bg-cyan-400\\/10 { background-color: hsl(190 60% 94%) !important; }
+        html:not(.dark) .text-cyan-200 { color: hsl(190 72% 25%) !important; }
+        html:not(.dark) .text-red-200 { color: hsl(345 68% 34%) !important; }
+        html:not(.dark) .text-red-300 { color: hsl(345 68% 34%) !important; }
+        html:not(.dark) .bg-red-400\\/10 { background-color: hsl(345 60% 95%) !important; }
+        html:not(.dark) .border-red-400\\/40 { border-color: hsl(345 55% 46% / 0.55) !important; }
+        html:not(.dark) .border-cyan-400\\/40 { border-color: hsl(190 55% 42% / 0.62) !important; }
+      `}</style>
       <aside className="fixed inset-y-0 left-0 z-40 hidden min-h-0 w-[270px] flex-col border-r border-sidebar-border/70 bg-sidebar/95 text-sidebar-foreground shadow-[20px_0_60px_-48px_black] backdrop-blur-xl lg:flex">
         <Brand />
         <NavList />

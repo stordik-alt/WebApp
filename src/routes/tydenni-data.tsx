@@ -266,7 +266,7 @@ function WeeklyPage() {
           </Button>
         </Card>
 
-        <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
+        <div className="min-w-0 overflow-hidden rounded-xl border !border-primary/40 bg-card shadow-[0_0_18px_hsl(var(--primary)/0.10),0_0_34px_hsl(var(--chart-4)/0.06),var(--shadow-card)] !ring-1 !ring-primary/15">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <Input className="h-9 w-[180px]" placeholder="Hledat zaměstnance" value={weeklyFilterText} onChange={(e) => setWeeklyFilterText(e.target.value)} />
             <Select value={weeklyFilterStatus} onValueChange={setWeeklyFilterStatus}>
