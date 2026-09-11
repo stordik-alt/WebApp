@@ -12,27 +12,27 @@
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
 
-  /* Deep blue surfaces with soft, elegant red controls. */
-  --background: 220 42% 95%;
+  /* Light mode: clean surfaces, high contrast, deep mint accent. */
+  --background: 220 42% 97%;
   --foreground: 222 35% 15%;
-  --card: 218 45% 99%;
+  --card: 0 0% 100%;
   --card-foreground: 222 35% 15%;
-  --popover: 218 45% 99%;
+  --popover: 0 0% 100%;
   --popover-foreground: 222 35% 15%;
   --primary: 2 55% 52%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 218 32% 88%;
+  --secondary: 218 32% 91%;
   --secondary-foreground: 222 34% 22%;
-  --muted: 219 28% 91%;
-  --muted-foreground: 218 18% 42%;
-  --accent: 2 38% 92%;
-  --accent-foreground: 2 45% 31%;
+  --muted: 219 28% 93%;
+  --muted-foreground: 218 18% 38%;
+  --accent: 158 30% 94%;
+  --accent-foreground: 158 48% 24%;
   --destructive: 0 64% 48%;
   --destructive-foreground: 0 0% 100%;
-  --border: 218 25% 82%;
-  --input: 218 27% 79%;
-  --ring: 2 55% 52%;
-  --success: 152 38% 38%;
+  --border: 218 25% 84%;
+  --input: 218 27% 80%;
+  --ring: 158 49% 28%;
+  --success: 158 49% 28%;
   --warning: 32 80% 47%;
   --sidebar: 224 48% 20%;
   --sidebar-foreground: 218 35% 94%;
@@ -46,7 +46,7 @@
   --chart-2: 218 58% 50%;
   --chart-3: 344 48% 58%;
   --chart-4: 275 32% 56%;
-  --chart-5: 152 38% 38%;
+  --chart-5: 158 49% 28%;
 
   --color-bg: hsl(var(--background));
   --color-surface: hsl(var(--card));
@@ -58,11 +58,11 @@
   --shadow-md: 0 12px 32px hsl(222 35% 15% / 0.08), 0 2px 8px hsl(222 35% 15% / 0.04);
   --shadow-card: 0 1px 2px hsl(222 35% 15% / 0.04), 0 10px 30px hsl(222 35% 15% / 0.045);
 
-  /* Global neon frame tokens — change these once to retheme all panels. */
-  --neon-border: 183 70% 45%;
-  --neon-border-alpha: 0.42;
-  --neon-ring-alpha: 0.14;
-  --neon-shadow: 0 0 18px hsl(var(--neon-border) / 0.08), 0 0 34px hsl(275 40% 55% / 0.045);
+  /* Global neon frame tokens — light mode uses deep mint #256C52. */
+  --neon-border: 158 49% 28%;
+  --neon-border-alpha: 0.72;
+  --neon-ring-alpha: 0.05;
+  --neon-shadow: 0 5px 18px hsl(158 49% 28% / 0.07), 0 1px 4px hsl(222 35% 15% / 0.04);
 }
 
 .dark {
