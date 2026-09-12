@@ -140,6 +140,8 @@ function WorkplacesPage() {
       for (const row of data ?? []) {
         const date = String(row.work_date);
         const product = String(row.product ?? (Array.isArray((row as any).products) ? (row as any).products[0]?.code : (row as any).products?.code) ?? "–");
+        const productCode = product.trim().toUpperCase();
+        if ((workplace.area === "HA" && productCode.startsWith("T_")) || (workplace.area === "TUP" && productCode.startsWith("H_"))) continue;
         const key = `${date}|${product}`;
         const current = byDayProduct.get(key);
         const oee = row.oee == null ? null : Number(row.oee);
