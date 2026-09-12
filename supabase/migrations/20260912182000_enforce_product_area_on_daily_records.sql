@@ -3,8 +3,6 @@
 --
 -- H_* products belong only to HA workplaces (041.xx).
 -- T_* products belong only to TUP workplaces (050.xx).
--- The line name (for example L1/4 HF) is kept, while the
--- workplace source_line is switched to the matching area.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.normalize_daily_record_line_by_product()
@@ -32,9 +30,9 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF upper(btrim(v_product_code)) LIKE 'T\_%' ESCAPE '\\' THEN
+  IF upper(btrim(v_product_code)) ~ '^T_' THEN
     v_area := 'TUP';
-  ELSIF upper(btrim(v_product_code)) LIKE 'H\_%' ESCAPE '\\' THEN
+  ELSIF upper(btrim(v_product_code)) ~ '^H_' THEN
     v_area := 'HA';
   ELSE
     RETURN NEW;
@@ -90,51 +88,61 @@ FOR EACH ROW
 EXECUTE FUNCTION public.normalize_daily_record_line_by_product();
 
 -- ============================================================
--- Repair existing records.
--- This uses the same product-area and line-name rules as the
--- trigger, so old incorrectly assigned T_* / H_* rows are moved
--- to the matching workplace.
+-- Repair existing incorrectly assigned records.
 -- ============================================================
 
-UPDATE public.daily_records dr
-SET line = target.source_line
-FROM LATERAL (
-  SELECT COALESCE(
-           w.source_line,
-           w.code || ' - ' || w.workplace_name || ' ' || w.line_name
-         ) AS source_line
-  FROM public.products p
-  JOIN public.workplaces w
-    ON w.area = CASE
-      WHEN upper(btrim(p.code)) LIKE 'T\_%' ESCAPE '\\' THEN 'TUP'
-      WHEN upper(btrim(p.code)) LIKE 'H\_%' ESCAPE '\\' THEN 'HA'
+WITH record_lines AS (
+  SELECT
+    dr.id,
+    dr.line,
+    p.code AS product_code,
+    CASE
+      WHEN upper(btrim(p.code)) ~ '^T_' THEN 'TUP'
+      WHEN upper(btrim(p.code)) ~ '^H_' THEN 'HA'
       ELSE NULL
-    END
-  WHERE p.id = dr.product_id
-    AND (
-      CASE
-        WHEN lower((regexp_match(dr.line, '(L[0-9]+\s*/\s*[0-9]+(?:\s+HF)?|Olovo)\s*$', 'i'))[1]) = 'olovo'
-          THEN 'Olovo'
-        ELSE upper(regexp_replace(
-          regexp_replace((regexp_match(dr.line, '(L[0-9]+\s*/\s*[0-9]+(?:\s+HF)?|Olovo)\s*$', 'i'))[1], '\s*/\s*', '/', 'g'),
+    END AS required_area,
+    (
+      regexp_match(
+        dr.line,
+        '(L[0-9]+\s*/\s*[0-9]+(?:\s+HF)?|Olovo)\s*$',
+        'i'
+      )
+    )[1] AS raw_line_name
+  FROM public.daily_records dr
+  JOIN public.products p ON p.id = dr.product_id
+  WHERE dr.line IS NOT NULL
+), normalized AS (
+  SELECT
+    rl.*,
+    CASE
+      WHEN lower(rl.raw_line_name) = 'olovo' THEN 'Olovo'
+      WHEN rl.raw_line_name IS NOT NULL THEN upper(
+        regexp_replace(
+          regexp_replace(rl.raw_line_name, '\s*/\s*', '/', 'g'),
           '\s+HF$', ' HF', 'i'
-        ))
-      END
-    ) = upper(regexp_replace(w.line_name, '\s+', '', 'g'))
-       OR upper(regexp_replace(w.line_name, '\s+', '', 'g')) = upper(regexp_replace(
-            CASE
-              WHEN lower((regexp_match(dr.line, '(L[0-9]+\s*/\s*[0-9]+(?:\s+HF)?|Olovo)\s*$', 'i'))[1]) = 'olovo'
-                THEN 'Olovo'
-              ELSE upper(regexp_replace(
-                regexp_replace((regexp_match(dr.line, '(L[0-9]+\s*/\s*[0-9]+(?:\s+HF)?|Olovo)\s*$', 'i'))[1], '\s*/\s*', '/', 'g'),
-                '\s+HF$', ' HF', 'i'
-              ))
-            END,
-            '\s+', '', 'g'
-          ))
-  ORDER BY w.code
-  LIMIT 1
-) target
-WHERE dr.product_id IS NOT NULL
-  AND dr.line IS NOT NULL
-  AND dr.line IS DISTINCT FROM target.source_line;
+        )
+      )
+      ELSE NULL
+    END AS line_name
+  FROM record_lines rl
+  WHERE rl.required_area IS NOT NULL
+), targets AS (
+  SELECT DISTINCT ON (n.id)
+    n.id,
+    COALESCE(
+      w.source_line,
+      w.code || ' - ' || w.workplace_name || ' ' || w.line_name
+    ) AS target_line
+  FROM normalized n
+  JOIN public.workplaces w
+    ON w.area = n.required_area
+   AND upper(regexp_replace(w.line_name, '\s+', '', 'g')) =
+       upper(regexp_replace(n.line_name, '\s+', '', 'g'))
+  WHERE n.line_name IS NOT NULL
+  ORDER BY n.id, w.code
+)
+UPDATE public.daily_records dr
+SET line = t.target_line
+FROM targets t
+WHERE dr.id = t.id
+  AND dr.line IS DISTINCT FROM t.target_line;
