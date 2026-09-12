@@ -1,0 +1,60 @@
+name: Finalize imported workplace detection
+
+on:
+  push:
+    branches: [redesign]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: redesign
+          fetch-depth: 1
+      - name: Normalize imported workplace detection and navigation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          changed = False
+
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          old = '/tup/.test(lineText)'
+          new = '/touch\\s*up|touchup|tup/.test(lineText)'
+          if old in s and new not in s:
+              s = s.replace(old, new, 1)
+              p.write_text(s)
+              changed = True
+
+          p = Path('src/components/AppShell.tsx')
+          s = p.read_text()
+          if 'Building2' not in s.split('\n', 1)[0]:
+              s = s.replace('LineChart } from "lucide-react";', 'LineChart, Building2 } from "lucide-react";')
+              if 'Building2 }' not in s.split('\n', 1)[0]:
+                  s = s.replace('LineChart from "lucide-react";', 'LineChart, Building2 from "lucide-react";')
+              changed = True
+          if '{ to: "/pracoviste", label: "Pracoviště", icon: Building2, roles: STAFF },' not in s:
+              needle = '{ to: "/denni-data", label: "Denní data", icon: ClipboardList, roles: STAFF },'
+              replacement = needle + '\n  { to: "/pracoviste", label: "Pracoviště", icon: Building2, roles: STAFF },'
+              if needle in s:
+                  s = s.replace(needle, replacement, 1)
+                  changed = True
+          p.write_text(s)
+
+          if not changed:
+              print('No changes needed')
+              raise SystemExit(0)
+
+          import subprocess
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git', 'add', 'src/components/ScreenshotImportV2.tsx', 'src/components/AppShell.tsx'], check=True)
+          subprocess.run(['git', 'commit', '-m', 'Finalize imported workplace detection'], check=True)
+          subprocess.run(['git', 'push', 'origin', 'redesign'], check=True)
+          PY

@@ -87,7 +87,7 @@ export async function upsertImportedProductProfile(input: {
     return current.id;
   }
 
-  if (current?.valid_to == null) {
+  if (current && current.valid_to == null) {
     const previousDay = new Date(`${input.validFrom}T00:00:00Z`);
     previousDay.setUTCDate(previousDay.getUTCDate() - 1);
     const { error } = await (supabase.from("product_profiles") as any)

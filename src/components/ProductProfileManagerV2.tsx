@@ -29,7 +29,7 @@ type ProductProfile = {
 };
 
 type Draft = { name: string; haCode: string; tupCode: string; haNorm: string; tupNorm: string; haCapacity: string; tupCapacity: string };
-const emptyDraft: Draft = { name: "", haCode: "", tupCode: "", haNorm: "", tupNorm: "", haCapacity: "1", tupCapacity: "1" };
+const emptyDraft: Draft = { name: "", haCode: "", tupCode: "", haNorm: "", tupNorm: "", haCapacity: "", tupCapacity: "" };
 const normalizeCode = (value: string | null | undefined) => (value ?? "").trim().toLowerCase().replace(/\s+/g, "");
 const keyOf = (ha: string | null | undefined, tup: string | null | undefined) => `${normalizeCode(ha)}|${normalizeCode(tup)}`;
 const keyOfProfile = (profile: ProductProfile) => keyOf(profile.ha_subassy, profile.tup_subassy);
@@ -112,8 +112,8 @@ export function ProductProfileManagerV2() {
       tupCode: profile.tup_subassy ?? "",
       haNorm: profile.h_norm_per_hour == null ? "" : String(profile.h_norm_per_hour),
       tupNorm: profile.t_norm_per_hour == null ? "" : String(profile.t_norm_per_hour),
-      haCapacity: profile.h_capacity == null ? "1" : String(profile.h_capacity),
-      tupCapacity: profile.t_capacity == null ? "1" : String(profile.t_capacity),
+      haCapacity: profile.h_capacity == null ? "" : String(profile.h_capacity),
+      tupCapacity: profile.t_capacity == null ? "" : String(profile.t_capacity),
     });
     setExpanded(`profile:${keyOfProfile(profile)}`);
     setDialogOpen(true);
@@ -138,7 +138,7 @@ export function ProductProfileManagerV2() {
     if (!/^H_/i.test(haCode)) throw new Error("HA Product ID musí začínat H_.");
     if (!tupCode) throw new Error("Zadejte TUP Product ID.");
     if (!Number.isFinite(haNorm) || haNorm <= 0 || !Number.isFinite(tupNorm) || tupNorm <= 0) throw new Error("Zadejte platnou normu pro HA i TUP.");
-    if (!Number.isInteger(haCapacity) || haCapacity < 1 || !Number.isInteger(tupCapacity) || tupCapacity < 1) throw new Error("Kapacita musí být celé číslo alespoň 1.");
+    if (!Number.isInteger(haCapacity) || haCapacity < 1 || !Number.isInteger(tupCapacity) || tupCapacity < 1) throw new Error("Kapacita je povinná a musí být celé číslo alespoň 1.");
 
     setBusy(true);
     try {
@@ -247,15 +247,15 @@ export function ProductProfileManagerV2() {
           <DialogTitle>{editing ? "Upravit Product Profile" : "Nový Product Profile"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
-          <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">TUP Product ID nemusí začínat T_. Může mít stejný formát jako HA Product ID, tedy například H_....</div>
+          <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">Kapacita je povinný údaj. U nového profilu se nepředvyplňuje žádná výchozí hodnota. Administrátor ji musí zadat pro HA i TUP.</div>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="grid gap-1.5 md:col-span-2"><Label>Název profilu</Label><Input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Např. Henry Ford 3596" /></div>
             <div className="grid gap-1.5"><Label className={HA.label}>HA Product ID</Label><Input className="border-cyan-400/30" value={draft.haCode} onChange={(e) => setDraft((d) => ({ ...d, haCode: e.target.value }))} placeholder="H_..." /></div>
             <div className="grid gap-1.5"><Label className={HA.label}>HA norma (ks/h)</Label><Input className="border-cyan-400/30" type="number" step="0.1" value={draft.haNorm} onChange={(e) => setDraft((d) => ({ ...d, haNorm: e.target.value }))} /></div>
-            <div className="grid gap-1.5"><Label className={HA.label}>HA kapacita</Label><Input className="border-cyan-400/30" type="number" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label className={HA.label}>HA kapacita</Label><Input className="border-cyan-400/30" type="number" min="1" value={draft.haCapacity} onChange={(e) => setDraft((d) => ({ ...d, haCapacity: e.target.value }))} placeholder="např. 2" /></div>
             <div className="grid gap-1.5"><Label className={TUP.label}>TUP Product ID</Label><Input className="border-red-400/30" value={draft.tupCode} onChange={(e) => setDraft((d) => ({ ...d, tupCode: e.target.value }))} placeholder="H_... nebo jiný kód" /></div>
             <div className="grid gap-1.5"><Label className={TUP.label}>TUP norma (ks/h)</Label><Input className="border-red-400/30" type="number" step="0.1" value={draft.tupNorm} onChange={(e) => setDraft((d) => ({ ...d, tupNorm: e.target.value }))} /></div>
-            <div className="grid gap-1.5"><Label className={TUP.label}>TUP kapacita</Label><Input className="border-red-400/30" type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} /></div>
+            <div className="grid gap-1.5"><Label className={TUP.label}>TUP kapacita</Label><Input className="border-red-400/30" type="number" min="1" value={draft.tupCapacity} onChange={(e) => setDraft((d) => ({ ...d, tupCapacity: e.target.value }))} placeholder="např. 2" /></div>
           </div>
         </div>
         <DialogFooter>
