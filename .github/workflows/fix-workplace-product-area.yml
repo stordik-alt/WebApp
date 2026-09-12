@@ -1,7 +1,8 @@
 name: Fix workplace area by product
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [sekce]
 
 jobs:
   patch:
