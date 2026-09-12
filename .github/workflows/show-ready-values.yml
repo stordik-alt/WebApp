@@ -1,0 +1,34 @@
+name: Show ready values
+on:
+  push:
+    branches: [redesign]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: redesign
+          fetch-depth: 0
+      - name: Patch ready state
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImport.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = 'stage === "employees" ?'
+          new = '(stage === "employees" || stage === "ready") ?'
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected one employee-stage render condition, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/show-ready-values.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ScreenshotImport.tsx .github/workflows/show-ready-values.yml
+          git commit -m 'Show employee values after OCR completion'
+          git push origin HEAD:redesign
