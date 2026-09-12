@@ -1,0 +1,40 @@
+name: Fix screenshot import build
+on:
+  workflow_dispatch:
+  push:
+    branches: [redesign]
+    paths:
+      - 'src/components/ScreenshotImportV2.tsx'
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: redesign
+          fetch-depth: 0
+      - name: Fix malformed hourly call
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          old = 'context: { profiles: relevant, operator_count: operatorCount } });'
+          new = 'context: { profiles: relevant, operator_count: operatorCount } } });'
+          if old not in s:
+              raise SystemExit('target syntax not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ScreenshotImportV2.tsx
+          git diff --cached --quiet || git commit -m 'Fix screenshot import syntax error'
+          git push origin HEAD:redesign
+      - name: Remove temporary workflow
+        if: always()
+        run: |
+          git rm -f .github/workflows/fix-screenshot-import-build.yml || true
+          git commit -m 'Remove temporary screenshot import workflow' || true
+          git push origin HEAD:redesign || true
