@@ -69,11 +69,8 @@ BEGIN
   IF code_value IS NULL THEN RETURN; END IF;
 
   area_value := CASE WHEN left(code_value, 3) = '050' THEN 'TUP' ELSE 'HA' END;
-  rest := btrim(substring(normalized FROM '^041\\.[0-9]{2}\\s*-\\s*(.*)$'));
-  IF rest = '' THEN
-    rest := btrim(substring(normalized FROM '^050\\.[0-9]{2}\\s*-\\s*(.*)$'));
-  END IF;
-  IF rest = '' THEN RETURN; END IF;
+  rest := btrim(substring(normalized FROM '^\\d{3}\\.[0-9]{2}\\s*-\\s*(.*)$'));
+  IF rest IS NULL OR rest = '' THEN RETURN; END IF;
 
   -- Olovo is a line name. It may occur at the end of the imported text.
   IF rest ~* '(^|[-\\s])OLOVO\\s*$' THEN
