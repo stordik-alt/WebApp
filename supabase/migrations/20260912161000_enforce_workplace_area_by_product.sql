@@ -2,6 +2,8 @@
 -- and HA products from being stored under TUP (050.xx) workplaces.
 -- The line name (e.g. L1/4 HF) is preserved; the code/source_line is taken
 -- from the existing workplace of the correct area.
+--
+-- Also repairs existing daily_records when this migration is applied.
 
 CREATE OR REPLACE FUNCTION public.normalize_daily_record_line_by_product()
 RETURNS trigger
@@ -61,8 +63,6 @@ BEFORE INSERT OR UPDATE OF product_id, line ON public.daily_records
 FOR EACH ROW
 EXECUTE FUNCTION public.normalize_daily_record_line_by_product();
 
--- Repair existing records as well. The BEFORE UPDATE trigger above performs
--- the same normalization using the product variant and line name.
 UPDATE public.daily_records
 SET line = line
 WHERE product_id IS NOT NULL
