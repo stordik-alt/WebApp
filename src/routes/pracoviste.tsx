@@ -147,7 +147,7 @@ function WorkplacesPage() {
     queryFn: async (): Promise<DetailRecord[]> => {
       const workplace = workplaces.find((w) => w.id === expanded);
       if (!workplace) return [];
-      let query = supabase.from("daily_records").select("work_date,product,oee,shift").eq("line", workplace.source_line ?? "").order("work_date", { ascending: false });
+      let query = supabase.from("daily_records").select("work_date,product,product_id,oee,shift,products:product_id(code)").eq("line", workplace.source_line ?? "").order("work_date", { ascending: false });
       if (period.from) query = query.gte("work_date", period.from);
       if (period.to) query = query.lte("work_date", period.to);
       const { data, error } = await query;
@@ -155,7 +155,7 @@ function WorkplacesPage() {
       const byDayProduct = new Map<string, DetailRecord>();
       for (const row of data ?? []) {
         const date = String(row.work_date);
-        const product = String(row.product ?? "–");
+        const product = String(row.product ?? (Array.isArray((row as any).products) ? (row as any).products[0]?.code : (row as any).products?.code) ?? "–");
         const key = `${date}|${product}`;
         const current = byDayProduct.get(key);
         const oee = row.oee == null ? null : Number(row.oee);
