@@ -32,8 +32,8 @@ function parseImportedLine(value: string): ParsedImport | null {
   const prefix = code.slice(0, 3);
   if (prefix !== "041" && prefix !== "050") return null;
   const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
-  const lineMatch = remainder.match(/(?:^|\s)(L\d+\/\d+(?:\s+HF)?|Olovo)\s*$/i);
-  const line_name = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].toUpperCase()) : "Neurčeno";
+  const lineMatch = remainder.match(/(?:^|\s)(L\d+\s*\/\s*\d+(?:\s+HF)?|Olovo)\s*$/i);
+  const line_name = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].replace(/\s*\/\s*/g, "/").replace(/\s+HF$/i, " HF").toUpperCase()) : "Neurčeno";
   const workplace_name = lineMatch ? remainder.slice(0, lineMatch.index).trim() : remainder;
   if (!workplace_name) return null;
   return { code, line_name, workplace_name, area, source_line };
