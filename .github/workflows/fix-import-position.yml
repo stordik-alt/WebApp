@@ -1,4 +1,4 @@
-name: Fix screenshot import position detection
+name: Finalize imported workplace detection
 
 on:
   push:
@@ -15,26 +15,46 @@ jobs:
         with:
           ref: redesign
           fetch-depth: 1
-      - name: Fix position inference
+      - name: Normalize imported workplace detection and navigation
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
+          changed = False
+
           p = Path('src/components/ScreenshotImportV2.tsx')
           s = p.read_text()
-          old = 'const next = (r.rows ?? []).map((row, i) => { const name = String(row.employee_name ?? "").trim(); const match = employeeMatch(name, activeEmployees); return { key: `${i}-${name}`, ocrName: name, employeeId: match?.id ?? null, position: row.position === "TUP" ? "TUP" as const : "HA" as const, oee: row.oee == null ? "" : String(row.oee), performance: row.performance == null ? "" : String(row.performance), availableTime: row.available_time == null ? "" : String(row.available_time), confidence: Number(row.confidence) || 0, include: true }; }).filter((r) => r.ocrName);'
-          new = 'const next = (r.rows ?? []).map((row, i) => { const name = String(row.employee_name ?? "").trim(); const match = employeeMatch(name, activeEmployees); const lineText = String(result?.line ?? "").toLowerCase(); const productText = String(currentProduct ?? "").toUpperCase(); const position = /hand\\s*assy|handassy/.test(lineText) || /^H_/.test(productText) ? "HA" as const : /tup/.test(lineText) || /^T_/.test(productText) ? "TUP" as const : row.position === "TUP" ? "TUP" as const : "HA" as const; return { key: `${i}-${name}`, ocrName: name, employeeId: match?.id ?? null, position, oee: row.oee == null ? "" : String(row.oee), performance: row.performance == null ? "" : String(row.performance), availableTime: row.available_time == null ? "" : String(row.available_time), confidence: Number(row.confidence) || 0, include: true }; }).filter((r) => r.ocrName);'
-          if old not in s:
-              print('No change needed')
+          old = '/tup/.test(lineText)'
+          new = '/touch\\s*up|touchup|tup/.test(lineText)'
+          if old in s and new not in s:
+              s = s.replace(old, new, 1)
+              p.write_text(s)
+              changed = True
+
+          p = Path('src/components/AppShell.tsx')
+          s = p.read_text()
+          if 'Building2' not in s.split('\n', 1)[0]:
+              s = s.replace('LineChart } from "lucide-react";', 'LineChart, Building2 } from "lucide-react";')
+              if 'Building2 }' not in s.split('\n', 1)[0]:
+                  s = s.replace('LineChart from "lucide-react";', 'LineChart, Building2 from "lucide-react";')
+              changed = True
+          if '{ to: "/pracoviste", label: "Pracoviště", icon: Building2, roles: STAFF },' not in s:
+              needle = '{ to: "/denni-data", label: "Denní data", icon: ClipboardList, roles: STAFF },'
+              replacement = needle + '\n  { to: "/pracoviste", label: "Pracoviště", icon: Building2, roles: STAFF },'
+              if needle in s:
+                  s = s.replace(needle, replacement, 1)
+                  changed = True
+          p.write_text(s)
+
+          if not changed:
+              print('No changes needed')
               raise SystemExit(0)
-          p.write_text(s.replace(old, new))
+
+          import subprocess
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git', 'add', 'src/components/ScreenshotImportV2.tsx', 'src/components/AppShell.tsx'], check=True)
+          subprocess.run(['git', 'commit', '-m', 'Finalize imported workplace detection'], check=True)
+          subprocess.run(['git', 'push', 'origin', 'redesign'], check=True)
           PY
-          if git diff --quiet -- src/components/ScreenshotImportV2.tsx; then
-            echo 'No changes'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/components/ScreenshotImportV2.tsx
-          git commit -m 'Fix HandAssy position detection in screenshot import'
-          git push origin redesign
