@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ChevronDown, Factory, Pencil, Save, SlidersHorizontal, Users, X } from "lucide-react";
+import { Building2, ChevronDown, Pencil, Save, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
@@ -32,7 +32,7 @@ function parseImportedLine(value: string): ParsedImport | null {
   const prefix = code.slice(0, 3);
   if (prefix !== "041" && prefix !== "050") return null;
   const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
-  const lineMatch = remainder.match(/(?:^|\s)(L\d+\/\d+|Olovo)\s*$/i);
+  const lineMatch = remainder.match(/(?:^|\s)(L\d+\/\d+(?:\s+HF)?|Olovo)\s*$/i);
   const line_name = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].toUpperCase()) : "Neurčeno";
   const workplace_name = lineMatch ? remainder.slice(0, lineMatch.index).trim() : remainder;
   if (!workplace_name) return null;
@@ -46,7 +46,7 @@ function oeeTone(value: number | null) {
   return "text-rose-300";
 }
 function formatOee(value: number | null) { return value == null ? "–" : `${value.toFixed(1)} %`; }
-function shiftHours(shift: string) { return ["Ranní", "Odpolední", "Noční"].includes(shift) ? 8 : 8; }
+function shiftHours(_shift: string) { return 8; }
 
 function WorkplacesPage() {
   const queryClient = useQueryClient();
@@ -68,40 +68,50 @@ function WorkplacesPage() {
       if (masterError) throw masterError;
       const { data: records, error: recordsError } = await supabase.from("daily_records").select("line,work_date,oee,available_time");
       if (recordsError) throw recordsError;
+
       const imported = new Map<string, ParsedImport>();
       for (const row of records ?? []) {
         const parsed = parseImportedLine(String(row.line ?? ""));
         if (parsed && !imported.has(parsed.code)) imported.set(parsed.code, parsed);
       }
+
       const masterByCode = new Map<string, any>((masterRows ?? []).map((row: any) => [String(row.code), row]));
       const missing = [...imported.values()].filter((item) => !masterByCode.has(item.code));
       if (missing.length) {
         const { data: created, error: createError } = await (supabase as any).from("workplaces").insert(missing.map((item) => ({ ...item }))).select("id,code,line_name,workplace_name,area,source_line,created_at,updated_at");
         if (!createError) {
           for (const row of created ?? []) masterByCode.set(String(row.code), row);
-        } else if (createError.code !== "23505") {
-          // The list must remain readable even when the optional workplace master cannot be written.
         }
       }
-      // Always merge imported workplaces into the display map. This prevents an empty master table
-      // (or a blocked master-table write) from hiding workplaces that already exist in daily_records.
       for (const item of imported.values()) {
         if (!masterByCode.has(item.code)) masterByCode.set(item.code, { id: `import-${item.code}`, ...item });
       }
+
       const stats = new Map<string, { records: number; lastDate: string | null; oeeSum: number; oeeCount: number; availabilitySum: number; availabilityCount: number }>();
       for (const row of records ?? []) {
-        const parsed = parseImportedLine(String(row.line ?? "")); if (!parsed) continue;
+        const parsed = parseImportedLine(String(row.line ?? ""));
+        if (!parsed) continue;
         const current = stats.get(parsed.code) ?? { records: 0, lastDate: null, oeeSum: 0, oeeCount: 0, availabilitySum: 0, availabilityCount: 0 };
         current.records += 1;
         const date = row.work_date ? String(row.work_date) : null;
         if (date && (!current.lastDate || date > current.lastDate)) current.lastDate = date;
-        const oee = Number(row.oee); if (Number.isFinite(oee)) { current.oeeSum += oee; current.oeeCount += 1; }
-        const availability = Number((row as any).available_time); if (Number.isFinite(availability)) { current.availabilitySum += availability; current.availabilityCount += 1; }
+        const oee = Number(row.oee);
+        if (Number.isFinite(oee)) { current.oeeSum += oee; current.oeeCount += 1; }
+        const availability = Number((row as any).available_time);
+        if (Number.isFinite(availability)) { current.availabilitySum += availability; current.availabilityCount += 1; }
         stats.set(parsed.code, current);
       }
+
       return [...masterByCode.values()].map((row: any) => {
         const stat = stats.get(String(row.code));
-        return { id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name), area: row.area as Workplace["area"], source_line: row.source_line ?? null, records: stat?.records ?? 0, lastDate: stat?.lastDate ?? null, avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null, avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null };
+        return {
+          id: String(row.id), code: String(row.code), line_name: String(row.line_name),
+          workplace_name: String(row.workplace_name), area: row.area as Workplace["area"],
+          source_line: row.source_line ?? null, records: stat?.records ?? 0,
+          lastDate: stat?.lastDate ?? null,
+          avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null,
+          avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null,
+        };
       }).sort((a, b) => a.code.localeCompare(b.code, "cs"));
     },
   });
@@ -129,7 +139,6 @@ function WorkplacesPage() {
     return [...result].sort(compare);
   }, [workplaces, search, areaFilter, lineFilter, sortKey, sortDirection]);
 
-  const grouped = useMemo(() => filteredWorkplaces.reduce<Record<string, Workplace[]>>((acc, item) => { (acc[item.line_name] ??= []).push(item); return acc; }, {}), [filteredWorkplaces]);
   const chartData = useMemo(() => filteredWorkplaces.map((w) => ({ name: w.code, oee: w.avgOee, availability: w.avgAvailability })), [filteredWorkplaces]);
 
   const detailQuery = useQuery({
@@ -159,7 +168,9 @@ function WorkplacesPage() {
 
   function beginEdit(workplace: Workplace) { setEditing(workplace.id); setDraftName(workplace.workplace_name); }
   async function saveEdit(workplace: Workplace) {
-    const name = draftName.trim(); if (!name) return; setSaving(true);
+    const name = draftName.trim();
+    if (!name) return;
+    setSaving(true);
     try {
       if (workplace.id.startsWith("import-")) {
         const { data, error } = await (supabase as any).from("workplaces").upsert({ code: workplace.code, line_name: workplace.line_name, workplace_name: name, area: workplace.area, source_line: workplace.source_line }, { onConflict: "code" }).select("id").single();
@@ -171,14 +182,19 @@ function WorkplacesPage() {
         setEditing(null);
       }
       await queryClient.invalidateQueries({ queryKey: ["workplaces"] });
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <AppShell title="Pracoviště" subtitle="Kód pracoviště určuje HA/TUP. Název pracoviště se přebírá z importu a lze ho kdykoliv upravit.">
+    <AppShell title="Pracoviště" subtitle="Přehled pracovišť podle kódu, linky a názvu.">
       <div className="grid min-w-0 gap-6">
         <Card className="p-4 sm:p-5">
-          <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><SlidersHorizontal className="h-5 w-5" /></span><div><h2 className="font-semibold">Filtry a řazení</h2><p className="text-xs text-muted-foreground">Omezte seznam a změňte pořadí podle potřebného ukazatele.</p></div></div>
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><SlidersHorizontal className="h-5 w-5" /></span>
+            <div><h2 className="font-semibold">Filtry a řazení</h2><p className="text-xs text-muted-foreground">Omezte seznam a změňte pořadí podle potřebného ukazatele.</p></div>
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div><Label className="text-xs">Hledat</Label><Input className="mt-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kód, linka nebo název…" /></div>
             <div><Label className="text-xs">Oblast</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as "all" | "HA" | "TUP")}><option value="all">Vše</option><option value="HA">HA</option><option value="TUP">TUP</option></select></div>
@@ -192,33 +208,46 @@ function WorkplacesPage() {
           <div className="border-b border-border px-4 py-4 sm:px-5">
             <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Porovnání pracovišť</h2><p className="text-xs text-muted-foreground">OEE a dostupnost podle aktuálně filtrovaných pracovišť.</p></div></div><div className="text-xs text-muted-foreground">{filteredWorkplaces.length} / {workplaces.length}</div></div>
           </div>
-          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="p-4 sm:p-5"><div className="h-[360px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: number | undefined) => value == null ? "–" : `${value.toFixed(1)} %`} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div></div>}
+          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="h-[320px] w-full p-3 sm:h-[360px] sm:p-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: number | undefined) => value == null ? "–" : `${value.toFixed(1)} %`} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
         </Card>
 
         <Card className="overflow-hidden p-0">
-          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · řazení podle {sortKey === "code" ? "kódu" : sortKey === "line" ? "linky" : sortKey === "name" ? "názvu" : sortKey === "oee" ? "OEE" : sortKey === "availability" ? "dostupnosti" : "počtu záznamů"}</p></div></div></div>
+          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div></div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
-            <div>
-              <div className="hidden grid-cols-[140px_120px_minmax(0,1fr)_130px_auto] gap-4 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid"><span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span></div>
-              <div className="divide-y divide-border">
-                {Object.entries(grouped).map(([line, items]) => <div key={line}>{items.map((workplace) => <div key={workplace.id}>
-                  <div className="grid gap-3 p-4 sm:grid-cols-[140px_120px_minmax(0,1fr)_130px_auto] sm:items-center sm:gap-4">
-                    <button type="button" className="text-left" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}><div className="flex items-center gap-2"><ChevronDown className={`h-4 w-4 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} /><div><div className="font-mono font-semibold">{workplace.code}</div><div className="mt-1 text-xs text-muted-foreground sm:hidden">{workplace.area}</div></div></div></button>
-                    <div className="font-medium">{workplace.line_name}</div>
-                    <div className="min-w-0">{editing === workplace.id ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><Label className="sr-only">Název pracoviště</Label><Input value={draftName} onChange={(e) => setDraftName(e.target.value)} autoFocus /></div><div className="flex gap-2"><Button size="sm" onClick={() => saveEdit(workplace)} disabled={saving || !draftName.trim()}><Save className="mr-1 h-4 w-4" />Uložit</Button><Button size="sm" variant="outline" onClick={() => setEditing(null)} disabled={saving}><X className="mr-1 h-4 w-4" />Zrušit</Button></div></div> : <><div className="font-medium">{workplace.workplace_name}</div><div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{workplace.area}</span>{workplace.records ? <span>· {workplace.records} záznamů</span> : null}{workplace.lastDate ? <span>· poslední {workplace.lastDate}</span> : null}</div></>}</div>
-                    <div className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</div>
-                    {editing !== workplace.id ? <Button size="sm" variant="ghost" onClick={() => beginEdit(workplace)}><Pencil className="mr-1 h-4 w-4" />Upravit</Button> : <span />}
-                  </div>
-                  {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="flex flex-wrap items-end gap-2"><div><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} /></div><div><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
-                    {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="font-medium truncate">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
-                  </div>}
-                </div>)}</div>)}
+            <div className="overflow-x-auto">
+              <div className="min-w-[720px]">
+                <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5">
+                  <span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span>
+                </div>
+                <div className="divide-y divide-border">
+                  {filteredWorkplaces.map((workplace) => (
+                    <div key={workplace.id}>
+                      <button type="button" className="grid w-full grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/20 sm:px-5" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
+                        <span className="flex items-center gap-2 font-mono font-semibold"><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}</span>
+                        <span className="font-medium">{workplace.line_name}</span>
+                        <span className="min-w-0 truncate font-medium">{workplace.workplace_name}</span>
+                        <span className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span>
+                        <span aria-hidden="true" />
+                      </button>
+
+                      {expanded === workplace.id && (
+                        <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
+                          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div>
+                            <div className="flex flex-wrap items-end gap-2"><div><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} /></div><div><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div>
+                          </div>
+                          {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="truncate font-medium">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </Card>
-        <Card className="p-4 text-sm text-muted-foreground"><div className="flex items-start gap-3"><Factory className="mt-0.5 h-4 w-4 shrink-0" /><p><strong>Pravidlo:</strong> kód <span className="font-mono">041.xx</span> = HA, kód <span className="font-mono">050.xx</span> = TUP. <strong>Olovo je společná linka</strong>, nikoliv společné pracoviště — na lince Olovo jsou samostatná pracoviště HA a TUP. Každé pracoviště má vlastní kód a vlastní zařazení podle kódu.</p><Users className="mt-0.5 h-4 w-4 shrink-0" /></div></Card>
+
+        <Card className="p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Pravidlo pracovišť</h2><p className="mt-1 text-sm text-muted-foreground">Kód 041.xx = HA, kód 050.xx = TUP. Linka a název se přebírají z denního záznamu. Olovo je vedeno jako samostatná linka.</p></div></div></Card>
       </div>
     </AppShell>
   );
