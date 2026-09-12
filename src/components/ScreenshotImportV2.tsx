@@ -137,7 +137,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const relevant = profiles.filter((p) => productDrafts.some((d) => normalize(p.ha_subassy) === normalize(d.product_code) || normalize(p.tup_subassy) === normalize(d.product_code)));
       if (!relevant.length) throw new Error("Pro Product ID nebyl nalezen kompletní Product Profile.");
       const image = await preprocessOcrImage(previewUrl, { scale: 2, quality: 0.94, maxWidth: 4096, maxHeight: 4096 });
-      const r = await extractHourly({ data: { imageDataUrl: image, context: { profiles: relevant, operator_count: operatorCount } });
+      const r = await extractHourly({ data: { imageDataUrl: image, context: { profiles: relevant, operator_count: operatorCount } } });
       const hourlyMetrics = r.hourly_metrics ?? [];
       setHourly(hourlyMetrics); setActualOee(r.actual_shift_oee_pct ?? null);
       const performanceValues = hourlyMetrics.map((m) => m.performance_pct).filter((v): v is number => v != null && Number.isFinite(v));
