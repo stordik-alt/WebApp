@@ -13,19 +13,13 @@ jobs:
         with:
           ref: redesign
           fetch-depth: 0
-      - name: Inspect import
+      - name: Inspect employee stage
         shell: python
         run: |
           from pathlib import Path
-          import re
           s = Path('src/components/ScreenshotImportV2.tsx').read_text()
-          print('length=', len(s))
-          print('help_score occurrences:')
-          for m in re.finditer('help_score', s):
-              print(repr(s[max(0,m.start()-250):m.end()+300]))
-          print('daily_records context:')
-          pos = s.find('daily_records')
-          print(repr(s[max(0,pos-300):pos+2200]))
+          for marker in ['const patchEmployee', 'employeeDrafts.map', 'row.ocrName', 'performance', 'availableTime']:
+              pos = s.find(marker)
+              print('\n###', marker, pos)
+              print(s[max(0,pos-800):pos+5000])
           raise SystemExit(1)
-      - name: Never reached
-        run: echo diagnostic
