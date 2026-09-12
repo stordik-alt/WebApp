@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ImageUp, Loader2, Plus, UploadCloud, X } from "lucide-react";
+import { Check, ImageUp, Loader2, UploadCloud, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractScreenshotStage, type OcrHourlyMetric, type OcrProduct, type OcrResult } from "@/lib/ocr.functions";
 import { extractHourlyWithContext, type ProductProfileContext } from "@/lib/ocr.hourly.functions";
@@ -137,9 +137,15 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const relevant = profiles.filter((p) => productDrafts.some((d) => normalize(p.ha_subassy) === normalize(d.product_code) || normalize(p.tup_subassy) === normalize(d.product_code)));
       if (!relevant.length) throw new Error("Pro Product ID nebyl nalezen kompletní Product Profile.");
       const image = await preprocessOcrImage(previewUrl, { scale: 2, quality: 0.94, maxWidth: 4096, maxHeight: 4096 });
-      const r = await extractHourly({ data: { imageDataUrl: image, context: { profiles: relevant, operator_count: operatorCount } } });
-      setHourly(r.hourly_metrics ?? []); setActualOee(r.actual_shift_oee_pct ?? null);
-      const inferredShift = shiftFromHours(r.hourly_metrics ?? []);
+      const r = await extractHourly({ data: { imageDataUrl: image, context: { profiles: relevant, operator_count: operatorCount } });
+      const hourlyMetrics = r.hourly_metrics ?? [];
+      setHourly(hourlyMetrics); setActualOee(r.actual_shift_oee_pct ?? null);
+      const performanceValues = hourlyMetrics.map((m) => m.performance_pct).filter((v): v is number => v != null && Number.isFinite(v));
+      const availabilityValues = hourlyMetrics.map((m) => m.availability_pct).filter((v): v is number => v != null && Number.isFinite(v));
+      const performanceFromHourly = performanceValues.length ? performanceValues.reduce((a, b) => a + b, 0) / performanceValues.length : null;
+      const availabilityFromHourly = availabilityValues.length ? availabilityValues.reduce((a, b) => a + b, 0) / availabilityValues.length : null;
+      setEmployeeDrafts((prev) => prev.map((row) => ({ ...row, performance: performanceFromHourly != null ? String(Number(performanceFromHourly.toFixed(2))) : row.performance, availableTime: availabilityFromHourly != null ? String(Number(availabilityFromHourly.toFixed(2))) : row.availableTime })));
+      const inferredShift = shiftFromHours(hourlyMetrics);
       if (inferredShift) setResult((prev) => prev ? { ...prev, shift: inferredShift } : prev);
       setStage("ready");
     } catch (e) { toast.error(`3. sekvence OCR selhala: ${(e as Error).message}`); setStage("employees"); } finally { setBusy(false); }
@@ -152,17 +158,19 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const shift = shiftFromHours(hourly) ?? result?.shift ?? SHIFTS[0];
       const line = result?.line?.trim() ?? "";
       if (!line) throw new Error("Chybí výrobní linka.");
-      const primary = productDrafts.find((p) => normalize(p.product_code) === normalize(currentProduct));
-      const { data: profileRows, error: profileError } = await supabase.from("product_profiles").select("*").is("valid_to", null);
-      if (profileError) throw profileError;
       const selected = selectedEmployees;
       if (actualOee == null || !Number.isFinite(actualOee)) throw new Error("Skutečné OEE nebylo vypočteno. Import nelze uložit.");
+      const hourlyPerformanceValues = hourly.map((m) => m.performance_pct).filter((v): v is number => v != null && Number.isFinite(v));
+      const hourlyAvailabilityValues = hourly.map((m) => m.availability_pct).filter((v): v is number => v != null && Number.isFinite(v));
+      const performanceFromHourly = hourlyPerformanceValues.length ? hourlyPerformanceValues.reduce((a, b) => a + b, 0) / hourlyPerformanceValues.length : null;
+      const availabilityFromHourly = hourlyAvailabilityValues.length ? hourlyAvailabilityValues.reduce((a, b) => a + b, 0) / hourlyAvailabilityValues.length : null;
+      if (performanceFromHourly == null || availabilityFromHourly == null) throw new Error("3. sekvence neposkytla platný Výkon nebo Dostupnost. Import nelze uložit.");
       const records = [];
       for (const row of selected) {
         const productCode = row.position === "TUP" ? productDrafts.find((p) => /^T_/i.test(p.product_code))?.product_code ?? currentProduct : productDrafts.find((p) => /^H_/i.test(p.product_code))?.product_code ?? currentProduct;
         const product = allProducts.find((p) => normalize(p.code) === normalize(productCode));
         if (!product) throw new Error(`Product ID ${productCode} nebylo nalezeno.`);
-        records.push({ employee_id: row.employeeId, work_date: workDate, shift, line, product_id: product.id, position: row.position, oee: actualOee, performance: Number(row.performance) || 0, available_time: Number(row.availableTime) || 0, help_score: 0, screenshot_path: screenshotPath, ...approval() });
+        records.push({ employee_id: row.employeeId, work_date: workDate, shift, line, product_id: product.id, position: row.position, oee: actualOee, performance: Number(performanceFromHourly.toFixed(2)), available_time: Number(availabilityFromHourly.toFixed(2)), help_score: 0, screenshot_path: screenshotPath, ...approval() });
       }
       if (!records.length) throw new Error("Import neobsahuje žádného vybraného zaměstnance.");
       const { error } = await supabase.from("daily_records").insert(records);
