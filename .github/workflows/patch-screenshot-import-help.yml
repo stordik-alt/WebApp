@@ -1,0 +1,74 @@
+name: Patch screenshot import help score
+on:
+  push:
+    branches: [redesign]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: redesign
+          fetch-depth: 0
+      - name: Patch import
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          changed = []
+          old = 'availableTime: string; confidence: number; include: boolean'
+          new = 'availableTime: string; helpScore: string; confidence: number; include: boolean'
+          if old in s:
+              s = s.replace(old, new, 1); changed.append('draft type')
+          old = 'availableTime: row.available_time == null ? "" : String(row.available_time), confidence:'
+          new = 'availableTime: row.available_time == null ? "" : String(row.available_time), helpScore: "0", confidence:'
+          if old in s:
+              s = s.replace(old, new, 1); changed.append('ocr default')
+          s = s.replace('availableTime: "", confidence:', 'availableTime: "", helpScore: "0", confidence:')
+          marker = 'supabase.from("daily_records").insert'
+          pos = s.find(marker)
+          if pos < 0: raise SystemExit('daily_records insert not found')
+          end = s.find('});', pos)
+          if end < 0: raise SystemExit('daily_records insert end not found')
+          chunk = s[pos:end]
+          if 'help_score:' not in chunk: raise SystemExit('help_score field not found in daily_records insert')
+          chunk2, n = re.subn(r'help_score:\s*[^,}]+', 'help_score: Number(row.helpScore) || 0', chunk, count=1)
+          if n:
+              s = s[:pos] + chunk2 + s[end:]
+              changed.append('daily record save')
+          if 'helpScore' not in s: raise SystemExit('helpScore state missing')
+          if 'aria-label={`Výpomoc ${row.ocrName}`}' not in s:
+              name_marker = '{row.ocrName}'
+              idx = s.find(name_marker)
+              if idx < 0: raise SystemExit('employee name render not found')
+              line_end = s.find('\n', idx)
+              if line_end < 0: line_end = len(s)
+              line = s[idx:line_end]
+              close = line.rfind('</')
+              if close < 0: raise SystemExit('employee name closing tag not found')
+              tag_end = line.find('>', close)
+              if tag_end < 0: raise SystemExit('employee name closing tag malformed')
+              control = ' <Input type="number" step="0.5" min="-100" max="100" value={row.helpScore} onChange={(e) => setEmployeeDrafts((prev) => prev.map((r) => r.key === row.key ? { ...r, helpScore: e.target.value } : r))} className="mt-2 w-24 text-center" aria-label={`Výpomoc ${row.ocrName}`} />'
+              line = line[:tag_end+1] + control + line[tag_end+1:]
+              s = s[:idx] + line + s[line_end:]
+              changed.append('employee help input')
+          if not changed: raise SystemExit('No changes made; refusing empty patch')
+          p.write_text(s)
+          print('Applied:', ', '.join(changed))
+      - name: Build
+        run: |
+          npm ci
+          npm run build
+      - name: Commit patch and remove workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ScreenshotImportV2.tsx .github/workflows/patch-screenshot-import-help.yml
+          git rm .github/workflows/patch-screenshot-import-help.yml
+          git commit -m 'Add help score input to screenshot import'
+          git push origin redesign
