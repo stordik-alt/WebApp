@@ -69,25 +69,18 @@ function WorkplacesPage() {
       if (masterError) throw masterError;
       const { data: records, error: recordsError } = await supabase.from("daily_records").select("line,work_date,oee,available_time");
       if (recordsError) throw recordsError;
-
       const imported = new Map<string, ParsedImport>();
       for (const row of records ?? []) {
         const parsed = parseImportedLine(String(row.line ?? ""));
         if (parsed && !imported.has(parsed.code)) imported.set(parsed.code, parsed);
       }
-
       const masterByCode = new Map<string, any>((masterRows ?? []).map((row: any) => [String(row.code), row]));
       const missing = [...imported.values()].filter((item) => !masterByCode.has(item.code));
       if (missing.length) {
         const { data: created, error: createError } = await (supabase as any).from("workplaces").insert(missing.map((item) => ({ ...item }))).select("id,code,line_name,workplace_name,area,source_line,created_at,updated_at");
-        if (!createError) {
-          for (const row of created ?? []) masterByCode.set(String(row.code), row);
-        }
+        if (!createError) for (const row of created ?? []) masterByCode.set(String(row.code), row);
       }
-      for (const item of imported.values()) {
-        if (!masterByCode.has(item.code)) masterByCode.set(item.code, { id: `import-${item.code}`, ...item });
-      }
-
+      for (const item of imported.values()) if (!masterByCode.has(item.code)) masterByCode.set(item.code, { id: `import-${item.code}`, ...item });
       const stats = new Map<string, { records: number; lastDate: string | null; oeeSum: number; oeeCount: number; availabilitySum: number; availabilityCount: number }>();
       for (const row of records ?? []) {
         const parsed = parseImportedLine(String(row.line ?? ""));
@@ -102,23 +95,14 @@ function WorkplacesPage() {
         if (Number.isFinite(availability)) { current.availabilitySum += availability; current.availabilityCount += 1; }
         stats.set(parsed.code, current);
       }
-
       return [...masterByCode.values()].map((row: any) => {
         const stat = stats.get(String(row.code));
-        return {
-          id: String(row.id), code: String(row.code), line_name: String(row.line_name),
-          workplace_name: String(row.workplace_name), area: row.area as Workplace["area"],
-          source_line: row.source_line ?? null, records: stat?.records ?? 0,
-          lastDate: stat?.lastDate ?? null,
-          avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null,
-          avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null,
-        };
+        return { id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name), area: row.area as Workplace["area"], source_line: row.source_line ?? null, records: stat?.records ?? 0, lastDate: stat?.lastDate ?? null, avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null, avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null };
       }).sort((a, b) => a.code.localeCompare(b.code, "cs"));
     },
   });
 
   const lineOptions = useMemo(() => [...new Set(workplaces.map((w) => w.line_name))].sort((a, b) => a.localeCompare(b, "cs")), [workplaces]);
-
   const filteredWorkplaces = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("cs-CZ");
     const result = workplaces.filter((w) => {
@@ -139,7 +123,6 @@ function WorkplacesPage() {
     };
     return [...result].sort(compare);
   }, [workplaces, search, areaFilter, lineFilter, sortKey, sortDirection]);
-
   const chartData = useMemo(() => filteredWorkplaces.map((w) => ({ name: w.code, oee: w.avgOee, availability: w.avgAvailability })), [filteredWorkplaces]);
 
   const detailQuery = useQuery({
@@ -183,35 +166,29 @@ function WorkplacesPage() {
         setEditing(null);
       }
       await queryClient.invalidateQueries({ queryKey: ["workplaces"] });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
     <AppShell title="Pracoviště" subtitle="Přehled pracovišť podle kódu, linky a názvu.">
-      <div className="grid min-w-0 gap-6">
+      <div className="grid min-w-0 gap-4 sm:gap-6">
         <Card className="overflow-hidden p-0">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5"
-            onClick={() => setShowFilters((value) => !value)}
-            aria-expanded={showFilters}
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><SlidersHorizontal className="h-5 w-5" /></span>
-              <div className="min-w-0"><h2 className="font-semibold">Filtry a řazení</h2><p className="truncate text-xs text-muted-foreground">Omezte seznam a změňte pořadí.</p></div>
-            </div>
-            <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
-          </button>
+          <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><SlidersHorizontal className="h-4 w-4" /></span>
+              <span className="font-semibold">Filtry a řazení</span>
+              <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+            </button>
+            <span className="shrink-0 text-xs text-muted-foreground">{filteredWorkplaces.length}/{workplaces.length}</span>
+          </div>
           {showFilters ? (
-            <div className="border-t border-border px-4 py-3 sm:px-5">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <div><Label className="text-xs">Hledat</Label><Input className="mt-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kód, linka nebo název…" /></div>
-                <div><Label className="text-xs">Oblast</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as "all" | "HA" | "TUP")}><option value="all">Vše</option><option value="HA">HA</option><option value="TUP">TUP</option></select></div>
-                <div><Label className="text-xs">Linka</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={lineFilter} onChange={(e) => setLineFilter(e.target.value)}><option value="all">Všechny linky</option>{lineOptions.map((line) => <option key={line} value={line}>{line}</option>)}</select></div>
-                <div><Label className="text-xs">Řadit podle</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}><option value="code">Kód pracoviště</option><option value="line">Linka</option><option value="name">Název pracoviště</option><option value="oee">OEE</option><option value="availability">Dostupnost</option><option value="records">Počet záznamů</option></select></div>
-                <div className="flex items-end gap-2"><Button variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); setSortDirection((d) => d === "asc" ? "desc" : "asc"); }}>{sortDirection === "asc" ? "Vzestupně ↑" : "Sestupně ↓"}</Button><Button variant="ghost" onClick={(e) => { e.stopPropagation(); setSearch(""); setAreaFilter("all"); setLineFilter("all"); setSortKey("code"); setSortDirection("asc"); }}>Reset</Button></div>
+            <div className="border-t border-border px-3 py-2 sm:px-4">
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+                <Input className="col-span-2 h-9 lg:col-span-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Hledat…" aria-label="Hledat" />
+                <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as "all" | "HA" | "TUP")} aria-label="Oblast"><option value="all">Oblast: Vše</option><option value="HA">Oblast: HA</option><option value="TUP">Oblast: TUP</option></select>
+                <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={lineFilter} onChange={(e) => setLineFilter(e.target.value)} aria-label="Linka"><option value="all">Linka: všechny</option>{lineOptions.map((line) => <option key={line} value={line}>{line}</option>)}</select>
+                <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} aria-label="Řadit podle"><option value="code">Řadit: kód</option><option value="line">Řadit: linka</option><option value="name">Řadit: název</option><option value="oee">Řadit: OEE</option><option value="availability">Řadit: dostupnost</option><option value="records">Řadit: záznamy</option></select>
+                <div className="flex gap-2"><Button variant="outline" className="h-9 flex-1 px-2" onClick={() => setSortDirection((d) => d === "asc" ? "desc" : "asc")}>{sortDirection === "asc" ? "↑" : "↓"}</Button><Button variant="ghost" className="h-9 px-3" onClick={() => { setSearch(""); setAreaFilter("all"); setLineFilter("all"); setSortKey("code"); setSortDirection("asc"); }}>Reset</Button></div>
               </div>
             </div>
           ) : null}
@@ -227,36 +204,20 @@ function WorkplacesPage() {
         <Card className="overflow-hidden p-0">
           <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div></div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
-            <div className="overflow-x-auto">
-              <div className="min-w-[720px]">
-                <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5">
-                  <span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span>
+            <div className="overflow-x-auto"><div className="min-w-[720px]">
+              <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5"><span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span></div>
+              <div className="divide-y divide-border">{filteredWorkplaces.map((workplace) => (
+                <div key={workplace.id}>
+                  <button type="button" className="grid w-full grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/20 sm:px-5" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
+                    <span className="flex items-center gap-2 font-mono font-semibold"><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}</span><span className="font-medium">{workplace.line_name}</span><span className="min-w-0 truncate font-medium">{workplace.workplace_name}</span><span className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span><span aria-hidden="true" />
+                  </button>
+                  {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="flex flex-wrap items-end gap-2"><div><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} /></div><div><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
+                    {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="truncate font-medium">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
+                  </div>}
                 </div>
-                <div className="divide-y divide-border">
-                  {filteredWorkplaces.map((workplace) => (
-                    <div key={workplace.id}>
-                      <button type="button" className="grid w-full grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/20 sm:px-5" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
-                        <span className="flex items-center gap-2 font-mono font-semibold"><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}</span>
-                        <span className="font-medium">{workplace.line_name}</span>
-                        <span className="min-w-0 truncate font-medium">{workplace.workplace_name}</span>
-                        <span className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span>
-                        <span aria-hidden="true" />
-                      </button>
-
-                      {expanded === workplace.id && (
-                        <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
-                          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                            <div><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div>
-                            <div className="flex flex-wrap items-end gap-2"><div><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} /></div><div><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div>
-                          </div>
-                          {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="truncate font-medium">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+              ))}</div>
+            </div></div>
           )}
         </Card>
 
