@@ -1,0 +1,40 @@
+name: Fix screenshot import position detection
+
+on:
+  push:
+    branches: [redesign]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: redesign
+          fetch-depth: 1
+      - name: Fix position inference
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          old = 'const next = (r.rows ?? []).map((row, i) => { const name = String(row.employee_name ?? "").trim(); const match = employeeMatch(name, activeEmployees); return { key: `${i}-${name}`, ocrName: name, employeeId: match?.id ?? null, position: row.position === "TUP" ? "TUP" as const : "HA" as const, oee: row.oee == null ? "" : String(row.oee), performance: row.performance == null ? "" : String(row.performance), availableTime: row.available_time == null ? "" : String(row.available_time), confidence: Number(row.confidence) || 0, include: true }; }).filter((r) => r.ocrName);'
+          new = 'const next = (r.rows ?? []).map((row, i) => { const name = String(row.employee_name ?? "").trim(); const match = employeeMatch(name, activeEmployees); const lineText = String(result?.line ?? "").toLowerCase(); const productText = String(currentProduct ?? "").toUpperCase(); const position = /hand\\s*assy|handassy/.test(lineText) || /^H_/.test(productText) ? "HA" as const : /tup/.test(lineText) || /^T_/.test(productText) ? "TUP" as const : row.position === "TUP" ? "TUP" as const : "HA" as const; return { key: `${i}-${name}`, ocrName: name, employeeId: match?.id ?? null, position, oee: row.oee == null ? "" : String(row.oee), performance: row.performance == null ? "" : String(row.performance), availableTime: row.available_time == null ? "" : String(row.available_time), confidence: Number(row.confidence) || 0, include: true }; }).filter((r) => r.ocrName);'
+          if old not in s:
+              print('No change needed')
+              raise SystemExit(0)
+          p.write_text(s.replace(old, new))
+          PY
+          if git diff --quiet -- src/components/ScreenshotImportV2.tsx; then
+            echo 'No changes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ScreenshotImportV2.tsx
+          git commit -m 'Fix HandAssy position detection in screenshot import'
+          git push origin redesign
