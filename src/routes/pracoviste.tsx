@@ -60,6 +60,7 @@ function WorkplacesPage() {
   const [lineFilter, setLineFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("code");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [showFilters, setShowFilters] = useState(false);
 
   const { data: workplaces = [], isLoading, isError } = useQuery({
     queryKey: ["workplaces"],
@@ -190,18 +191,30 @@ function WorkplacesPage() {
   return (
     <AppShell title="Pracoviště" subtitle="Přehled pracovišť podle kódu, linky a názvu.">
       <div className="grid min-w-0 gap-6">
-        <Card className="p-4 sm:p-5">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><SlidersHorizontal className="h-5 w-5" /></span>
-            <div><h2 className="font-semibold">Filtry a řazení</h2><p className="text-xs text-muted-foreground">Omezte seznam a změňte pořadí podle potřebného ukazatele.</p></div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div><Label className="text-xs">Hledat</Label><Input className="mt-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kód, linka nebo název…" /></div>
-            <div><Label className="text-xs">Oblast</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as "all" | "HA" | "TUP")}><option value="all">Vše</option><option value="HA">HA</option><option value="TUP">TUP</option></select></div>
-            <div><Label className="text-xs">Linka</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={lineFilter} onChange={(e) => setLineFilter(e.target.value)}><option value="all">Všechny linky</option>{lineOptions.map((line) => <option key={line} value={line}>{line}</option>)}</select></div>
-            <div><Label className="text-xs">Řadit podle</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}><option value="code">Kód pracoviště</option><option value="line">Linka</option><option value="name">Název pracoviště</option><option value="oee">OEE</option><option value="availability">Dostupnost</option><option value="records">Počet záznamů</option></select></div>
-            <div className="flex items-end gap-2"><Button variant="outline" className="w-full" onClick={() => setSortDirection((d) => d === "asc" ? "desc" : "asc")}>{sortDirection === "asc" ? "Vzestupně ↑" : "Sestupně ↓"}</Button><Button variant="ghost" onClick={() => { setSearch(""); setAreaFilter("all"); setLineFilter("all"); setSortKey("code"); setSortDirection("asc"); }}>Reset</Button></div>
-          </div>
+        <Card className="overflow-hidden p-0">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5"
+            onClick={() => setShowFilters((value) => !value)}
+            aria-expanded={showFilters}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><SlidersHorizontal className="h-5 w-5" /></span>
+              <div className="min-w-0"><h2 className="font-semibold">Filtry a řazení</h2><p className="truncate text-xs text-muted-foreground">Omezte seznam a změňte pořadí.</p></div>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+          </button>
+          {showFilters ? (
+            <div className="border-t border-border px-4 py-3 sm:px-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div><Label className="text-xs">Hledat</Label><Input className="mt-1" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Kód, linka nebo název…" /></div>
+                <div><Label className="text-xs">Oblast</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value as "all" | "HA" | "TUP")}><option value="all">Vše</option><option value="HA">HA</option><option value="TUP">TUP</option></select></div>
+                <div><Label className="text-xs">Linka</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={lineFilter} onChange={(e) => setLineFilter(e.target.value)}><option value="all">Všechny linky</option>{lineOptions.map((line) => <option key={line} value={line}>{line}</option>)}</select></div>
+                <div><Label className="text-xs">Řadit podle</Label><select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}><option value="code">Kód pracoviště</option><option value="line">Linka</option><option value="name">Název pracoviště</option><option value="oee">OEE</option><option value="availability">Dostupnost</option><option value="records">Počet záznamů</option></select></div>
+                <div className="flex items-end gap-2"><Button variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); setSortDirection((d) => d === "asc" ? "desc" : "asc"); }}>{sortDirection === "asc" ? "Vzestupně ↑" : "Sestupně ↓"}</Button><Button variant="ghost" onClick={(e) => { e.stopPropagation(); setSearch(""); setAreaFilter("all"); setLineFilter("all"); setSortKey("code"); setSortDirection("asc"); }}>Reset</Button></div>
+              </div>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="overflow-hidden p-0">
