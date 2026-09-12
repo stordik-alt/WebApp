@@ -26,6 +26,7 @@ type Workplace = {
   source_line: string | null;
   records: number;
   lastDate: string | null;
+  avgOee: number | null;
 };
 
 type ParsedImport = { code: string; line_name: string; workplace_name: string; area: "HA" | "TUP"; source_line: string };
@@ -42,6 +43,17 @@ function parseImportedLine(value: string): ParsedImport | null {
   if (prefix !== "041" && prefix !== "050") return null;
   if (!workplace_name) return null;
   return { code, line_name, workplace_name, area, source_line };
+}
+
+function oeeTone(value: number | null) {
+  if (value == null) return "text-muted-foreground";
+  if (value >= 100) return "text-emerald-300";
+  if (value >= 80) return "text-amber-300";
+  return "text-rose-300";
+}
+
+function formatOee(value: number | null) {
+  return value == null ? "–" : `${value.toFixed(1)} %`;
 }
 
 function WorkplacesPage() {
@@ -61,7 +73,7 @@ function WorkplacesPage() {
 
       const { data: records, error: recordsError } = await supabase
         .from("daily_records")
-        .select("line,work_date");
+        .select("line,work_date,oee");
       if (recordsError) throw recordsError;
 
       const imported = new Map<string, ParsedImport>();
@@ -81,23 +93,32 @@ function WorkplacesPage() {
         for (const row of created ?? []) masterByCode.set(String(row.code), row);
       }
 
-      const stats = new Map<string, { records: number; lastDate: string | null }>();
+      const stats = new Map<string, { records: number; lastDate: string | null; oeeSum: number; oeeCount: number }>();
       for (const row of records ?? []) {
         const parsed = parseImportedLine(String(row.line ?? ""));
         if (!parsed) continue;
-        const current = stats.get(parsed.code) ?? { records: 0, lastDate: null };
+        const current = stats.get(parsed.code) ?? { records: 0, lastDate: null, oeeSum: 0, oeeCount: 0 };
         current.records += 1;
         const date = row.work_date ? String(row.work_date) : null;
         if (date && (!current.lastDate || date > current.lastDate)) current.lastDate = date;
+        const oee = Number(row.oee);
+        if (Number.isFinite(oee)) {
+          current.oeeSum += oee;
+          current.oeeCount += 1;
+        }
         stats.set(parsed.code, current);
       }
 
-      return [...masterByCode.values()].map((row: any) => ({
-        id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name),
-        area: row.area as Workplace["area"], source_line: row.source_line ?? null,
-        records: stats.get(String(row.code))?.records ?? 0,
-        lastDate: stats.get(String(row.code))?.lastDate ?? null,
-      })).sort((a, b) => a.code.localeCompare(b.code, "cs"));
+      return [...masterByCode.values()].map((row: any) => {
+        const stat = stats.get(String(row.code));
+        return {
+          id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name),
+          area: row.area as Workplace["area"], source_line: row.source_line ?? null,
+          records: stat?.records ?? 0,
+          lastDate: stat?.lastDate ?? null,
+          avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null,
+        };
+      }).sort((a, b) => a.code.localeCompare(b.code, "cs"));
     },
   });
 
@@ -137,14 +158,14 @@ function WorkplacesPage() {
           </div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : workplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
             <div>
-              <div className="hidden grid-cols-[140px_120px_minmax(0,1fr)_auto] gap-4 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
-                <span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span></span>
+              <div className="hidden grid-cols-[140px_120px_minmax(0,1fr)_130px_auto] gap-4 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+                <span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span>
               </div>
               <div className="divide-y divide-border">
                 {Object.entries(grouped).map(([line, items]) => (
                   <div key={line}>
                     {items.map((workplace) => (
-                      <div key={workplace.id} className="grid gap-3 p-4 sm:grid-cols-[140px_120px_minmax(0,1fr)_auto] sm:items-center sm:gap-4">
+                      <div key={workplace.id} className="grid gap-3 p-4 sm:grid-cols-[140px_120px_minmax(0,1fr)_130px_auto] sm:items-center sm:gap-4">
                         <div><div className="font-mono font-semibold">{workplace.code}</div><div className="mt-1 text-xs text-muted-foreground sm:hidden">{workplace.area}</div></div>
                         <div className="font-medium">{workplace.line_name}</div>
                         <div className="min-w-0">
@@ -155,6 +176,7 @@ function WorkplacesPage() {
                             </div>
                           ) : <><div className="font-medium">{workplace.workplace_name}</div><div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{workplace.area}</span>{workplace.records ? <span>· {workplace.records} záznamů</span> : null}{workplace.lastDate ? <span>· poslední {workplace.lastDate}</span> : null}</div></>}
                         </div>
+                        <div className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</div>
                         {editing !== workplace.id ? <Button size="sm" variant="ghost" onClick={() => beginEdit(workplace)}><Pencil className="mr-1 h-4 w-4" />Upravit</Button> : <span />}
                       </div>
                     ))}
