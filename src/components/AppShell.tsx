@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart, Building2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ResideoLogo } from "@/components/ResideoLogo";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ const NAV = [
   { to: "/moje-vysledky", label: "Moje výsledky", icon: BarChart3, roles: ["operator" as AppRole] },
   { to: "/zamestnanci", label: "Zaměstnanci", icon: Users, roles: STAFF },
   { to: "/denni-data", label: "Denní data", icon: ClipboardList, roles: STAFF },
+  { to: "/pracoviste", label: "Pracoviště", icon: Building2, roles: STAFF },
   { to: "/tydenni-data", label: "Týdenní data", icon: CalendarRange, roles: STAFF },
   { to: "/quality-alerty", label: "Quality Alerty", icon: AlertTriangle, roles: STAFF },
   { to: "/produkty", label: "Produkty / Normy", icon: Package, roles: STAFF },
