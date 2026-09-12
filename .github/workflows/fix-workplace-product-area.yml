@@ -1,0 +1,40 @@
+name: Fix workplace area by product
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sekce
+          fetch-depth: 0
+      - name: Patch import validation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          old = '''        const productCode = row.position === "TUP" ? productDrafts.find((p) => /^T_/i.test(p.product_code))?.product_code ?? currentProduct : productDrafts.find((p) => /^H_/i.test(p.product_code))?.product_code ?? currentProduct;\n'''
+          new = '''        const productCode = row.position === "TUP" ? productDrafts.find((p) => /^T_/i.test(p.product_code))?.product_code ?? currentProduct : productDrafts.find((p) => /^H_/i.test(p.product_code))?.product_code ?? currentProduct;\n        const productArea = /^T_/i.test(productCode) ? "TUP" : /^H_/i.test(productCode) ? "HA" : null;\n        let recordLine = line;\n        if (productArea && line) {\n          const lineMatch = line.match(/(?:^|\\s)(L\\d+\\s*\\/\\s*\\d+(?:\\s+HF)?|Olovo)\\s*$/i);\n          const lineName = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].replace(/\\s*\\/\\s*/g, "/").replace(/\\s+HF$/i, " HF").toUpperCase()) : null;\n          if (lineName) {\n            const { data: matchingWorkplaces } = await (supabase as any).from("workplaces").select("source_line").eq("area", productArea).eq("line_name", lineName).limit(1);\n            if (matchingWorkplaces?.[0]?.source_line) recordLine = matchingWorkplaces[0].source_line;\n          }\n        }\n'''
+          if old not in s:
+              raise SystemExit('Target line not found')
+          s = s.replace(old, new, 1)
+          old2 = '''        records.push({ employee_id: row.employeeId, work_date: workDate, shift, line, product_id: product.id, position: row.position, oee: actualOee, performance: Number(performanceFromHourly.toFixed(2)), available_time: Number(availabilityFromHourly.toFixed(2)), help_score: Number(row.helpScore) || 0, screenshot_path: screenshotPath, ...approval() });\n'''
+          new2 = '''        records.push({ employee_id: row.employeeId, work_date: workDate, shift, line: recordLine, product_id: product.id, position: row.position, oee: actualOee, performance: Number(performanceFromHourly.toFixed(2)), available_time: Number(availabilityFromHourly.toFixed(2)), help_score: Number(row.helpScore) || 0, screenshot_path: screenshotPath, ...approval() });\n'''
+          if old2 not in s:
+              raise SystemExit('Target records.push line not found')
+          s = s.replace(old2, new2, 1)
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/ScreenshotImportV2.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Enforce workplace area from product variant"
+          git push origin sekce
