@@ -25,14 +25,16 @@ type SortKey = "code" | "line" | "name" | "oee" | "availability" | "records";
 
 function parseImportedLine(value: string): ParsedImport | null {
   const source_line = value.trim();
-  const match = source_line.match(/^(\d{3}\.\d{2})\s*-\s*(.*?)\s+(L\d+\/\d+|Olovo)\s*$/i);
+  const match = source_line.match(/^(\d{3}\.\d{2})\s*-\s*(.+)$/i);
   if (!match) return null;
   const code = match[1];
-  const workplace_name = match[2].trim();
-  const line_name = /^olovo$/i.test(match[3]) ? "Olovo" : match[3].toUpperCase();
+  const remainder = match[2].trim();
   const prefix = code.slice(0, 3);
-  const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
   if (prefix !== "041" && prefix !== "050") return null;
+  const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
+  const lineMatch = remainder.match(/(?:^|\s)(L\d+\/\d+|Olovo)\s*$/i);
+  const line_name = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].toUpperCase()) : "Neurčeno";
+  const workplace_name = lineMatch ? remainder.slice(0, lineMatch.index).trim() : remainder;
   if (!workplace_name) return null;
   return { code, line_name, workplace_name, area, source_line };
 }
@@ -59,7 +61,7 @@ function WorkplacesPage() {
   const [sortKey, setSortKey] = useState<SortKey>("code");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  const { data: workplaces = [], isLoading } = useQuery({
+  const { data: workplaces = [], isLoading, isError } = useQuery({
     queryKey: ["workplaces"],
     queryFn: async (): Promise<Workplace[]> => {
       const { data: masterRows, error: masterError } = await (supabase as any).from("workplaces").select("id,code,line_name,workplace_name,area,source_line,created_at,updated_at").order("code", { ascending: true });
@@ -67,13 +69,24 @@ function WorkplacesPage() {
       const { data: records, error: recordsError } = await supabase.from("daily_records").select("line,work_date,oee,available_time");
       if (recordsError) throw recordsError;
       const imported = new Map<string, ParsedImport>();
-      for (const row of records ?? []) { const parsed = parseImportedLine(String(row.line ?? "")); if (parsed && !imported.has(parsed.code)) imported.set(parsed.code, parsed); }
+      for (const row of records ?? []) {
+        const parsed = parseImportedLine(String(row.line ?? ""));
+        if (parsed && !imported.has(parsed.code)) imported.set(parsed.code, parsed);
+      }
       const masterByCode = new Map<string, any>((masterRows ?? []).map((row: any) => [String(row.code), row]));
       const missing = [...imported.values()].filter((item) => !masterByCode.has(item.code));
       if (missing.length) {
         const { data: created, error: createError } = await (supabase as any).from("workplaces").insert(missing.map((item) => ({ ...item }))).select("id,code,line_name,workplace_name,area,source_line,created_at,updated_at");
-        if (createError && createError.code !== "23505") throw createError;
-        for (const row of created ?? []) masterByCode.set(String(row.code), row);
+        if (!createError) {
+          for (const row of created ?? []) masterByCode.set(String(row.code), row);
+        } else if (createError.code !== "23505") {
+          // The list must remain readable even when the optional workplace master cannot be written.
+        }
+      }
+      // Always merge imported workplaces into the display map. This prevents an empty master table
+      // (or a blocked master-table write) from hiding workplaces that already exist in daily_records.
+      for (const item of imported.values()) {
+        if (!masterByCode.has(item.code)) masterByCode.set(item.code, { id: `import-${item.code}`, ...item });
       }
       const stats = new Map<string, { records: number; lastDate: string | null; oeeSum: number; oeeCount: number; availabilitySum: number; availabilityCount: number }>();
       for (const row of records ?? []) {
@@ -86,7 +99,10 @@ function WorkplacesPage() {
         const availability = Number((row as any).available_time); if (Number.isFinite(availability)) { current.availabilitySum += availability; current.availabilityCount += 1; }
         stats.set(parsed.code, current);
       }
-      return [...masterByCode.values()].map((row: any) => { const stat = stats.get(String(row.code)); return { id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name), area: row.area as Workplace["area"], source_line: row.source_line ?? null, records: stat?.records ?? 0, lastDate: stat?.lastDate ?? null, avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null, avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null }; }).sort((a, b) => a.code.localeCompare(b.code, "cs"));
+      return [...masterByCode.values()].map((row: any) => {
+        const stat = stats.get(String(row.code));
+        return { id: String(row.id), code: String(row.code), line_name: String(row.line_name), workplace_name: String(row.workplace_name), area: row.area as Workplace["area"], source_line: row.source_line ?? null, records: stat?.records ?? 0, lastDate: stat?.lastDate ?? null, avgOee: stat && stat.oeeCount > 0 ? stat.oeeSum / stat.oeeCount : null, avgAvailability: stat && stat.availabilityCount > 0 ? stat.availabilitySum / stat.availabilityCount : null };
+      }).sort((a, b) => a.code.localeCompare(b.code, "cs"));
     },
   });
 
@@ -114,7 +130,6 @@ function WorkplacesPage() {
   }, [workplaces, search, areaFilter, lineFilter, sortKey, sortDirection]);
 
   const grouped = useMemo(() => filteredWorkplaces.reduce<Record<string, Workplace[]>>((acc, item) => { (acc[item.line_name] ??= []).push(item); return acc; }, {}), [filteredWorkplaces]);
-
   const chartData = useMemo(() => filteredWorkplaces.map((w) => ({ name: w.code, oee: w.avgOee, availability: w.avgAvailability })), [filteredWorkplaces]);
 
   const detailQuery = useQuery({
@@ -145,8 +160,18 @@ function WorkplacesPage() {
   function beginEdit(workplace: Workplace) { setEditing(workplace.id); setDraftName(workplace.workplace_name); }
   async function saveEdit(workplace: Workplace) {
     const name = draftName.trim(); if (!name) return; setSaving(true);
-    try { const { error } = await (supabase as any).from("workplaces").update({ workplace_name: name }).eq("id", workplace.id); if (error) throw error; setEditing(null); await queryClient.invalidateQueries({ queryKey: ["workplaces"] }); }
-    finally { setSaving(false); }
+    try {
+      if (workplace.id.startsWith("import-")) {
+        const { data, error } = await (supabase as any).from("workplaces").upsert({ code: workplace.code, line_name: workplace.line_name, workplace_name: name, area: workplace.area, source_line: workplace.source_line }, { onConflict: "code" }).select("id").single();
+        if (error) throw error;
+        if (data?.id) setEditing(null);
+      } else {
+        const { error } = await (supabase as any).from("workplaces").update({ workplace_name: name }).eq("id", workplace.id);
+        if (error) throw error;
+        setEditing(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["workplaces"] });
+    } finally { setSaving(false); }
   }
 
   return (
@@ -167,12 +192,12 @@ function WorkplacesPage() {
           <div className="border-b border-border px-4 py-4 sm:px-5">
             <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Porovnání pracovišť</h2><p className="text-xs text-muted-foreground">OEE a dostupnost podle aktuálně filtrovaných pracovišť.</p></div></div><div className="text-xs text-muted-foreground">{filteredWorkplaces.length} / {workplaces.length}</div></div>
           </div>
-          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="p-4 sm:p-5"><div className="h-[360px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: number | undefined) => value == null ? "–" : `${value.toFixed(1)} %`} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div></div>}
+          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="p-4 sm:p-5"><div className="h-[360px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: number | undefined) => value == null ? "–" : `${value.toFixed(1)} %`} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div></div>}
         </Card>
 
         <Card className="overflow-hidden p-0">
           <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · řazení podle {sortKey === "code" ? "kódu" : sortKey === "line" ? "linky" : sortKey === "name" ? "názvu" : sortKey === "oee" ? "OEE" : sortKey === "availability" ? "dostupnosti" : "počtu záznamů"}</p></div></div></div>
-          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
+          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
             <div>
               <div className="hidden grid-cols-[140px_120px_minmax(0,1fr)_130px_auto] gap-4 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid"><span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span></div>
               <div className="divide-y divide-border">
