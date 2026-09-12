@@ -22,13 +22,13 @@ type Workplace = {
   code: string;
   line_name: string;
   workplace_name: string;
-  area: "HA" | "TUP" | "BOTH";
+  area: "HA" | "TUP";
   source_line: string | null;
   records: number;
   lastDate: string | null;
 };
 
-type ParsedImport = { code: string; line_name: string; workplace_name: string; area: "HA" | "TUP" | "BOTH"; source_line: string };
+type ParsedImport = { code: string; line_name: string; workplace_name: string; area: "HA" | "TUP"; source_line: string };
 
 function parseImportedLine(value: string): ParsedImport | null {
   const source_line = value.trim();
@@ -38,13 +38,10 @@ function parseImportedLine(value: string): ParsedImport | null {
   const workplace_name = match[2].trim();
   const line_name = /^olovo$/i.test(match[3]) ? "Olovo" : match[3].toUpperCase();
   const prefix = code.slice(0, 3);
-  const area: "HA" | "TUP" | "BOTH" = line_name === "Olovo" ? "BOTH" : prefix === "041" ? "HA" : prefix === "050" ? "TUP" : "HA";
+  const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
+  if (prefix !== "041" && prefix !== "050") return null;
   if (!workplace_name) return null;
   return { code, line_name, workplace_name, area, source_line };
-}
-
-function areaLabel(area: Workplace["area"]) {
-  return area === "BOTH" ? "HA + TUP" : area;
 }
 
 function WorkplacesPage() {
@@ -148,7 +145,7 @@ function WorkplacesPage() {
                   <div key={line}>
                     {items.map((workplace) => (
                       <div key={workplace.id} className="grid gap-3 p-4 sm:grid-cols-[140px_120px_minmax(0,1fr)_auto] sm:items-center sm:gap-4">
-                        <div><div className="font-mono font-semibold">{workplace.code}</div><div className="mt-1 text-xs text-muted-foreground sm:hidden">{areaLabel(workplace.area)}</div></div>
+                        <div><div className="font-mono font-semibold">{workplace.code}</div><div className="mt-1 text-xs text-muted-foreground sm:hidden">{workplace.area}</div></div>
                         <div className="font-medium">{workplace.line_name}</div>
                         <div className="min-w-0">
                           {editing === workplace.id ? (
@@ -156,7 +153,7 @@ function WorkplacesPage() {
                               <div className="min-w-0 flex-1"><Label className="sr-only">Název pracoviště</Label><Input value={draftName} onChange={(e) => setDraftName(e.target.value)} autoFocus /></div>
                               <div className="flex gap-2"><Button size="sm" onClick={() => saveEdit(workplace)} disabled={saving || !draftName.trim()}><Save className="mr-1 h-4 w-4" />Uložit</Button><Button size="sm" variant="outline" onClick={() => setEditing(null)} disabled={saving}><X className="mr-1 h-4 w-4" />Zrušit</Button></div>
                             </div>
-                          ) : <><div className="font-medium">{workplace.workplace_name}</div><div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{areaLabel(workplace.area)}</span>{workplace.records ? <span>· {workplace.records} záznamů</span> : null}{workplace.lastDate ? <span>· poslední {workplace.lastDate}</span> : null}</div></>}
+                          ) : <><div className="font-medium">{workplace.workplace_name}</div><div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{workplace.area}</span>{workplace.records ? <span>· {workplace.records} záznamů</span> : null}{workplace.lastDate ? <span>· poslední {workplace.lastDate}</span> : null}</div></>}
                         </div>
                         {editing !== workplace.id ? <Button size="sm" variant="ghost" onClick={() => beginEdit(workplace)}><Pencil className="mr-1 h-4 w-4" />Upravit</Button> : <span />}
                       </div>
@@ -167,7 +164,7 @@ function WorkplacesPage() {
             </div>
           )}
         </Card>
-        <Card className="p-4 text-sm text-muted-foreground"><div className="flex items-start gap-3"><Factory className="mt-0.5 h-4 w-4 shrink-0" /><p><strong>Pravidlo:</strong> kód <span className="font-mono">041.xx</span> = HA, kód <span className="font-mono">050.xx</span> = TUP. Linka <strong>Olovo</strong> je vždy společná pro HA i TUP. Název se při prvním importu uloží a následně je možné jej kdykoliv upravit.</p><Users className="mt-0.5 h-4 w-4 shrink-0" /></div></Card>
+        <Card className="p-4 text-sm text-muted-foreground"><div className="flex items-start gap-3"><Factory className="mt-0.5 h-4 w-4 shrink-0" /><p><strong>Pravidlo:</strong> kód <span className="font-mono">041.xx</span> = HA, kód <span className="font-mono">050.xx</span> = TUP. <strong>Olovo je společná linka</strong>, nikoliv společné pracoviště — na lince Olovo jsou samostatná pracoviště HA a TUP. Každé pracoviště má vlastní kód a vlastní zařazení podle kódu.</p><Users className="mt-0.5 h-4 w-4 shrink-0" /></div></Card>
       </div>
     </AppShell>
   );
