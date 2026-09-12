@@ -92,11 +92,12 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     if (!drafts.length) void runEmployees();
   };
 
-  const runEmployees = async () => {
-    if (!previewUrl) return;
+  const runEmployees = async (imageDataUrl?: string) => {
+    const source = imageDataUrl ?? previewUrl;
+    if (!source) return;
     setBusy(true); setStage("employees");
     try {
-      const image = await preprocessOcrImage(previewUrl, { scale: 2, quality: 0.94, maxWidth: 4096, maxHeight: 4096 });
+      const image = await preprocessOcrImage(source, { scale: 2, quality: 0.94, maxWidth: 4096, maxHeight: 4096 });
       const r = await extractStage({ data: { imageDataUrl: image, stage: "employees" } });
       const next = (r.rows ?? []).map((row, i) => { const name = String(row.employee_name ?? "").trim(); const match = employeeMatch(name, activeEmployees); return { key: `${i}-${name}`, ocrName: name, employeeId: match?.id ?? null, position: row.position === "TUP" ? "TUP" as const : "HA" as const, oee: row.oee == null ? "" : String(row.oee), performance: row.performance == null ? "" : String(row.performance), availableTime: row.available_time == null ? "" : String(row.available_time), confidence: Number(row.confidence) || 0, include: true }; }).filter((r) => r.ocrName);
       setEmployeeDrafts(next);
@@ -183,7 +184,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       setStage("products");
       const detected = r.products?.length ? r.products : r.product_code ? [{ product_code: r.product_code, norm_per_hour: r.norm_per_hour, confidence: r.header_confidence }] : [];
       const missing = detected.filter((p) => !profileComplete(loadedProfiles.find((x) => normalize(x.ha_subassy) === normalize(p.product_code) || normalize(x.tup_subassy) === normalize(p.product_code)), p.product_code));
-      if (missing.length) openProfileSetup(detected, loadedProfiles); else await runEmployees();
+      if (missing.length) openProfileSetup(detected, loadedProfiles); else await runEmployees(dataUrl);
     } catch (e) { toast.error(`1. sekvence OCR selhala: ${(e as Error).message}`); } finally { setBusy(false); }
   };
 
