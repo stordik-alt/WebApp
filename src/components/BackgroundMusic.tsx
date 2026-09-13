@@ -21,19 +21,16 @@ export function BackgroundMusic() {
     const loadSong = async () => {
       const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH).data.publicUrl;
       if (!cancelled) setUrl(publicUrl);
-
       const { data: files } = await supabase.storage.from(BUCKET).list("", {
         limit: 100,
         sortBy: { column: "name", order: "asc" },
       });
       if (cancelled) return;
-
       const audioFiles = (files ?? []).filter((file) => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
       const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
       if (file) setUrl(supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl);
       setError("");
     };
-
     void loadSong();
     return () => { cancelled = true; };
   }, []);
@@ -41,6 +38,7 @@ export function BackgroundMusic() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !url) return;
+
     audio.src = url;
     audio.loop = true;
     audio.preload = "auto";
@@ -49,37 +47,6 @@ export function BackgroundMusic() {
     audio.volume = MUSIC_VOLUME;
     audio.load();
 
-    // Zkusit spustit hudbu okamžitě po načtení stránky. Pokud prohlížeč
-    // blokuje automatické přehrávání, spustíme ji při první interakci uživatele.
-    const tryAutoplay = async () => {
-      try {
-        audio.muted = false;
-        audio.volume = MUSIC_VOLUME;
-        await audio.play();
-      } catch {
-        // Autoplay může být prohlížečem z bezpečnostních důvodů zablokován.
-        // První kliknutí/tap/klávesa ho následně odblokuje.
-      }
-    };
-
-    void tryAutoplay();
-
-    const resumeAfterInteraction = () => {
-      if (!audio.paused) return;
-      void audio.play().catch(() => undefined);
-    };
-
-    window.addEventListener("pointerdown", resumeAfterInteraction, { passive: true });
-    window.addEventListener("keydown", resumeAfterInteraction, { passive: true });
-    return () => {
-      window.removeEventListener("pointerdown", resumeAfterInteraction);
-      window.removeEventListener("keydown", resumeAfterInteraction);
-    };
-  }, [url]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
     const onPlay = () => {
       audio.muted = false;
       audio.volume = MUSIC_VOLUME;
@@ -91,16 +58,44 @@ export function BackgroundMusic() {
       setPlaying(false);
       setError("Skladbu se nepodařilo načíst ze Supabase.");
     };
+
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("error", onError);
+
+    const tryAutoplay = async () => {
+      try {
+        audio.muted = false;
+        audio.volume = MUSIC_VOLUME;
+        await audio.play();
+        setPlaying(!audio.paused);
+      } catch {
+        // Browser may block autoplay until the first user interaction.
+      }
+    };
+
+    const resumeAfterInteraction = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-background-music-button]")) return;
+      if (!audio.paused) return;
+      void audio.play()
+        .then(() => setPlaying(!audio.paused))
+        .catch(() => undefined);
+    };
+
+    void tryAutoplay();
+    window.addEventListener("pointerdown", resumeAfterInteraction, { passive: true });
+    window.addEventListener("keydown", resumeAfterInteraction, { passive: true });
+
     return () => {
+      window.removeEventListener("pointerdown", resumeAfterInteraction);
+      window.removeEventListener("keydown", resumeAfterInteraction);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
       audio.pause();
     };
-  }, []);
+  }, [url]);
 
   const toggle = async () => {
     const audio = audioRef.current;
@@ -111,6 +106,7 @@ export function BackgroundMusic() {
         audio.muted = false;
         audio.volume = MUSIC_VOLUME;
         await audio.play();
+        setPlaying(!audio.paused);
       } catch (playError) {
         console.error("Background music playback failed", playError);
         setPlaying(false);
@@ -118,6 +114,7 @@ export function BackgroundMusic() {
       }
     } else {
       audio.pause();
+      setPlaying(false);
     }
   };
 
@@ -128,6 +125,7 @@ export function BackgroundMusic() {
       <audio ref={audioRef} />
       <button
         type="button"
+        data-background-music-button
         onClick={() => void toggle()}
         disabled={!url}
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
