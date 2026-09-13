@@ -50,10 +50,7 @@ export function BackgroundMusic() {
     audio.volume = MUSIC_VOLUME;
     audio.load();
 
-    const syncPlayingState = () => {
-      setPlaying(!audio.paused && !audio.ended);
-    };
-
+    const syncPlayingState = () => setPlaying(!audio.paused && !audio.ended);
     const onPlay = () => {
       audio.muted = false;
       audio.volume = MUSIC_VOLUME;
@@ -86,21 +83,10 @@ export function BackgroundMusic() {
       }
     };
 
-    const resumeAfterInteraction = (event: Event) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("[data-background-music-button]")) return;
-      if (!audio.paused) return;
-      void audio.play().then(syncPlayingState).catch(() => undefined);
-    };
-
     void tryAutoplay();
-    window.addEventListener("pointerdown", resumeAfterInteraction, { passive: true });
-    window.addEventListener("keydown", resumeAfterInteraction, { passive: true });
 
     return () => {
       window.clearInterval(stateTimer);
-      window.removeEventListener("pointerdown", resumeAfterInteraction);
-      window.removeEventListener("keydown", resumeAfterInteraction);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("playing", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -145,59 +131,35 @@ export function BackgroundMusic() {
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
         title={error || (playing ? "Zastavit hudbu" : "Spustit hudbu")}
         style={playing ? {
-          animation: "musicBubblePulse 1.8s cubic-bezier(.4,0,.2,1) infinite",
+          animation: "musicBubblePulse 1.8s ease-in-out infinite",
           backgroundColor: "hsl(var(--primary))",
           color: "hsl(var(--primary-foreground))",
           borderColor: "hsl(var(--primary) / 0.5)",
           boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15), 0 0 24px hsl(var(--primary) / 0.45)",
         } : undefined}
-        className="fixed bottom-4 right-4 z-[9999] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className="fixed bottom-4 right-4 z-[2147483647] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {playing ? (
           <>
             <span className="pointer-events-none absolute -inset-1 rounded-full border border-primary/50" style={{ animation: "musicBubbleRing 1.8s ease-out infinite" }} />
-            <span className="pointer-events-none absolute -inset-2.5 rounded-full border border-primary/25" style={{ animation: "musicBubbleRing 1.8s ease-out .6s infinite" }} />
-            <span className="pointer-events-none absolute -inset-4 rounded-full border border-primary/10" style={{ animation: "musicBubbleRing 2.4s ease-out 1.2s infinite" }} />
+            <span className="pointer-events-none absolute -inset-2 rounded-full border border-primary/25" style={{ animation: "musicBubbleRing 1.8s ease-out 0.6s infinite" }} />
             <span className="pointer-events-none absolute inset-0 rounded-full bg-primary/25" style={{ animation: "musicBubbleGlow 1.8s ease-in-out infinite" }} />
-            <span className="pointer-events-none absolute inset-[-7px]" style={{ animation: "musicBubbleOrbit 3s linear infinite" }}>
-              <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
-            </span>
-            <span className="pointer-events-none absolute inset-[-7px]" style={{ animation: "musicBubbleOrbit 3s linear infinite reverse" }}>
-              <span className="absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary/80" />
-            </span>
           </>
         ) : null}
-        <Music2
-          className="relative z-10 h-5 w-5"
-          style={playing ? { animation: "musicNoteBounce 1.8s ease-in-out infinite" } : undefined}
-        />
+        <Music2 className="relative z-10 h-5 w-5" />
       </button>
       <style>{`
         @keyframes musicBubblePulse {
           0%, 100% { transform: scale(1); }
-          25% { transform: scale(1.04); }
-          50% { transform: scale(1.09); }
-          75% { transform: scale(1.03); }
+          50% { transform: scale(1.08); }
         }
         @keyframes musicBubbleRing {
-          0% { opacity: .72; transform: scale(.88); }
-          70% { opacity: .18; }
-          100% { opacity: 0; transform: scale(1.55); }
+          0% { opacity: .7; transform: scale(.92); }
+          100% { opacity: 0; transform: scale(1.45); }
         }
         @keyframes musicBubbleGlow {
-          0%, 100% { opacity: .18; transform: scale(.94); }
-          35% { opacity: .48; transform: scale(1.03); }
-          65% { opacity: .3; transform: scale(1.1); }
-        }
-        @keyframes musicBubbleOrbit {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes musicNoteBounce {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          25% { transform: translateY(-1px) rotate(-4deg); }
-          50% { transform: translateY(1px) rotate(3deg); }
-          75% { transform: translateY(-1px) rotate(-2deg); }
+          0%, 100% { opacity: .2; transform: scale(.96); }
+          50% { opacity: .5; transform: scale(1.08); }
         }
       `}</style>
     </>,
