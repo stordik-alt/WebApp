@@ -73,8 +73,6 @@ export function BackgroundMusic() {
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("error", onError);
 
-    // Stav synchronizujeme i periodicky. Tím se bublina správně rozsvítí
-    // i v případě, kdy prohlížeč při navigaci vynechá některou media událost.
     const stateTimer = window.setInterval(syncPlayingState, 250);
 
     const tryAutoplay = async () => {
@@ -147,7 +145,7 @@ export function BackgroundMusic() {
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
         title={error || (playing ? "Zastavit hudbu" : "Spustit hudbu")}
         style={playing ? {
-          animation: "musicBubblePulse 1.8s ease-in-out infinite",
+          animation: "musicBubblePulse 1.8s cubic-bezier(.4,0,.2,1) infinite",
           backgroundColor: "hsl(var(--primary))",
           color: "hsl(var(--primary-foreground))",
           borderColor: "hsl(var(--primary) / 0.5)",
@@ -157,34 +155,49 @@ export function BackgroundMusic() {
       >
         {playing ? (
           <>
-            <span
-              className="pointer-events-none absolute -inset-1 rounded-full border border-primary/50"
-              style={{ animation: "musicBubbleRing 1.8s ease-out infinite" }}
-            />
-            <span
-              className="pointer-events-none absolute -inset-2 rounded-full border border-primary/25"
-              style={{ animation: "musicBubbleRing 1.8s ease-out 0.6s infinite" }}
-            />
-            <span
-              className="pointer-events-none absolute inset-0 rounded-full bg-primary/25"
-              style={{ animation: "musicBubbleGlow 1.8s ease-in-out infinite" }}
-            />
+            <span className="pointer-events-none absolute -inset-1 rounded-full border border-primary/50" style={{ animation: "musicBubbleRing 1.8s ease-out infinite" }} />
+            <span className="pointer-events-none absolute -inset-2.5 rounded-full border border-primary/25" style={{ animation: "musicBubbleRing 1.8s ease-out .6s infinite" }} />
+            <span className="pointer-events-none absolute -inset-4 rounded-full border border-primary/10" style={{ animation: "musicBubbleRing 2.4s ease-out 1.2s infinite" }} />
+            <span className="pointer-events-none absolute inset-0 rounded-full bg-primary/25" style={{ animation: "musicBubbleGlow 1.8s ease-in-out infinite" }} />
+            <span className="pointer-events-none absolute inset-[-7px]" style={{ animation: "musicBubbleOrbit 3s linear infinite" }}>
+              <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+            </span>
+            <span className="pointer-events-none absolute inset-[-7px]" style={{ animation: "musicBubbleOrbit 3s linear infinite reverse" }}>
+              <span className="absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary/80" />
+            </span>
           </>
         ) : null}
-        <Music2 className="relative z-10 h-5 w-5" />
+        <Music2
+          className="relative z-10 h-5 w-5"
+          style={playing ? { animation: "musicNoteBounce 1.8s ease-in-out infinite" } : undefined}
+        />
       </button>
       <style>{`
         @keyframes musicBubblePulse {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.08); }
+          25% { transform: scale(1.04); }
+          50% { transform: scale(1.09); }
+          75% { transform: scale(1.03); }
         }
         @keyframes musicBubbleRing {
-          0% { opacity: .7; transform: scale(.92); }
-          100% { opacity: 0; transform: scale(1.45); }
+          0% { opacity: .72; transform: scale(.88); }
+          70% { opacity: .18; }
+          100% { opacity: 0; transform: scale(1.55); }
         }
         @keyframes musicBubbleGlow {
-          0%, 100% { opacity: .2; transform: scale(.96); }
-          50% { opacity: .5; transform: scale(1.08); }
+          0%, 100% { opacity: .18; transform: scale(.94); }
+          35% { opacity: .48; transform: scale(1.03); }
+          65% { opacity: .3; transform: scale(1.1); }
+        }
+        @keyframes musicBubbleOrbit {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes musicNoteBounce {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25% { transform: translateY(-1px) rotate(-4deg); }
+          50% { transform: translateY(1px) rotate(3deg); }
+          75% { transform: translateY(-1px) rotate(-2deg); }
         }
       `}</style>
     </>,
