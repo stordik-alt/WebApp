@@ -17,6 +17,7 @@ import { themeInitScript } from "@/lib/use-theme";
 import { percentColor } from "@/lib/percent-color";
 import appCss from "../styles.css?url";
 import mintCss from "../mint-theme.css?url";
+import appearanceCss from "../appearance-themes.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -114,6 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: mintCss },
+      { rel: "stylesheet", href: appearanceCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
