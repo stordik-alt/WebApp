@@ -13,6 +13,22 @@ function profileIsComplete(profile: ProductProfileContext | undefined) { return 
 export async function sha256File(file: File) { const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer()); return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join(""); }
 export async function createImportBatch(totalItems: number) { const { data, error } = await db.from("import_batches").insert({ total_items: totalItems, status: "PROCESSING" }).select("*").single(); if (error) throw error; return data as { id: string }; }
 export async function createImportItem(batchId: string, screenshotPath: string, sourceHash: string) { const { data, error } = await db.from("import_items").insert({ batch_id: batchId, screenshot_path: screenshotPath, source_hash: sourceHash, status: "PROCESSING" }).select("*").single(); if (error) throw error; return data as { id: string }; }
+
+export async function completeImportBatch(batchId: string) {
+  const { data: items, error } = await db.from("import_items").select("status").eq("batch_id", batchId);
+  if (error) throw error;
+  const list = (items ?? []) as Array<{ status: string }>;
+  const total = list.length;
+  const autoApproved = list.filter((x) => x.status === "AUTO_APPROVED").length;
+  const pending = list.filter((x) => x.status === "PENDING_APPROVAL").length;
+  const errors = list.filter((x) => x.status === "ERROR" || x.status === "REJECTED").length;
+  const completed = autoApproved + pending + errors + list.filter((x) => x.status === "APPROVED").length;
+  const status = errors > 0 ? (completed >= total ? "COMPLETED_WITH_ERRORS" : "FAILED") : completed >= total ? "COMPLETED" : "PROCESSING";
+  const { error: updateError } = await db.from("import_batches").update({ status, completed_at: completed >= total ? new Date().toISOString() : null }).eq("id", batchId);
+  if (updateError) throw updateError;
+  return { total, autoApproved, pending, errors, status };
+}
+
 export async function markImportItemError(itemId: string, message: string) { await db.from("import_items").update({ status: "ERROR", error_message: message, completed_at: new Date().toISOString() }).eq("id", itemId); await db.from("import_item_events").insert({ import_item_id: itemId, event_type: "ERROR", to_status: "ERROR", payload: { message } }); }
 
 export async function persistOcrResult(itemId: string, result: OcrResult, products: Product[], employees: Employee[], profiles: ProductProfileContext[]) {
