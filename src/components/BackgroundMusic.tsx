@@ -19,26 +19,24 @@ export function BackgroundMusic() {
 
     let cancelled = false;
     const loadSong = async () => {
-      const { data: files, error: listError } = await supabase.storage.from(BUCKET).list("", {
+      // Nečekáme na storage.list(): přehrávač musí být schopný použít pevnou
+      // cestu i v případě, že listování bucketu není pro veřejného uživatele povoleno.
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH);
+      if (!cancelled) setUrl(data.publicUrl);
+
+      // Pokud walk.mp3 neexistuje, zkusíme najít první audio soubor v bucketu.
+      const { data: files } = await supabase.storage.from(BUCKET).list("", {
         limit: 100,
         sortBy: { column: "name", order: "asc" },
       });
-
       if (cancelled) return;
-      if (listError) {
-        setError("Hudbu se nepodařilo načíst.");
-        return;
-      }
 
       const audioFiles = (files ?? []).filter((file) => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
-      const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
-      if (!file) {
-        setError("V úložišti není nalezena žádná skladba.");
-        return;
-      }
+      if (audioFiles.length === 0) return;
 
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(file.name);
-      setUrl(data.publicUrl);
+      const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
+      const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl;
+      setUrl(publicUrl);
       setError("");
     };
 
@@ -51,9 +49,11 @@ export function BackgroundMusic() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !url) return;
+
     audio.src = url;
     audio.loop = true;
     audio.preload = "auto";
+    audio.volume = volume;
     audio.load();
   }, [url]);
 
@@ -66,11 +66,14 @@ export function BackgroundMusic() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      setPlaying(true);
+      setError("");
+    };
     const onPause = () => setPlaying(false);
     const onError = () => {
       setPlaying(false);
-      setError("Skladbu se nepodařilo přehrát.");
+      setError("Skladbu se nepodařilo načíst ze Supabase.");
     };
 
     audio.addEventListener("play", onPlay);
@@ -87,13 +90,14 @@ export function BackgroundMusic() {
   const toggle = async () => {
     const audio = audioRef.current;
     if (!audio || !url) return;
-    setError("");
 
+    setError("");
     if (audio.paused) {
       try {
         await audio.play();
-      } catch {
-        setError("Přehrávání zablokoval prohlížeč.");
+      } catch (playError) {
+        console.error("Background music playback failed", playError);
+        setError("Přehrávání bylo prohlížečem zablokováno.");
       }
     } else {
       audio.pause();
