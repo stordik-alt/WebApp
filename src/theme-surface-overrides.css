@@ -1,0 +1,71 @@
+/*
+ * Theme surface normalization.
+ * Legacy Tailwind slate classes and table headers must never keep the
+ * original blue surface when another OptiShift color scheme is selected.
+ * All surfaces derive from the active theme tokens instead.
+ */
+
+/* Tables: the header previously used a fixed blue/gray dark-mode value. */
+table thead,
+table thead tr {
+  background: hsl(var(--muted) / 0.55) !important;
+}
+table thead th {
+  background: transparent !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border-color: hsl(var(--border) / 0.8) !important;
+}
+
+/* Legacy slate surfaces: map them to the active theme surfaces. */
+.bg-slate-950\/20 { background-color: hsl(var(--background) / 0.78) !important; }
+.bg-slate-950\/40 { background-color: hsl(var(--card) / 0.92) !important; }
+.bg-slate-950\/45 { background-color: hsl(var(--card) / 0.94) !important; }
+.bg-slate-950\/60 { background-color: hsl(var(--card)) !important; }
+.bg-slate-900\/35 { background-color: hsl(var(--muted) / 0.48) !important; }
+.bg-slate-900\/45 { background-color: hsl(var(--muted) / 0.58) !important; }
+.bg-slate-900\/55 { background-color: hsl(var(--muted) / 0.68) !important; }
+.bg-slate-900\/70 { background-color: hsl(var(--muted) / 0.78) !important; }
+.bg-slate-900\/80 { background-color: hsl(var(--muted) / 0.88) !important; }
+
+/* Legacy slate borders: use the active scheme's border token. */
+.border-slate-500\/80,
+.border-slate-500\/70,
+.border-slate-500\/60,
+.border-slate-500\/50,
+.border-slate-500\/40,
+.border-slate-600\/80,
+.border-slate-600\/70,
+.border-slate-600\/60,
+.border-slate-600\/50,
+.border-slate-700\/80,
+.border-slate-700\/70,
+.border-slate-700\/60,
+.border-slate-700\/50 {
+  border-color: hsl(var(--border) / 0.9) !important;
+}
+
+/* Keep legacy panel frames tied to the current scheme's accent. */
+.rounded-xl.bg-slate-950\/40,
+.rounded-2xl.bg-slate-950\/40,
+.rounded-lg.bg-slate-950\/40,
+.rounded-xl.bg-slate-950\/60,
+.rounded-2xl.bg-slate-950\/60 {
+  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
+  box-shadow: var(--neon-shadow), var(--shadow-card) !important;
+}
+
+/* Light and dark mode use the same scheme tokens; only luminance changes. */
+html:not(.dark) table thead,
+html.dark table thead {
+  background: hsl(var(--muted) / 0.55) !important;
+}
+
+/* Prevent a hard-coded blue utility surface from leaking into any theme. */
+.bg-blue-950\/20,
+.bg-blue-950\/30,
+.bg-blue-950\/40,
+.bg-indigo-950\/20,
+.bg-indigo-950\/30,
+.bg-indigo-950\/40 {
+  background-color: hsl(var(--card) / 0.92) !important;
+}
