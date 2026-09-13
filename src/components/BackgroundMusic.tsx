@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Music2 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 
 const VOLUME_KEY = "app-background-music-volume";
@@ -13,8 +12,6 @@ export function BackgroundMusic() {
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(0.25);
   const [error, setError] = useState("");
-  const { role } = useAuth();
-  const isAdmin = role === "admin";
 
   useEffect(() => {
     const stored = Number(window.localStorage.getItem(VOLUME_KEY));
@@ -57,9 +54,13 @@ export function BackgroundMusic() {
     audio.src = url;
     audio.loop = true;
     audio.preload = "auto";
-    audio.volume = volume;
     audio.load();
-  }, [url, volume]);
+  }, [url]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) audio.volume = volume;
+  }, [volume]);
 
   useEffect(() => {
     const audio = audioRef.current;
