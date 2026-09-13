@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEmployees } from "@/lib/data";
 import { useAuth, type AppRole } from "@/lib/auth";
+import { AppShell } from "@/components/AppShell";
 
 export const Route = createFileRoute("/ke-schvaleni")({
   head: () => ({ meta: [{ title: "Ke schválení – Výkonnost operátorů" }, { name: "description", content: "Kontrola a schvalování nových účtů a záznamů před zařazením do aplikace." }] }),
