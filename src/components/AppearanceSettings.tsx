@@ -19,8 +19,8 @@ export function AppearanceSettings() {
 
   return (
     <>
-      <Button type="button" variant="ghost" className="w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => setOpen(true)} aria-label="Nastavení vzhledu">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sidebar-accent/45"><Palette className="h-4 w-4" /></span>
+      <Button type="button" variant="ghost" className="h-10 w-full justify-start gap-3 rounded-xl px-3 py-2 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => setOpen(true)} aria-label="Nastavení vzhledu">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sidebar-accent/45"><Palette className="h-4 w-4" /></span>
         <span>Nastavení vzhledu</span>
       </Button>
 
