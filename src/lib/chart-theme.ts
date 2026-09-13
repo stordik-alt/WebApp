@@ -9,5 +9,7 @@ export const tooltipStyle = {
   },
   labelStyle: { color: "var(--popover-foreground)", fontWeight: 600 },
   itemStyle: { color: "var(--popover-foreground)" },
-  cursor: { fill: "var(--muted)", stroke: "var(--border)" },
+  // Recharts expects valid CSS colors here. Our theme tokens are HSL channels,
+  // so wrap them in hsl() to prevent the active tooltip cursor from rendering black.
+  cursor: { fill: "hsl(var(--muted))", stroke: "hsl(var(--border))" },
 } as const;
