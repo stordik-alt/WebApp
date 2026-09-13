@@ -30,6 +30,8 @@ npm run dev
 
 ## Deployment na Vercel
 
+**Aktuální nasazená aplikace:** https://opti-shift.vercel.app/
+
 Projekt je nastaven pro hosting na Vercelu. Build (`npm run build`) používá Nitro preset `vercel` a vytvoří `.vercel/output` (Vercel Build Output API) — SSR běží jako serverless funkce, statické soubory se servírují z CDN.
 
 Postup:
