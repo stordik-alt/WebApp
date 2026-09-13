@@ -1,0 +1,230 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { CheckCircle2, ExternalLink, UserPlus, XCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEmployees } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
+import { upsertImportedProductProfile } from "@/lib/productProfiles";
+
+const db = supabase as any;
+
+type PendingImport = {
+  id: string; batch_id: string; created_at: string; screenshot_path: string | null;
+  work_date: string | null; shift: string | null; line: string | null; product_code: string | null; product_name: string | null;
+  norm_per_hour: number | null; ocr_confidence: number | null; ocr_data: any; admin_corrections: any; pending_reasons: string[] | null;
+  product_id: string | null; product_match_status: string | null; product_profile_status: string | null;
+};
+
+type PendingRow = {
+  id: string; import_item_id: string; row_index: number; ocr_employee_name: string | null; employee_id: string | null;
+  position: "HA" | "TUP" | null; oee: number | null; performance: number | null; available_time: number | null;
+  confidence: number | null; match_status: string; validation_status: string; admin_corrections: any;
+};
+
+type RowDraft = { employeeName: string; position: string; oee: string; performance: string; availableTime: string };
+type ProfileDraft = { profileName: string; haCode: string; haNorm: string; haCapacity: string; tupCode: string; tupNorm: string; tupCapacity: string; validFrom: string };
+
+const reasonLabels: Record<string, string> = {
+  MISSING_DATE: "Chybí datum", MISSING_SHIFT: "Chybí směna", MISSING_LINE: "Chybí linka", PRODUCT_NOT_FOUND: "Produkt není v databázi",
+  PRODUCT_PROFILE_MISSING: "Chybí Product Profile", PRODUCT_PROFILE_INCOMPLETE: "Product Profile není kompletní", EMPLOYEE_UNMATCHED: "Zaměstnanec není přiřazen",
+  POSITION_MISSING: "Chybí HA/TUP", OEE_MISSING: "Chybí OEE", PERFORMANCE_MISSING: "Chybí výkon", AVAILABILITY_MISSING: "Chybí dostupnost",
+  HOURLY_DATA_MISSING: "Chybí hodinová data", HOURLY_KPI_MISSING: "Hodinová data nemají platné KPI", DUPLICATE_RECORD: "Denní záznam již existuje",
+};
+const labelReason = (v: string) => reasonLabels[v] ?? v;
+const numOrNull = (v: string) => { if (!v.trim()) return null; const n = Number(v.replace(",", ".")); return Number.isFinite(n) ? n : null; };
+const normalize = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "");
+
+export function ImportApprovalQueue() {
+  const qc = useQueryClient();
+  const { data: employees = [] } = useEmployees();
+  const { session } = useAuth();
+  const [selected, setSelected] = useState<PendingImport | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Record<string, string>>({});
+  const [rowEditing, setRowEditing] = useState<Record<string, RowDraft>>({});
+  const [employeeOpen, setEmployeeOpen] = useState(false);
+  const [employeeRow, setEmployeeRow] = useState<PendingRow | null>(null);
+  const [newEmployee, setNewEmployee] = useState({ fullName: "", firstName: "", lastName: "" });
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState<ProfileDraft>({ profileName: "", haCode: "", haNorm: "", haCapacity: "", tupCode: "", tupNorm: "", tupCapacity: "", validFrom: new Date().toISOString().slice(0, 10) });
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const query = useQuery({
+    queryKey: ["import-approval-queue"],
+    queryFn: async () => {
+      const { data: items, error } = await db.from("import_items").select("*").eq("status", "PENDING_APPROVAL").order("created_at", { ascending: false });
+      if (error) throw error;
+      const ids = (items ?? []).map((x: any) => x.id);
+      if (!ids.length) return { items: [] as PendingImport[], rows: [] as PendingRow[] };
+      const { data: rows, error: rowError } = await db.from("import_item_rows").select("*").in("import_item_id", ids).order("row_index");
+      if (rowError) throw rowError;
+      return { items: items as PendingImport[], rows: rows as PendingRow[] };
+    },
+  });
+  const items = query.data?.items ?? [];
+  const rows = query.data?.rows ?? [];
+  const selectedRows = useMemo(() => selected ? rows.filter(r => r.import_item_id === selected.id) : [], [rows, selected]);
+  const blockerList = selected?.pending_reasons ?? [];
+
+  const openPreview = async (item: PendingImport) => {
+    setSelected(item); setEditing({}); setRowEditing({});
+    if (!item.screenshot_path) return setPreviewUrl(null);
+    const { data, error } = await supabase.storage.from("screenshots").createSignedUrl(item.screenshot_path, 600);
+    if (error) { toast.error(`Screenshot nelze zobrazit: ${error.message}`); return; }
+    setPreviewUrl(data.signedUrl);
+  };
+
+  const saveHeader = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("Není vybrán import.");
+      const patch = {
+        work_date: editing.work_date ?? selected.work_date,
+        shift: editing.shift ?? selected.shift,
+        line: editing.line ?? selected.line,
+        product_code: editing.product_code ?? selected.product_code,
+        product_name: editing.product_name ?? selected.product_name,
+        norm_per_hour: editing.norm_per_hour === undefined ? selected.norm_per_hour : numOrNull(editing.norm_per_hour),
+      } as Record<string, unknown>;
+      if (!patch.work_date || !patch.shift || !patch.line) throw new Error("Datum, směna a linka musí být vyplněné.");
+      const code = String(patch.product_code ?? "").trim();
+      if (!code) throw new Error("Product ID musí být vyplněné.");
+      const { data: products, error: productError } = await db.from("products").select("id,code,name,active");
+      if (productError) throw productError;
+      const product = (products ?? []).find((p: any) => normalize(p.code) === normalize(code));
+      let productProfileStatus: "VALID" | "MISSING" | "INCOMPLETE" = "MISSING";
+      if (product) {
+        const { data: profiles, error } = await db.from("product_profiles").select("*").is("valid_to", null).order("valid_from", { ascending: false });
+        if (error) throw error;
+        const pp = (profiles ?? []).find((p: any) => normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code));
+        productProfileStatus = !pp ? "MISSING" : (pp.ha_subassy && Number(pp.h_norm_per_hour) > 0 && Number(pp.h_capacity) >= 1 && pp.tup_subassy && Number(pp.t_norm_per_hour) > 0 && Number(pp.t_capacity) >= 1 ? "VALID" : "INCOMPLETE");
+      }
+      const reasons: string[] = [];
+      if (!product) reasons.push("PRODUCT_NOT_FOUND");
+      else if (productProfileStatus === "MISSING") reasons.push("PRODUCT_PROFILE_MISSING");
+      else if (productProfileStatus === "INCOMPLETE") reasons.push("PRODUCT_PROFILE_INCOMPLETE");
+      for (const row of selectedRows) {
+        if (!row.employee_id) reasons.push("EMPLOYEE_UNMATCHED");
+        if (!row.position) reasons.push("POSITION_MISSING");
+        if (row.oee == null || !Number.isFinite(Number(row.oee))) reasons.push("OEE_MISSING");
+        if (row.performance == null || !Number.isFinite(Number(row.performance))) reasons.push("PERFORMANCE_MISSING");
+        if (row.available_time == null || !Number.isFinite(Number(row.available_time))) reasons.push("AVAILABILITY_MISSING");
+      }
+      const { error } = await db.from("import_items").update({ ...patch, product_id: product?.id ?? null, product_match_status: product ? "MATCHED" : "UNMATCHED", product_profile_status: productProfileStatus, pending_reasons: [...new Set(reasons)], admin_corrections: { ...(selected.admin_corrections ?? {}), ...patch } }).eq("id", selected.id).eq("status", "PENDING_APPROVAL");
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("OCR opravy byly uloženy a validace přepočítána."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveRow = useMutation({
+    mutationFn: async ({ row }: { row: PendingRow }) => {
+      const draft = rowEditing[row.id] ?? { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", oee: String(row.oee ?? ""), performance: String(row.performance ?? ""), availableTime: String(row.available_time ?? "") };
+      const oee = numOrNull(draft.oee), performance = numOrNull(draft.performance), availableTime = numOrNull(draft.availableTime);
+      if (!draft.employeeName.trim()) throw new Error("OCR jméno zaměstnance nesmí být prázdné.");
+      if (!draft.position || !["HA", "TUP"].includes(draft.position)) throw new Error("Pozice musí být HA nebo TUP.");
+      if (oee == null || performance == null || availableTime == null) throw new Error("OEE, výkon a dostupnost musí být platná čísla.");
+      const { error } = await db.from("import_item_rows").update({ ocr_employee_name: draft.employeeName.trim(), position: draft.position, oee, performance, available_time: availableTime, admin_corrections: { ...(row.admin_corrections ?? {}), ocr_employee_name: draft.employeeName.trim(), position: draft.position, oee, performance, available_time: availableTime } }).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Řádek zaměstnance byl uložen."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const assignEmployee = useMutation({
+    mutationFn: async ({ row, employeeId }: { row: PendingRow; employeeId: string }) => {
+      const { error } = await db.from("import_item_rows").update({ employee_id: employeeId, match_status: "ASSIGNED_MANUALLY", validation_status: "VALID", admin_corrections: { ...(row.admin_corrections ?? {}), employee_id: employeeId } }).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Zaměstnanec byl přiřazen."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const createEmployee = useMutation({
+    mutationFn: async ({ row }: { row: PendingRow }) => {
+      const fullName = newEmployee.fullName.trim() || `${newEmployee.firstName.trim()} ${newEmployee.lastName.trim()}`.trim();
+      if (!fullName) throw new Error("Jméno zaměstnance nesmí být prázdné.");
+      const { data, error } = await db.from("employees").insert({ full_name: fullName, active: true }).select("id").single();
+      if (error) throw error;
+      const { error: rowError } = await db.from("import_item_rows").update({ employee_id: data.id, match_status: "CREATED_NEW", validation_status: "VALID", admin_corrections: { ...(row.admin_corrections ?? {}), created_employee_id: data.id, created_employee_name: fullName } }).eq("id", row.id);
+      if (rowError) throw rowError;
+    },
+    onSuccess: () => { setEmployeeOpen(false); setEmployeeRow(null); setNewEmployee({ fullName: "", firstName: "", lastName: "" }); qc.invalidateQueries(); toast.success("Zaměstnanec byl vytvořen a přiřazen."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const createProfile = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("Není vybrán import.");
+      const validFrom = profile.validFrom || selected.work_date || new Date().toISOString().slice(0, 10);
+      const ha = profile.haCode.trim() ? { code: profile.haCode.trim(), norm: Number(profile.haNorm), capacity: Number(profile.haCapacity) } : undefined;
+      const tup = profile.tupCode.trim() ? { code: profile.tupCode.trim(), norm: Number(profile.tupNorm), capacity: Number(profile.tupCapacity) } : undefined;
+      if (!ha || !tup) throw new Error("Product Profile musí obsahovat HA i TUP Product ID.");
+      if (!Number.isFinite(ha.norm) || ha.norm <= 0 || !Number.isInteger(ha.capacity) || ha.capacity < 1) throw new Error("HA norma/kapacita nejsou platné.");
+      if (!Number.isFinite(tup.norm) || tup.norm <= 0 || !Number.isInteger(tup.capacity) || tup.capacity < 1) throw new Error("TUP norma/kapacita nejsou platné.");
+      await upsertImportedProductProfile({ profileName: profile.profileName || selected.product_name, ha, tup, validFrom });
+      const { error } = await db.from("import_items").update({ product_profile_status: "VALID", admin_corrections: { ...(selected.admin_corrections ?? {}), product_profile_created: true, product_profile: profile } }).eq("id", selected.id).eq("status", "PENDING_APPROVAL");
+      if (error) throw error;
+    },
+    onSuccess: () => { setProfileOpen(false); qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Product Profile byl uložen. Výrobní data stále čekají na schválení."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const approve = useMutation({
+    mutationFn: async (item: PendingImport) => {
+      const { data, error } = await db.rpc("approve_import_item", { p_import_item_id: item.id, p_actor_id: session?.user?.id ?? null });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data?.message ?? "Schválení importu selhalo.");
+      return data;
+    },
+    onSuccess: (data: any) => { setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); qc.invalidateQueries(); toast.success(`Import byl schválen. Vytvořeno záznamů: ${data?.created_count ?? 0}.`); },
+    onError: (e: Error) => toast.error(`Import nebyl schválen: ${e.message}`),
+  });
+
+  const reject = useMutation({
+    mutationFn: async ({ item, reason }: { item: PendingImport; reason: string }) => {
+      if (!reason.trim()) throw new Error("U zamítnutí je nutný důvod.");
+      const now = new Date().toISOString();
+      const { error } = await db.from("import_items").update({ status: "REJECTED", rejected_by: session?.user?.id ?? null, rejected_at: now, rejection_reason: reason.trim(), completed_at: now }).eq("id", item.id).eq("status", "PENDING_APPROVAL");
+      if (error) throw error;
+      const { error: eventError } = await db.from("import_item_events").insert({ import_item_id: item.id, actor_id: session?.user?.id ?? null, event_type: "ADMIN_REJECTED", from_status: "PENDING_APPROVAL", to_status: "REJECTED", payload: { reason: reason.trim() } });
+      if (eventError) throw eventError;
+    },
+    onSuccess: () => { setRejectOpen(false); setRejectReason(""); setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Import byl zamítnut."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openEmployee = (row: PendingRow) => { setEmployeeRow(row); setNewEmployee({ fullName: row.ocr_employee_name ?? "", firstName: "", lastName: "" }); setEmployeeOpen(true); };
+  const startProfile = () => {
+    if (!selected) return;
+    const main = (selected.ocr_data?.products ?? []).find((p: any) => p.product_code === selected.product_code) ?? selected.ocr_data?.products?.[0];
+    setProfile({ profileName: selected.product_name ?? selected.product_code ?? "", haCode: main?.product_code ?? selected.product_code ?? "", haNorm: main?.norm_per_hour != null ? String(main.norm_per_hour) : "", haCapacity: "", tupCode: "", tupNorm: "", tupCapacity: "", validFrom: selected.work_date ?? new Date().toISOString().slice(0, 10) });
+    setProfileOpen(true);
+  };
+  const openRowEdit = (row: PendingRow) => setRowEditing(p => ({ ...p, [row.id]: { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", oee: String(row.oee ?? ""), performance: String(row.performance ?? ""), availableTime: String(row.available_time ?? "") } }));
+  const updateDraft = (row: PendingRow, key: keyof RowDraft, value: string) => setRowEditing(p => ({ ...p, [row.id]: { ...(p[row.id] ?? { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", oee: String(row.oee ?? ""), performance: String(row.performance ?? ""), availableTime: String(row.available_time ?? "") }), [key]: value } }));
+
+  return <div className="grid gap-4">
+    <Card className="p-4"><div className="flex items-center justify-between gap-3"><div><div className="font-semibold">Importy čekající na schválení</div><div className="text-sm text-muted-foreground">OCR je pouze návrh. Před schválením lze upravit všechny OCR hodnoty.</div></div><Badge variant={items.length ? "default" : "outline"}>{items.length} čeká</Badge></div></Card>
+    {query.isLoading ? <Card className="p-6 text-sm text-muted-foreground">Načítám importy…</Card> : query.error ? <Card className="p-6 text-sm text-destructive">Nepodařilo se načíst importy: {(query.error as Error).message}</Card> : items.length === 0 ? <Card className="p-8 text-center text-sm text-muted-foreground">Žádný import nečeká na schválení.</Card> : <div className="grid gap-3">{items.map(item => <Card key={item.id} className="p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap gap-2"><Badge variant="secondary">PENDING</Badge>{item.product_code && <Badge variant="outline">{item.product_code}</Badge>}{item.ocr_confidence != null && <Badge variant="outline">OCR {Math.round(Number(item.ocr_confidence) * 100)}%</Badge>}</div><div className="mt-2 font-medium">{item.work_date ?? "Bez data"} · {item.shift ?? "Bez směny"} · {item.line ?? "Bez linky"}</div><div className="text-sm text-muted-foreground">{item.product_name || item.product_code || "Neurčený produkt"} · {rows.filter(r => r.import_item_id === item.id).length} zaměstnanců</div><div className="mt-2 flex flex-wrap gap-1">{(item.pending_reasons ?? []).map(r => <Badge key={r} variant="destructive" className="text-xs">{labelReason(r)}</Badge>)}</div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void openPreview(item)}>Detail / screenshot</Button><Button variant="destructive" onClick={() => { setSelected(item); setRejectOpen(true); }}>Zamítnout</Button></div></div></Card>)}</div>}
+
+    <Dialog open={!!selected && !rejectOpen} onOpenChange={v => { if (!v) { setSelected(null); setPreviewUrl(null); } }}><DialogContent className="max-h-[95vh] max-w-6xl overflow-y-auto">{selected && <><DialogHeader><DialogTitle>Kontrola importu · {selected.product_code ?? "bez produktu"}</DialogTitle></DialogHeader><div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]"><div className="space-y-4"><Card className="overflow-hidden p-2">{previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer"><img src={previewUrl} alt="Originální screenshot importu" className="max-h-[520px] w-full rounded-lg object-contain" /></a> : <div className="p-8 text-center text-sm text-muted-foreground">Screenshot není dostupný.</div>}<div className="p-2 text-xs text-muted-foreground">Kliknutím otevřete originální screenshot ve větším zobrazení.</div></Card><Card className="p-4"><div className="font-semibold">Důvody kontroly</div><div className="mt-2 flex flex-wrap gap-2">{blockerList.length ? blockerList.map(x => <Badge key={x} variant="destructive">{labelReason(x)}</Badge>) : <Badge variant="outline">Žádný známý blocker</Badge>}</div></Card></div><div className="space-y-4"><Card className="p-4"><div className="font-semibold">OCR data – upravitelná</div><div className="mt-3 grid gap-3 sm:grid-cols-2">{([ ["work_date","Datum"],["shift","Směna"],["line","Linka"],["product_code","Product ID"],["product_name","Název produktu"],["norm_per_hour","Norma / h"] ] as [string,string][]).map(([key,label]) => <label key={key} className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">{label}</span><Input value={editing[key] ?? String((selected as any)[key] ?? "")} onChange={e => setEditing(p => ({ ...p, [key]: e.target.value }))} /></label>)}</div><Button className="mt-3" variant="outline" disabled={saveHeader.isPending} onClick={() => saveHeader.mutate()}>Uložit opravy a znovu validovat</Button></Card>
+
+<Card className="p-4"><div className="font-semibold">Zaměstnanci – OCR + opravy</div><div className="mt-3 space-y-3">{selectedRows.map(row => { const d = rowEditing[row.id] ?? { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", oee: String(row.oee ?? ""), performance: String(row.performance ?? ""), availableTime: String(row.available_time ?? "") }; return <div key={row.id} className="rounded-xl border p-3"><div className="grid gap-2 sm:grid-cols-2"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">OCR jméno – upravitelné</span><Input value={d.employeeName} onFocus={() => openRowEdit(row)} onChange={e => updateDraft(row, "employeeName", e.target.value)} /></label><div className="flex items-end gap-2"><select className="h-10 flex-1 rounded-md border bg-background px-3 text-sm" value={row.employee_id ?? ""} onChange={e => e.target.value && assignEmployee.mutate({ row, employeeId: e.target.value })}><option value="">Vyberte stávajícího zaměstnance…</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.full_name}</option>)}</select><Button variant="outline" onClick={() => openEmployee(row)}><UserPlus className="mr-2 h-4 w-4" />Nový</Button></div></div><div className="mt-3 grid gap-2 sm:grid-cols-4"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={d.position} onChange={e => updateDraft(row, "position", e.target.value)}><option value="">HA/TUP…</option><option value="HA">HA</option><option value="TUP">TUP</option></select><Input placeholder="OEE" value={d.oee} onFocus={() => openRowEdit(row)} onChange={e => updateDraft(row, "oee", e.target.value)} /><Input placeholder="Výkon" value={d.performance} onFocus={() => openRowEdit(row)} onChange={e => updateDraft(row, "performance", e.target.value)} /><Input placeholder="Dostupnost" value={d.availableTime} onFocus={() => openRowEdit(row)} onChange={e => updateDraft(row, "availableTime", e.target.value)} /></div><div className="mt-2 flex items-center justify-between gap-2"><div className="text-xs text-muted-foreground">Přiřazení: {row.employee_id ? "OK" : "čeká"} · OCR {row.confidence != null ? `${Math.round(Number(row.confidence) * 100)}%` : "–"}</div><Button size="sm" variant="outline" disabled={saveRow.isPending} onClick={() => saveRow.mutate({ row })}>Uložit řádek</Button></div></div>; })}</div></Card>
+
+<Card className="p-4"><div className="font-semibold">Product Profile</div><div className="mt-1 text-sm text-muted-foreground">Vytvoření profilu je samostatný krok a samo neschvaluje výrobní data.</div><Button className="mt-3" variant="outline" onClick={startProfile}><ExternalLink className="mr-2 h-4 w-4" />Vytvořit / upravit Product Profile</Button></Card></div></div><DialogFooter className="gap-2"><Button variant="destructive" onClick={() => setRejectOpen(true)}><XCircle className="mr-2 h-4 w-4" />Zamítnout</Button><Button disabled={approve.isPending || blockerList.length > 0} onClick={() => approve.mutate(selected)}><CheckCircle2 className="mr-2 h-4 w-4" />Schválit a zařadit do statistik</Button></DialogFooter></>}</DialogContent></Dialog>
+
+<Dialog open={employeeOpen} onOpenChange={setEmployeeOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Nový zaměstnanec – kontrola OCR údajů</DialogTitle></DialogHeader><div className="grid gap-3"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Celé jméno</span><Input value={newEmployee.fullName} onChange={e => setNewEmployee(p => ({ ...p, fullName: e.target.value }))} /></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Jméno</span><Input value={newEmployee.firstName} onChange={e => setNewEmployee(p => ({ ...p, firstName: e.target.value }))} /></label><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Příjmení</span><Input value={newEmployee.lastName} onChange={e => setNewEmployee(p => ({ ...p, lastName: e.target.value }))} /></label></div></div><DialogFooter><Button variant="outline" onClick={() => setEmployeeOpen(false)}>Zrušit</Button><Button disabled={!employeeRow || createEmployee.isPending} onClick={() => employeeRow && createEmployee.mutate({ row: employeeRow })}>Vytvořit a přiřadit</Button></DialogFooter></DialogContent></Dialog>
+
+<Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Zamítnout import</DialogTitle></DialogHeader><Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Uveďte důvod zamítnutí…" rows={5} /><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Zrušit</Button><Button variant="destructive" disabled={!rejectReason.trim() || reject.isPending || !selected} onClick={() => selected && reject.mutate({ item: selected, reason: rejectReason })}>Zamítnout import</Button></DialogFooter></DialogContent></Dialog>
+
+<Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Product Profile – kontrola a vytvoření</DialogTitle></DialogHeader><div className="grid gap-3 sm:grid-cols-2">{([ ["profileName","Název profilu"],["haCode","HA Product ID"],["haNorm","HA norma / h"],["haCapacity","HA kapacita"],["tupCode","TUP Product ID"],["tupNorm","TUP norma / h"],["tupCapacity","TUP kapacita"],["validFrom","Platnost od"] ] as [keyof ProfileDraft,string][]).map(([key,label]) => <label key={key} className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">{label}</span><Input value={profile[key]} onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} /></label>)}</div><DialogFooter><Button variant="outline" onClick={() => setProfileOpen(false)}>Zrušit</Button><Button disabled={createProfile.isPending} onClick={() => createProfile.mutate()}>Vytvořit Product Profile</Button></DialogFooter></DialogContent></Dialog>
+  </div>;
+}
