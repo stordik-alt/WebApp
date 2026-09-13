@@ -7,6 +7,7 @@ const MUSIC_VOLUME = 0.35;
 const HOST_ID = "global-background-music-host";
 const BUTTON_ID = "global-background-music-button";
 const AUDIO_ID = "global-background-music-audio";
+const STYLE_ID = "global-background-music-style";
 const ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>`;
 
 export function BackgroundMusic() {
@@ -15,10 +16,44 @@ export function BackgroundMusic() {
     let audio: HTMLAudioElement | null = null;
     let button: HTMLButtonElement | null = null;
     let host: HTMLDivElement | null = null;
+    let style: HTMLStyleElement | null = null;
     let cleanup: (() => void) | undefined;
 
     const setup = async () => {
       document.getElementById(HOST_ID)?.remove();
+      document.getElementById(STYLE_ID)?.remove();
+
+      style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent = `
+        @keyframes musicBubblePulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(45,212,191,.42), 0 0 18px rgba(45,212,191,.55), 0 6px 18px rgba(0,0,0,.35); }
+          50% { transform: scale(1.11); box-shadow: 0 0 0 7px rgba(45,212,191,.08), 0 0 30px rgba(45,212,191,.78), 0 0 52px rgba(45,212,191,.32), 0 6px 18px rgba(0,0,0,.35); }
+        }
+        @keyframes musicIconBeat {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          20% { transform: scale(1.16) rotate(-4deg); }
+          40% { transform: scale(1.04) rotate(4deg); }
+          60% { transform: scale(1.14) rotate(-3deg); }
+        }
+        @keyframes musicBubbleRing {
+          0% { opacity: .9; transform: scale(.82); }
+          70% { opacity: .25; }
+          100% { opacity: 0; transform: scale(1.85); }
+        }
+        @keyframes musicBubbleWave {
+          0% { opacity: 0; transform: scale(.55) translateX(-2px); }
+          25% { opacity: 1; }
+          100% { opacity: 0; transform: scale(1.18) translateX(8px); }
+        }
+        @keyframes musicBubbleNote {
+          0% { opacity: 0; transform: translate(0, 8px) scale(.65) rotate(-8deg); }
+          18% { opacity: 1; }
+          100% { opacity: 0; transform: translate(8px, -28px) scale(1.05) rotate(12deg); }
+        }
+      `;
+      document.head.appendChild(style);
+
       host = document.createElement("div");
       host.id = HOST_ID;
       Object.assign(host.style, { position: "fixed", inset: "0", width: "100vw", height: "100vh", pointerEvents: "none", zIndex: "2147483647", overflow: "visible" });
@@ -47,7 +82,7 @@ export function BackgroundMusic() {
 
       const waves = [0, 1, 2].map(i => {
         const el = document.createElement("span");
-        Object.assign(el.style, { position: "absolute", right: `${-7 - i * 5}px`, top: `${8 - i * 2}px`, width: `${7 + i * 4}px`, height: `${16 + i * 5}px`, border: "2px solid rgba(94,234,212,.9)", borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", borderRadius: "0 999px 999px 0", pointerEvents: "none", opacity: "0", transformOrigin: "left center", willChange: "transform, opacity, filter" });
+        Object.assign(el.style, { position: "absolute", right: `${-7 - i * 5}px`, top: `${8 - i * 2}px`, width: `${7 + i * 4}px`, height: `${16 + i * 5}px`, border: "2px solid rgba(94,234,212,.9)", borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", borderRadius: "0 999px 999px 0", pointerEvents: "none", opacity: "0", transformOrigin: "left center", willChange: "transform, opacity" });
         button!.appendChild(el);
         return el;
       });
@@ -119,7 +154,6 @@ export function BackgroundMusic() {
       const file = audioFiles.find(item => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
       if (file && file.name !== PREFERRED_PATH) { audio.src = supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl; audio.load(); }
 
-      // Automaticky spustit hudbu ihned po připravení zdroje.
       try { audio.muted = false; audio.volume = MUSIC_VOLUME; await audio.play(); sync(); } catch { sync(); }
 
       cleanup = () => {
@@ -130,11 +164,12 @@ export function BackgroundMusic() {
         audio?.removeEventListener("ended", onState);
         audio?.removeEventListener("error", onError);
         audio?.pause();
+        style?.remove();
       };
     };
 
     void setup();
-    return () => { cancelled = true; cleanup?.(); host?.remove(); document.getElementById(HOST_ID)?.remove(); };
+    return () => { cancelled = true; cleanup?.(); host?.remove(); document.getElementById(HOST_ID)?.remove(); document.getElementById(STYLE_ID)?.remove(); };
   }, []);
 
   return null;
