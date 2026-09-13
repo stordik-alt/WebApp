@@ -2,15 +2,19 @@ import type { CSSProperties } from "react";
 
 export function percentColor(value: number | null | undefined): CSSProperties | undefined {
   if (value == null || !Number.isFinite(value)) return undefined;
-  const normalized = Math.max(0, Math.min(100, value));
-  const hue = normalized * 1.2;
-  const lightSaturation = 68;
-  const lightLightness = 34;
-  const darkSaturation = 78;
-  const darkLightness = 58;
+
+  // Jednotné hodnocení všech procent v aplikaci:
+  // >= 96 % zelená, 80–95,9 % žlutá, < 80 % červená.
+  const color =
+    value >= 96
+      ? "hsl(var(--success))"
+      : value >= 80
+        ? "hsl(var(--warning))"
+        : "hsl(var(--destructive))";
+
   return {
-    color: `light-dark(hsl(${hue} ${lightSaturation}% ${lightLightness}%), hsl(${hue} ${darkSaturation}% ${darkLightness}%))`,
-    textShadow: `0 0 8px light-dark(transparent, hsl(${hue} ${darkSaturation}% ${darkLightness}% / 0.12))`,
+    color,
+    textShadow: `0 0 8px color-mix(in srgb, ${color} 18%, transparent)`,
   };
 }
 

@@ -25,7 +25,12 @@ export function KpiCard({
         : tone === "danger"
           ? "text-destructive"
           : "text-foreground";
-  const percentageStyle = unit === "%" ? percentColor(parsePercent(value)) : undefined;
+  const isPercentage = unit === "%";
+  const percentageStyle = isPercentage ? percentColor(parsePercent(value)) : undefined;
+  // The global .text-foreground rule is intentionally !important, so do not
+  // apply that class to percentage KPIs; the inline semantic percentage color
+  // must be allowed to control the rendered value.
+  const valueClass = isPercentage ? "" : toneClass;
 
   return (
     <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
@@ -35,7 +40,7 @@ export function KpiCard({
         </span>
         {icon ? <span className="text-muted-foreground">{icon}</span> : null}
       </div>
-      <div className={`mt-2 text-3xl font-semibold tabular-nums ${toneClass}`} style={percentageStyle}>
+      <div className={`mt-2 text-3xl font-semibold tabular-nums ${valueClass}`} style={percentageStyle}>
         {value}
         {unit ? <span className="ml-1 text-base font-normal text-muted-foreground">{unit}</span> : null}
       </div>
