@@ -185,38 +185,38 @@ function Dashboard() {
         </div>
       }
     >
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-4 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-5">
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-3 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-4">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl lg:pr-4">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-              <Sparkles className="h-3 w-3" /> Live overview
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl lg:pr-3">
+            <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+              <Sparkles className="h-2.5 w-2.5" /> Live overview
             </div>
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Výkon je pod kontrolou.</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Jedním pohledem vidíte OEE, kvalitu, lidi i signály, které vyžadují pozornost.</p>
+            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Výkon je pod kontrolou.</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Jedním pohledem vidíte OEE, kvalitu, lidi i signály, které vyžadují pozornost.</p>
           </div>
-          <div className="w-full space-y-3 lg:w-[560px] lg:shrink-0">
-            <div className="flex items-center justify-end gap-2 text-xs font-medium text-muted-foreground">
+          <div className="w-full space-y-2 lg:w-[520px] lg:shrink-0">
+            <div className="flex items-center justify-end gap-1.5 text-[11px] font-medium text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-success shadow-[0_0_12px_hsl(var(--success)/0.8)]" aria-hidden="true" />
               Aktuálně
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <MiniSignal
-                icon={<CircleCheck className="h-5 w-5" />}
+                icon={<CircleCheck className="h-4 w-4" />}
                 label="Provoz"
                 value="V provozu"
                 description="Vše běží podle plánu"
                 tone="success"
               />
               <MiniSignal
-                icon={<AlertTriangle className="h-5 w-5" />}
+                icon={<AlertTriangle className="h-4 w-4" />}
                 label="Quality alerty"
                 value={openAlerts.length}
                 description={openAlerts.length ? "Vyžaduje pozornost" : "Bez kritických upozornění"}
                 tone={openAlerts.length ? "warning" : "default"}
               />
               <MiniSignal
-                icon={<Boxes className="h-5 w-5" />}
+                icon={<Boxes className="h-4 w-4" />}
                 label="Produkty"
                 value="Aktivní"
                 description="Zobrazit produkty"
@@ -224,7 +224,7 @@ function Dashboard() {
                 tone="primary"
               />
               <MiniSignal
-                icon={<Users className="h-5 w-5" />}
+                icon={<Users className="h-4 w-4" />}
                 label="Lidé"
                 value={activeEmployees.length}
                 description="Zobrazit tým"
@@ -422,15 +422,15 @@ function MiniSignal({
 
   const content = (
     <>
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${iconClass}`}>
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${iconClass}`}>
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.14em]">{label}</span>
-        <span className="mt-1 block text-lg font-semibold leading-tight text-foreground">{value}</span>
-        {description ? <span className="mt-1 block truncate text-[11px] font-medium text-muted-foreground">{description}</span> : null}
+        <span className="block text-[9px] font-semibold uppercase tracking-[0.14em]">{label}</span>
+        <span className="mt-0.5 block text-base font-semibold leading-tight text-foreground">{value}</span>
+        {description ? <span className="mt-0.5 block truncate text-[10px] font-medium text-muted-foreground">{description}</span> : null}
       </span>
-      {to ? <ArrowUpRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" /> : null}
+      {to ? <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" /> : null}
     </>
   );
 
@@ -438,7 +438,7 @@ function MiniSignal({
     return (
       <Link
         to={to}
-        className={`group flex min-h-[112px] items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_hsl(var(--primary)/0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 active:translate-y-0 active:scale-[0.99] ${toneClass}`}
+        className={`group flex min-h-[88px] items-center gap-2.5 rounded-xl border p-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_hsl(var(--primary)/0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 active:translate-y-0 active:scale-[0.99] ${toneClass}`}
         aria-label={`${label}: ${value}. ${description ?? "Otevřít sekci"}`}
       >
         {content}
@@ -446,7 +446,7 @@ function MiniSignal({
     );
   }
 
-  return <div className={`flex min-h-[112px] items-center gap-3 rounded-2xl border p-3.5 shadow-sm ${toneClass}`}>{content}</div>;
+  return <div className={`flex min-h-[88px] items-center gap-2.5 rounded-xl border p-2.5 shadow-sm ${toneClass}`}>{content}</div>;
 }
 
 function CardHeaderRow({ title, icon, action }: { title: string; icon: React.ReactNode; action: string }) {
