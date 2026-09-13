@@ -148,9 +148,9 @@ function RootComponent() {
         <AuthGate>
           <Outlet />
         </AuthGate>
+        <BackgroundMusic />
       </AuthProvider>
       <Toaster position="top-right" richColors />
-      <BackgroundMusic />
     </QueryClientProvider>
   );
 }
