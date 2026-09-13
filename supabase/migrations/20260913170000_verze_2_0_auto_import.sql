@@ -134,26 +134,16 @@ create table if not exists public.import_item_events (
   payload jsonb not null default '{}'::jsonb
 );
 
-create index if not exists idx_import_items_batch_id
-  on public.import_items(batch_id);
-create index if not exists idx_import_items_status
-  on public.import_items(status);
-create index if not exists idx_import_items_work_date
-  on public.import_items(work_date);
-create index if not exists idx_import_items_product_id
-  on public.import_items(product_id);
-create index if not exists idx_import_item_rows_import_item_id
-  on public.import_item_rows(import_item_id);
-create index if not exists idx_import_item_rows_employee_id
-  on public.import_item_rows(employee_id);
-create index if not exists idx_import_item_rows_daily_record_id
-  on public.import_item_rows(daily_record_id);
-create index if not exists idx_import_item_hourly_import_item_id
-  on public.import_item_hourly(import_item_id);
-create index if not exists idx_import_item_events_import_item_id
-  on public.import_item_events(import_item_id);
-create index if not exists idx_import_item_events_created_at
-  on public.import_item_events(created_at desc);
+create index if not exists idx_import_items_batch_id on public.import_items(batch_id);
+create index if not exists idx_import_items_status on public.import_items(status);
+create index if not exists idx_import_items_work_date on public.import_items(work_date);
+create index if not exists idx_import_items_product_id on public.import_items(product_id);
+create index if not exists idx_import_item_rows_import_item_id on public.import_item_rows(import_item_id);
+create index if not exists idx_import_item_rows_employee_id on public.import_item_rows(employee_id);
+create index if not exists idx_import_item_rows_daily_record_id on public.import_item_rows(daily_record_id);
+create index if not exists idx_import_item_hourly_import_item_id on public.import_item_hourly(import_item_id);
+create index if not exists idx_import_item_events_import_item_id on public.import_item_events(import_item_id);
+create index if not exists idx_import_item_events_created_at on public.import_item_events(created_at desc);
 
 create or replace function public.set_import_updated_at()
 returns trigger
@@ -212,11 +202,16 @@ returns trigger
 language plpgsql
 as $$
 begin
-  perform public.refresh_import_batch_counters(coalesce(new.batch_id, old.batch_id));
+  if tg_op = 'DELETE' then
+    perform public.refresh_import_batch_counters(old.batch_id);
+    return old;
+  end if;
+
+  perform public.refresh_import_batch_counters(new.batch_id);
   if tg_op = 'UPDATE' and old.batch_id is distinct from new.batch_id then
     perform public.refresh_import_batch_counters(old.batch_id);
   end if;
-  return coalesce(new, old);
+  return new;
 end;
 $$;
 
