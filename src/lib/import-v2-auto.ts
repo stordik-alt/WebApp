@@ -68,7 +68,7 @@ export async function finalizeImportItem(itemId: string, result: OcrResult, empl
     await db.from("import_item_rows").update({ validation_status: "BLOCKED" }).eq("import_item_id", itemId).is("daily_record_id", null);
     await db.from("import_items").update({ status: "PENDING_APPROVAL", pending_reasons: blockers }).eq("id", itemId);
     await db.from("import_item_events").insert({ import_item_id: itemId, event_type: "VALIDATION_BLOCKED", to_status: "PENDING_APPROVAL", payload: { blockers } });
-    return { status: "PENDING_APPROVAL" as const, duplicateRows: 0, createdRecords: 0 };
+    return { status: "PENDING_APPROVAL" as const, duplicateRows: 0, createdRecords: 0, blockers };
   }
   if (!matchedProduct) throw new Error("Cannot auto-process without a matched product.");
   const performance = average(hourly.map((m) => m.performance_pct));
@@ -82,7 +82,7 @@ export async function finalizeImportItem(itemId: string, result: OcrResult, empl
     const rpcBlockers = Array.isArray(response.blockers) ? response.blockers : ["DUPLICATE_RECORD"];
     return { status: "PENDING_APPROVAL" as const, duplicateRows: rpcBlockers.includes("DUPLICATE_RECORD") ? 1 : 0, createdRecords: 0, blockers: rpcBlockers };
   }
-  return { status: "AUTO_APPROVED" as const, duplicateRows: 0, createdRecords: Number(response?.created_daily_records ?? 0) };
+  return { status: "AUTO_APPROVED" as const, duplicateRows: 0, createdRecords: Number(response?.created_daily_records ?? 0), blockers: [] };
 }
 
 export async function approvePendingImport(itemId: string, actorId: string) {
