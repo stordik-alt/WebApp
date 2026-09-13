@@ -2,29 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { Music2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-const VOLUME_KEY = "app-background-music-volume";
 const BUCKET = "background-music";
 const PREFERRED_PATH = "walk.mp3";
+const MUSIC_VOLUME = 0.35;
 
 export function BackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [url, setUrl] = useState("");
   const [playing, setPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.25);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const stored = Number(window.localStorage.getItem(VOLUME_KEY));
-    if (Number.isFinite(stored) && stored >= 0 && stored <= 1) setVolume(stored);
-
     let cancelled = false;
     const loadSong = async () => {
-      // Nečekáme na storage.list(): přehrávač musí být schopný použít pevnou
-      // cestu i v případě, že listování bucketu není pro veřejného uživatele povoleno.
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH);
-      if (!cancelled) setUrl(data.publicUrl);
+      // walk.mp3 is the canonical file. Do not depend on bucket listing permissions.
+      const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH).data.publicUrl;
+      if (!cancelled) setUrl(publicUrl);
 
-      // Pokud walk.mp3 neexistuje, zkusíme najít první audio soubor v bucketu.
+      // Fallback if the canonical file is not present.
       const { data: files } = await supabase.storage.from(BUCKET).list("", {
         limit: 100,
         sortBy: { column: "name", order: "asc" },
@@ -32,11 +27,10 @@ export function BackgroundMusic() {
       if (cancelled) return;
 
       const audioFiles = (files ?? []).filter((file) => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
-      if (audioFiles.length === 0) return;
-
       const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
-      const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl;
-      setUrl(publicUrl);
+      if (file) {
+        setUrl(supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl);
+      }
       setError("");
     };
 
@@ -53,20 +47,19 @@ export function BackgroundMusic() {
     audio.src = url;
     audio.loop = true;
     audio.preload = "auto";
-    audio.volume = volume;
+    audio.playsInline = true;
+    audio.muted = false;
+    audio.volume = MUSIC_VOLUME;
     audio.load();
   }, [url]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) audio.volume = volume;
-  }, [volume]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const onPlay = () => {
+      audio.muted = false;
+      audio.volume = MUSIC_VOLUME;
       setPlaying(true);
       setError("");
     };
@@ -94,9 +87,12 @@ export function BackgroundMusic() {
     setError("");
     if (audio.paused) {
       try {
+        audio.muted = false;
+        audio.volume = MUSIC_VOLUME;
         await audio.play();
       } catch (playError) {
         console.error("Background music playback failed", playError);
+        setPlaying(false);
         setError("Přehrávání bylo prohlížečem zablokováno.");
       }
     } else {
