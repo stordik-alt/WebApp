@@ -33,6 +33,8 @@ export const themeInitScript = `(function(){try{var k='${STORAGE_KEY}',s='${SCHE
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => readStored());
+  // The color scheme is deliberately independent from light/dark mode.
+  // Switching mode must never replace the user's selected palette.
   const [scheme, setSchemeState] = useState<ThemeScheme>(() => readScheme());
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export function useTheme() {
 
   const toggle = useCallback(() => {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
+    // Intentionally do not touch `scheme`: red stays red, blue stays blue, etc.
   }, []);
 
   const setScheme = useCallback((next: ThemeScheme) => {
