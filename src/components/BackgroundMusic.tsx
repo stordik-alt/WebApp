@@ -36,27 +36,32 @@ export function BackgroundMusic() {
       button.setAttribute("aria-label", "Spustit hudbu");
       button.setAttribute("title", "Spustit hudbu");
       button.innerHTML = ICON;
-      Object.assign(button.style, { position: "fixed", right: "16px", bottom: "16px", width: "40px", height: "40px", minWidth: "40px", minHeight: "40px", padding: "0", margin: "0", borderRadius: "9999px", border: "1px solid rgba(255,255,255,.18)", background: "#6b7280", color: "#fff", display: "grid", placeItems: "center", boxSizing: "border-box", cursor: "pointer", pointerEvents: "auto", touchAction: "manipulation", WebkitTapHighlightColor: "transparent", zIndex: "2147483647", boxShadow: "0 5px 18px rgba(0,0,0,.35)", transition: "background .25s ease, box-shadow .25s ease, transform .25s ease", overflow: "visible" });
+      Object.assign(button.style, { position: "fixed", right: "16px", bottom: "16px", width: "40px", height: "40px", minWidth: "40px", minHeight: "40px", padding: "0", margin: "0", borderRadius: "9999px", border: "1px solid rgba(255,255,255,.18)", background: "#6b7280", color: "#fff", display: "grid", placeItems: "center", boxSizing: "border-box", cursor: "pointer", pointerEvents: "auto", touchAction: "manipulation", WebkitTapHighlightColor: "transparent", zIndex: "2147483647", boxShadow: "0 5px 18px rgba(0,0,0,.35)", transition: "background .25s ease, box-shadow .25s ease, transform .25s ease", overflow: "visible", willChange: "transform, box-shadow" });
 
-      const rings = ["-5px", "-10px", "-15px"].map((inset, i) => {
+      const rings = ["-4px", "-9px", "-14px"].map((inset, i) => {
         const el = document.createElement("span");
-        Object.assign(el.style, { position: "absolute", inset, borderRadius: "50%", border: i === 0 ? "2px solid rgba(94,234,212,.6)" : "1px solid rgba(94,234,212,.3)", pointerEvents: "none", opacity: "0" });
+        Object.assign(el.style, { position: "absolute", inset, borderRadius: "50%", border: i === 0 ? "2px solid rgba(94,234,212,.72)" : "1px solid rgba(94,234,212,.38)", pointerEvents: "none", opacity: "0", transformOrigin: "center", willChange: "transform, opacity" });
         button!.appendChild(el);
         return el;
       });
+
       const waves = [0, 1, 2].map(i => {
         const el = document.createElement("span");
-        Object.assign(el.style, { position: "absolute", right: `${-6 - i * 4}px`, top: `${9 + i * 5}px`, width: `${7 + i * 3}px`, height: `${12 + i * 4}px`, border: "2px solid rgba(94,234,212,.75)", borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", borderRadius: "0 999px 999px 0", pointerEvents: "none", opacity: "0" });
+        Object.assign(el.style, { position: "absolute", right: `${-7 - i * 5}px`, top: `${8 - i * 2}px`, width: `${7 + i * 4}px`, height: `${16 + i * 5}px`, border: "2px solid rgba(94,234,212,.9)", borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", borderRadius: "0 999px 999px 0", pointerEvents: "none", opacity: "0", transformOrigin: "left center", willChange: "transform, opacity, filter" });
         button!.appendChild(el);
         return el;
       });
+
       const notes = ["♪", "♫", "♩"].map((symbol, i) => {
         const el = document.createElement("span");
         el.textContent = symbol;
-        Object.assign(el.style, { position: "absolute", right: `${-9 - i * 7}px`, top: `${-14 - i * 4}px`, color: "rgba(94,234,212,.95)", fontSize: `${12 + i * 2}px`, lineHeight: "1", fontWeight: "700", pointerEvents: "none", opacity: "0", textShadow: "0 0 10px rgba(45,212,191,.8)" });
+        Object.assign(el.style, { position: "absolute", right: `${-8 - i * 7}px`, top: `${-15 - i * 4}px`, color: "rgba(94,234,212,.98)", fontSize: `${11 + i * 2}px`, lineHeight: "1", fontWeight: "700", pointerEvents: "none", opacity: "0", textShadow: "0 0 10px rgba(45,212,191,.9)", willChange: "transform, opacity" });
         button!.appendChild(el);
         return el;
       });
+
+      const icon = button.querySelector("svg") as SVGElement | null;
+      if (icon) Object.assign(icon.style, { position: "relative", zIndex: "10", transformOrigin: "center", willChange: "transform" });
 
       host.append(audio, button);
       document.documentElement.appendChild(host);
@@ -68,18 +73,20 @@ export function BackgroundMusic() {
         if (on) {
           button.style.background = "hsl(171 72% 55%)";
           button.style.color = "#07151a";
-          button.style.borderColor = "rgba(94,234,212,.8)";
-          button.style.boxShadow = "0 0 0 1px rgba(94,234,212,.2), 0 0 22px rgba(45,212,191,.55), 0 6px 18px rgba(0,0,0,.35)";
-          button.style.animation = "musicBubblePulse 1.35s ease-in-out infinite";
-          rings.forEach((e, i) => { e.style.opacity = i === 0 ? "1" : ".7"; e.style.animation = `musicBubbleRing 2s ease-out ${i * .42}s infinite`; });
-          waves.forEach((e, i) => { e.style.opacity = ".9"; e.style.animation = `musicBubbleWave 1.15s ease-in-out ${i * .16}s infinite`; });
-          notes.forEach((e, i) => { e.style.opacity = ".95"; e.style.animation = `musicBubbleNote 2.2s ease-out ${i * .5}s infinite`; });
+          button.style.borderColor = "rgba(94,234,212,.9)";
+          button.style.boxShadow = "0 0 0 1px rgba(94,234,212,.25), 0 0 18px rgba(45,212,191,.55), 0 0 42px rgba(45,212,191,.28), 0 6px 18px rgba(0,0,0,.35)";
+          button.style.animation = "musicBubblePulse .95s ease-in-out infinite";
+          if (icon) icon.style.animation = "musicIconBeat .95s ease-in-out infinite";
+          rings.forEach((e, i) => { e.style.opacity = i === 0 ? "1" : ".75"; e.style.animation = `musicBubbleRing 1.65s ease-out ${i * .36}s infinite`; });
+          waves.forEach((e, i) => { e.style.opacity = ".95"; e.style.animation = `musicBubbleWave .9s ease-out ${i * .18}s infinite`; });
+          notes.forEach((e, i) => { e.style.opacity = ".98"; e.style.animation = `musicBubbleNote 1.8s ease-out ${i * .42}s infinite`; });
         } else {
           button.style.background = "#6b7280";
           button.style.color = "#fff";
           button.style.borderColor = "rgba(255,255,255,.18)";
           button.style.boxShadow = "0 5px 18px rgba(0,0,0,.35)";
           button.style.animation = "none";
+          if (icon) icon.style.animation = "none";
           [...rings, ...waves, ...notes].forEach(e => { e.style.opacity = "0"; e.style.animation = "none"; });
         }
       };
