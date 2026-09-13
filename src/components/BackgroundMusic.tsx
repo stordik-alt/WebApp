@@ -21,16 +21,19 @@ export function BackgroundMusic() {
     const loadSong = async () => {
       const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH).data.publicUrl;
       if (!cancelled) setUrl(publicUrl);
+
       const { data: files } = await supabase.storage.from(BUCKET).list("", {
         limit: 100,
         sortBy: { column: "name", order: "asc" },
       });
       if (cancelled) return;
+
       const audioFiles = (files ?? []).filter((file) => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
       const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
       if (file) setUrl(supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl);
       setError("");
     };
+
     void loadSong();
     return () => { cancelled = true; };
   }, []);
@@ -47,6 +50,10 @@ export function BackgroundMusic() {
     audio.volume = MUSIC_VOLUME;
     audio.load();
 
+    const syncPlayingState = () => {
+      setPlaying(!audio.paused && !audio.ended);
+    };
+
     const onPlay = () => {
       audio.muted = false;
       audio.volume = MUSIC_VOLUME;
@@ -54,23 +61,30 @@ export function BackgroundMusic() {
       setError("");
     };
     const onPause = () => setPlaying(false);
+    const onEnded = () => setPlaying(false);
     const onError = () => {
       setPlaying(false);
       setError("Skladbu se nepodařilo načíst ze Supabase.");
     };
 
     audio.addEventListener("play", onPlay);
+    audio.addEventListener("playing", onPlay);
     audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
     audio.addEventListener("error", onError);
+
+    // Stav synchronizujeme i periodicky. Tím se bublina správně rozsvítí
+    // i v případě, kdy prohlížeč při navigaci vynechá některou media událost.
+    const stateTimer = window.setInterval(syncPlayingState, 250);
 
     const tryAutoplay = async () => {
       try {
         audio.muted = false;
         audio.volume = MUSIC_VOLUME;
         await audio.play();
-        setPlaying(!audio.paused);
+        syncPlayingState();
       } catch {
-        // Browser may block autoplay until the first user interaction.
+        syncPlayingState();
       }
     };
 
@@ -78,9 +92,7 @@ export function BackgroundMusic() {
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-background-music-button]")) return;
       if (!audio.paused) return;
-      void audio.play()
-        .then(() => setPlaying(!audio.paused))
-        .catch(() => undefined);
+      void audio.play().then(syncPlayingState).catch(() => undefined);
     };
 
     void tryAutoplay();
@@ -88,10 +100,13 @@ export function BackgroundMusic() {
     window.addEventListener("keydown", resumeAfterInteraction, { passive: true });
 
     return () => {
+      window.clearInterval(stateTimer);
       window.removeEventListener("pointerdown", resumeAfterInteraction);
       window.removeEventListener("keydown", resumeAfterInteraction);
       audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("playing", onPlay);
       audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("error", onError);
       audio.pause();
     };
@@ -101,12 +116,13 @@ export function BackgroundMusic() {
     const audio = audioRef.current;
     if (!audio || !url) return;
     setError("");
+
     if (audio.paused) {
       try {
         audio.muted = false;
         audio.volume = MUSIC_VOLUME;
         await audio.play();
-        setPlaying(!audio.paused);
+        setPlaying(!audio.paused && !audio.ended);
       } catch (playError) {
         console.error("Background music playback failed", playError);
         setPlaying(false);
@@ -130,11 +146,47 @@ export function BackgroundMusic() {
         disabled={!url}
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
         title={error || (playing ? "Zastavit hudbu" : "Spustit hudbu")}
-        className={`fixed bottom-4 right-4 z-[9999] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${playing ? "border-primary/40 bg-primary text-primary-foreground shadow-primary/30 animate-[pulse_2s_ease-in-out_infinite]" : "border-border bg-muted text-muted-foreground shadow-black/10"}`}
+        style={playing ? {
+          animation: "musicBubblePulse 1.8s ease-in-out infinite",
+          backgroundColor: "hsl(var(--primary))",
+          color: "hsl(var(--primary-foreground))",
+          borderColor: "hsl(var(--primary) / 0.5)",
+          boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15), 0 0 24px hsl(var(--primary) / 0.45)",
+        } : undefined}
+        className="fixed bottom-4 right-4 z-[9999] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {playing ? <><span className="pointer-events-none absolute inset-0 rounded-full border border-primary/60 animate-ping" /><span className="pointer-events-none absolute -inset-1.5 rounded-full border border-primary/30 animate-[pulse_1.8s_ease-in-out_infinite]" /></> : null}
+        {playing ? (
+          <>
+            <span
+              className="pointer-events-none absolute -inset-1 rounded-full border border-primary/50"
+              style={{ animation: "musicBubbleRing 1.8s ease-out infinite" }}
+            />
+            <span
+              className="pointer-events-none absolute -inset-2 rounded-full border border-primary/25"
+              style={{ animation: "musicBubbleRing 1.8s ease-out 0.6s infinite" }}
+            />
+            <span
+              className="pointer-events-none absolute inset-0 rounded-full bg-primary/25"
+              style={{ animation: "musicBubbleGlow 1.8s ease-in-out infinite" }}
+            />
+          </>
+        ) : null}
         <Music2 className="relative z-10 h-5 w-5" />
       </button>
+      <style>{`
+        @keyframes musicBubblePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.08); }
+        }
+        @keyframes musicBubbleRing {
+          0% { opacity: .7; transform: scale(.92); }
+          100% { opacity: 0; transform: scale(1.45); }
+        }
+        @keyframes musicBubbleGlow {
+          0%, 100% { opacity: .2; transform: scale(.96); }
+          50% { opacity: .5; transform: scale(1.08); }
+        }
+      `}</style>
     </>,
     document.body,
   );
