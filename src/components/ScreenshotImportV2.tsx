@@ -60,8 +60,8 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     let itemId: string | undefined;
     try {
       const sourceHash = await sha256File(file);
-      const { data: duplicate } = await (supabase as any).from("import_items").select("id,screenshot_path,status").eq("source_hash", sourceHash).maybeSingle();
-      if (duplicate) { updateItem(key, { status: "DUPLICATE", message: "Stejný screenshot již byl importován.", itemId: duplicate.id, screenshotPath: duplicate.screenshot_path }); return; }
+      const { data: duplicate } = await (supabase as any).from("import_items").select("id,screenshot_path,status,created_at").eq("source_hash", sourceHash).in("status", ["PROCESSING", "VALIDATING", "PENDING_APPROVAL", "AUTO_APPROVED", "APPROVED"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (duplicate) { updateItem(key, { status: "DUPLICATE", message: "Stejný screenshot již byl úspěšně importován nebo je právě zpracováván.", itemId: duplicate.id, screenshotPath: duplicate.screenshot_path }); return; }
 
       const extension = (file.name.split(".").pop() || "png").toLowerCase();
       const path = `daily/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
