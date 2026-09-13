@@ -38,7 +38,7 @@ const formatDate = (value: string) => {
 
 function metricTone(value: number | null | undefined) {
   if (value == null) return "text-muted-foreground";
-  if (value >= 100) return "text-emerald-300";
+  if (value >= 96) return "text-emerald-300";
   if (value >= 80) return "text-amber-300";
   return "text-rose-300";
 }
