@@ -48,6 +48,33 @@ export function BackgroundMusic() {
     audio.muted = false;
     audio.volume = MUSIC_VOLUME;
     audio.load();
+
+    // Zkusit spustit hudbu okamžitě po načtení stránky. Pokud prohlížeč
+    // blokuje automatické přehrávání, spustíme ji při první interakci uživatele.
+    const tryAutoplay = async () => {
+      try {
+        audio.muted = false;
+        audio.volume = MUSIC_VOLUME;
+        await audio.play();
+      } catch {
+        // Autoplay může být prohlížečem z bezpečnostních důvodů zablokován.
+        // První kliknutí/tap/klávesa ho následně odblokuje.
+      }
+    };
+
+    void tryAutoplay();
+
+    const resumeAfterInteraction = () => {
+      if (!audio.paused) return;
+      void audio.play().catch(() => undefined);
+    };
+
+    window.addEventListener("pointerdown", resumeAfterInteraction, { passive: true });
+    window.addEventListener("keydown", resumeAfterInteraction, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", resumeAfterInteraction);
+      window.removeEventListener("keydown", resumeAfterInteraction);
+    };
   }, [url]);
 
   useEffect(() => {
@@ -98,16 +125,6 @@ export function BackgroundMusic() {
 
   return createPortal(
     <>
-      <style>{`
-        @keyframes musicBubblePulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.07); }
-        }
-        @keyframes musicBubbleGlow {
-          0%, 100% { opacity: .18; transform: scale(.92); }
-          50% { opacity: .42; transform: scale(1.18); }
-        }
-      `}</style>
       <audio ref={audioRef} />
       <button
         type="button"
@@ -115,19 +132,9 @@ export function BackgroundMusic() {
         disabled={!url}
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
         title={error || (playing ? "Zastavit hudbu" : "Spustit hudbu")}
-        style={{ animation: playing ? "musicBubblePulse 1.8s ease-in-out infinite" : undefined }}
-        className={`fixed bottom-4 right-4 z-[9999] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${playing ? "border-primary/40 bg-primary text-primary-foreground shadow-primary/30" : "border-border bg-muted text-muted-foreground shadow-black/10"}`}
+        className={`fixed bottom-4 right-4 z-[9999] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${playing ? "border-primary/40 bg-primary text-primary-foreground shadow-primary/30 animate-[pulse_2s_ease-in-out_infinite]" : "border-border bg-muted text-muted-foreground shadow-black/10"}`}
       >
-        {playing ? (
-          <>
-            <span
-              className="pointer-events-none absolute -inset-1 rounded-full bg-primary/30"
-              style={{ animation: "musicBubbleGlow 1.8s ease-in-out infinite" }}
-            />
-            <span className="pointer-events-none absolute inset-0 rounded-full border border-primary/60 animate-ping" />
-            <span className="pointer-events-none absolute -inset-1.5 rounded-full border border-primary/30 animate-[pulse_1.8s_ease-in-out_infinite]" />
-          </>
-        ) : null}
+        {playing ? <><span className="pointer-events-none absolute inset-0 rounded-full border border-primary/60 animate-ping" /><span className="pointer-events-none absolute -inset-1.5 rounded-full border border-primary/30 animate-[pulse_1.8s_ease-in-out_infinite]" /></> : null}
         <Music2 className="relative z-10 h-5 w-5" />
       </button>
     </>,
