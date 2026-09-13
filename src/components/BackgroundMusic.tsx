@@ -12,6 +12,7 @@ export function BackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [hostReady, setHostReady] = useState(false);
   const [url, setUrl] = useState("");
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
@@ -21,7 +22,8 @@ export function BackgroundMusic() {
   useEffect(() => {
     if (!mounted) return;
 
-    const host = document.createElement("div");
+    const existing = document.getElementById(MUSIC_HOST_ID);
+    const host = existing instanceof HTMLDivElement ? existing : document.createElement("div");
     host.id = MUSIC_HOST_ID;
     host.setAttribute("data-background-music-host", "true");
     Object.assign(host.style, {
@@ -33,10 +35,12 @@ export function BackgroundMusic() {
       zIndex: "2147483647",
       isolation: "isolate",
     });
-    document.documentElement.appendChild(host);
+    if (!existing) document.documentElement.appendChild(host);
     hostRef.current = host;
+    setHostReady(true);
 
     return () => {
+      setHostReady(false);
       host.remove();
       hostRef.current = null;
     };
@@ -144,7 +148,7 @@ export function BackgroundMusic() {
     }
   };
 
-  if (!mounted || !hostRef.current) return null;
+  if (!mounted || !hostReady || !hostRef.current) return null;
 
   return createPortal(
     <>
