@@ -7,8 +7,7 @@ const MUSIC_VOLUME = 0.35;
 const HOST_ID = "global-background-music-host";
 const BUTTON_ID = "global-background-music-button";
 const AUDIO_ID = "global-background-music-audio";
-
-const ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>`;
+const ICON = `<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>`;
 
 export function BackgroundMusic() {
   useEffect(() => {
@@ -22,7 +21,7 @@ export function BackgroundMusic() {
       document.getElementById(HOST_ID)?.remove();
       host = document.createElement("div");
       host.id = HOST_ID;
-      Object.assign(host.style, { position: "fixed", left: "0", top: "0", width: "100vw", height: "100vh", pointerEvents: "none", zIndex: "2147483647", overflow: "visible" });
+      Object.assign(host.style, { position: "fixed", inset: "0", width: "100vw", height: "100vh", pointerEvents: "none", zIndex: "2147483647", overflow: "visible" });
 
       audio = document.createElement("audio");
       audio.id = AUDIO_ID;
@@ -37,48 +36,60 @@ export function BackgroundMusic() {
       button.setAttribute("aria-label", "Spustit hudbu");
       button.setAttribute("title", "Spustit hudbu");
       button.innerHTML = ICON;
-      Object.assign(button.style, { position: "fixed", right: "16px", bottom: "16px", width: "46px", height: "46px", minWidth: "46px", minHeight: "46px", padding: "0", margin: "0", borderRadius: "9999px", border: "1px solid rgba(255,255,255,.18)", background: "#6b7280", color: "#fff", display: "grid", placeItems: "center", boxSizing: "border-box", cursor: "pointer", pointerEvents: "auto", touchAction: "manipulation", WebkitTapHighlightColor: "transparent", zIndex: "2147483647", boxShadow: "0 5px 20px rgba(0,0,0,.35)", transition: "background .25s ease, box-shadow .25s ease, transform .25s ease" });
+      Object.assign(button.style, { position: "fixed", right: "16px", bottom: "16px", width: "40px", height: "40px", minWidth: "40px", minHeight: "40px", padding: "0", margin: "0", borderRadius: "9999px", border: "1px solid rgba(255,255,255,.18)", background: "#6b7280", color: "#fff", display: "grid", placeItems: "center", boxSizing: "border-box", cursor: "pointer", pointerEvents: "auto", touchAction: "manipulation", WebkitTapHighlightColor: "transparent", zIndex: "2147483647", boxShadow: "0 5px 18px rgba(0,0,0,.35)", transition: "background .25s ease, box-shadow .25s ease, transform .25s ease", overflow: "visible" });
 
-      const rings = ["-5px", "-10px"].map((inset, index) => {
-        const ring = document.createElement("span");
-        Object.assign(ring.style, { position: "absolute", inset, borderRadius: "9999px", border: index === 0 ? "2px solid rgba(94,234,212,.55)" : "1px solid rgba(94,234,212,.28)", pointerEvents: "none", opacity: "0" });
-        button!.appendChild(ring);
-        return ring;
+      const rings = ["-5px", "-10px", "-15px"].map((inset, i) => {
+        const el = document.createElement("span");
+        Object.assign(el.style, { position: "absolute", inset, borderRadius: "50%", border: i === 0 ? "2px solid rgba(94,234,212,.6)" : "1px solid rgba(94,234,212,.3)", pointerEvents: "none", opacity: "0" });
+        button!.appendChild(el);
+        return el;
+      });
+      const waves = [0, 1, 2].map(i => {
+        const el = document.createElement("span");
+        Object.assign(el.style, { position: "absolute", right: `${-6 - i * 4}px`, top: `${9 + i * 5}px`, width: `${7 + i * 3}px`, height: `${12 + i * 4}px`, border: "2px solid rgba(94,234,212,.75)", borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", borderRadius: "0 999px 999px 0", pointerEvents: "none", opacity: "0" });
+        button!.appendChild(el);
+        return el;
+      });
+      const notes = ["♪", "♫", "♩"].map((symbol, i) => {
+        const el = document.createElement("span");
+        el.textContent = symbol;
+        Object.assign(el.style, { position: "absolute", right: `${-9 - i * 7}px`, top: `${-14 - i * 4}px`, color: "rgba(94,234,212,.95)", fontSize: `${12 + i * 2}px`, lineHeight: "1", fontWeight: "700", pointerEvents: "none", opacity: "0", textShadow: "0 0 10px rgba(45,212,191,.8)" });
+        button!.appendChild(el);
+        return el;
       });
 
       host.append(audio, button);
       document.documentElement.appendChild(host);
 
-      const setPlayingVisual = (isPlaying: boolean) => {
+      const visual = (on: boolean) => {
         if (!button) return;
-        button.setAttribute("aria-label", isPlaying ? "Zastavit hudbu" : "Spustit hudbu");
-        button.setAttribute("title", isPlaying ? "Zastavit hudbu" : "Spustit hudbu");
-        if (isPlaying) {
+        button.setAttribute("aria-label", on ? "Zastavit hudbu" : "Spustit hudbu");
+        button.setAttribute("title", on ? "Zastavit hudbu" : "Spustit hudbu");
+        if (on) {
           button.style.background = "hsl(171 72% 55%)";
           button.style.color = "#07151a";
-          button.style.borderColor = "rgba(94,234,212,.7)";
-          button.style.boxShadow = "0 0 0 1px rgba(94,234,212,.2), 0 0 26px rgba(45,212,191,.55), 0 6px 20px rgba(0,0,0,.35)";
-          button.style.animation = "musicBubblePulse 1.6s ease-in-out infinite";
-          rings.forEach((ring, index) => { ring.style.opacity = index === 0 ? "1" : ".7"; ring.style.animation = `musicBubbleRing 1.8s ease-out ${index * 0.55}s infinite`; });
+          button.style.borderColor = "rgba(94,234,212,.8)";
+          button.style.boxShadow = "0 0 0 1px rgba(94,234,212,.2), 0 0 22px rgba(45,212,191,.55), 0 6px 18px rgba(0,0,0,.35)";
+          button.style.animation = "musicBubblePulse 1.35s ease-in-out infinite";
+          rings.forEach((e, i) => { e.style.opacity = i === 0 ? "1" : ".7"; e.style.animation = `musicBubbleRing 2s ease-out ${i * .42}s infinite`; });
+          waves.forEach((e, i) => { e.style.opacity = ".9"; e.style.animation = `musicBubbleWave 1.15s ease-in-out ${i * .16}s infinite`; });
+          notes.forEach((e, i) => { e.style.opacity = ".95"; e.style.animation = `musicBubbleNote 2.2s ease-out ${i * .5}s infinite`; });
         } else {
           button.style.background = "#6b7280";
           button.style.color = "#fff";
           button.style.borderColor = "rgba(255,255,255,.18)";
-          button.style.boxShadow = "0 5px 20px rgba(0,0,0,.35)";
+          button.style.boxShadow = "0 5px 18px rgba(0,0,0,.35)";
           button.style.animation = "none";
-          rings.forEach((ring) => { ring.style.opacity = "0"; ring.style.animation = "none"; });
+          [...rings, ...waves, ...notes].forEach(e => { e.style.opacity = "0"; e.style.animation = "none"; });
         }
       };
-
-      const sync = () => setPlayingVisual(Boolean(audio && !audio.paused && !audio.ended));
-      const onPlay = () => sync();
-      const onPause = () => sync();
-      const onEnded = () => sync();
+      const sync = () => visual(Boolean(audio && !audio.paused && !audio.ended));
+      const onState = () => sync();
       const onError = () => { sync(); button?.setAttribute("title", "Skladbu se nepodařilo načíst ze Supabase."); };
-      audio.addEventListener("play", onPlay);
-      audio.addEventListener("playing", onPlay);
-      audio.addEventListener("pause", onPause);
-      audio.addEventListener("ended", onEnded);
+      audio.addEventListener("play", onState);
+      audio.addEventListener("playing", onState);
+      audio.addEventListener("pause", onState);
+      audio.addEventListener("ended", onState);
       audio.addEventListener("error", onError);
 
       const toggle = async () => {
@@ -89,26 +100,27 @@ export function BackgroundMusic() {
         } else { audio.pause(); sync(); }
       };
       button.addEventListener("click", toggle);
-      setPlayingVisual(false);
+      visual(false);
 
       const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(PREFERRED_PATH).data.publicUrl;
       if (cancelled || !audio) return;
       audio.src = publicUrl;
       audio.load();
-
       const { data: files } = await supabase.storage.from(BUCKET).list("", { limit: 100, sortBy: { column: "name", order: "asc" } });
       if (cancelled || !audio) return;
-      const audioFiles = (files ?? []).filter((file) => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
-      const file = audioFiles.find((item) => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
+      const audioFiles = (files ?? []).filter(file => /\.(mp3|wav|ogg|m4a|aac|webm)$/i.test(file.name));
+      const file = audioFiles.find(item => item.name.toLowerCase() === PREFERRED_PATH) ?? audioFiles[0];
       if (file && file.name !== PREFERRED_PATH) { audio.src = supabase.storage.from(BUCKET).getPublicUrl(file.name).data.publicUrl; audio.load(); }
+
+      // Automaticky spustit hudbu ihned po připravení zdroje.
       try { audio.muted = false; audio.volume = MUSIC_VOLUME; await audio.play(); sync(); } catch { sync(); }
 
       cleanup = () => {
         button?.removeEventListener("click", toggle);
-        audio?.removeEventListener("play", onPlay);
-        audio?.removeEventListener("playing", onPlay);
-        audio?.removeEventListener("pause", onPause);
-        audio?.removeEventListener("ended", onEnded);
+        audio?.removeEventListener("play", onState);
+        audio?.removeEventListener("playing", onState);
+        audio?.removeEventListener("pause", onState);
+        audio?.removeEventListener("ended", onState);
         audio?.removeEventListener("error", onError);
         audio?.pause();
       };
