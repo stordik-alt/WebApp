@@ -39,8 +39,8 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function Brand() { return <div className="shrink-0 border-b border-sidebar-border/70 px-5 pb-5 pt-5"><OptiShiftLogo size="sidebar" /></div>; }
-function SignOutButton() { return <Button variant="outline" size="sm" className="w-full justify-start gap-2 rounded-xl border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => void supabase.auth.signOut()}><LogOut className="h-4 w-4" />Odhlásit se</Button>; }
-function SidebarSettings() { return <div className="shrink-0 grid gap-2 border-t border-sidebar-border/70 p-4"><AppearanceSettings /><ThemeToggle /><SignOutButton /></div>; }
+function SignOutButton() { return <Button variant="ghost" size="sm" className="h-10 w-full justify-start gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => void supabase.auth.signOut()}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sidebar-accent/45"><LogOut className="h-4 w-4" /></span><span>Odhlásit se</span></Button>; }
+function SidebarSettings() { return <div className="shrink-0 grid gap-1 border-t border-sidebar-border/70 p-3"><AppearanceSettings /><ThemeToggle /><SignOutButton /></div>; }
 
 export function AppShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false); const { isTester } = useAuth();
