@@ -6,15 +6,41 @@ import { supabase } from "@/integrations/supabase/client";
 const BUCKET = "background-music";
 const PREFERRED_PATH = "walk.mp3";
 const MUSIC_VOLUME = 0.35;
+const MUSIC_HOST_ID = "global-background-music-host";
 
 export function BackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
   const [url, setUrl] = useState("");
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const host = document.createElement("div");
+    host.id = MUSIC_HOST_ID;
+    host.setAttribute("data-background-music-host", "true");
+    Object.assign(host.style, {
+      position: "fixed",
+      inset: "0",
+      width: "100vw",
+      height: "100vh",
+      pointerEvents: "none",
+      zIndex: "2147483647",
+      isolation: "isolate",
+    });
+    document.documentElement.appendChild(host);
+    hostRef.current = host;
+
+    return () => {
+      host.remove();
+      hostRef.current = null;
+    };
+  }, [mounted]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +144,7 @@ export function BackgroundMusic() {
     }
   };
 
-  if (!mounted) return null;
+  if (!mounted || !hostRef.current) return null;
 
   return createPortal(
     <>
@@ -130,14 +156,21 @@ export function BackgroundMusic() {
         disabled={!url}
         aria-label={playing ? "Zastavit hudbu" : "Spustit hudbu"}
         title={error || (playing ? "Zastavit hudbu" : "Spustit hudbu")}
-        style={playing ? {
-          animation: "musicBubblePulse 1.8s ease-in-out infinite",
-          backgroundColor: "hsl(var(--primary))",
-          color: "hsl(var(--primary-foreground))",
-          borderColor: "hsl(var(--primary) / 0.5)",
-          boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15), 0 0 24px hsl(var(--primary) / 0.45)",
-        } : undefined}
-        className="fixed bottom-4 right-4 z-[2147483647] grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{
+          position: "fixed",
+          right: "16px",
+          bottom: "16px",
+          zIndex: 2147483647,
+          pointerEvents: "auto",
+          ...(playing ? {
+            animation: "musicBubblePulse 1.8s ease-in-out infinite",
+            backgroundColor: "hsl(var(--primary))",
+            color: "hsl(var(--primary-foreground))",
+            borderColor: "hsl(var(--primary) / 0.5)",
+            boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15), 0 0 24px hsl(var(--primary) / 0.45)",
+          } : {}),
+        }}
+        className="grid h-11 w-11 place-items-center rounded-full border shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {playing ? (
           <>
@@ -163,6 +196,6 @@ export function BackgroundMusic() {
         }
       `}</style>
     </>,
-    document.body,
+    hostRef.current,
   );
 }
