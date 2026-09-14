@@ -53,6 +53,7 @@ type HourlyDetail = {
   capacity: number | null;
   operator_count: number | null;
   actual_oee_pct: number | null;
+  productive_minutes: number | null;
 };
 
 function DailyPage() {
@@ -118,8 +119,10 @@ function DailyPage() {
         const { data: item } = await supabase.from("import_items").select("id").eq("screenshot_path", typed.screenshot_path).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (item?.id) {
           const { data: hourly } = await supabase.from("import_item_hourly").select("hour,product_code,actual_output,performance_pct,availability_pct,norm_per_hour,capacity,operator_count,actual_oee_pct,raw_data").eq("import_item_id", item.id).order("hour", { ascending: true });
-          setDetailHourly((hourly ?? []).map((row: any) => {
+          const mapped = (hourly ?? []).map((row: any) => {
             const raw = row.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
+            const calculation = raw.calculation && typeof raw.calculation === "object" ? raw.calculation : {};
+            const productiveMinutes = Number(calculation.productive_minutes);
             return {
               hour: Number(row.hour), product_code: row.product_code ?? raw.product_code ?? null,
               actual_output: row.actual_output ?? raw.actual_output ?? null,
@@ -129,8 +132,13 @@ function DailyPage() {
               capacity: row.capacity ?? raw.capacity ?? null,
               operator_count: row.operator_count ?? raw.operator_count ?? null,
               actual_oee_pct: row.actual_oee_pct ?? raw.actual_oee_pct ?? null,
-            };
-          }));
+              productive_minutes: Number.isFinite(productiveMinutes) ? productiveMinutes : null,
+            } as HourlyDetail;
+          });
+          const isNight = (record.shift ?? "").toLowerCase().startsWith("no");
+          const normalizeNight = (hour: number) => hour >= 22 ? hour - 22 : hour + 2;
+          mapped.sort((a, b) => isNight ? normalizeNight(a.hour) - normalizeNight(b.hour) : a.hour - b.hour);
+          setDetailHourly(mapped);
         }
       }
     } catch (error) {
@@ -140,19 +148,14 @@ function DailyPage() {
     }
   };
 
-  const detailWeights = useMemo(() => {
-    const n = detailHourly.length;
-    if (n <= 0) return [] as number[];
-    if (n === 1) return [7.25];
-    if (n === 2) return [1, 1];
-    return detailHourly.map((_, i) => i === 0 ? 1 - 10 / 60 : i === n - 1 ? 1 - 5 / 60 : 1 - 30 / 60);
-  }, [detailHourly]);
+  const detailWeights = useMemo(() => detailHourly.map((row) => row.productive_minutes ?? 0), [detailHourly]);
 
   const detailCalc = useMemo(() => {
     if (!detailHourly.length) return { oee: null, performance: null, availability: null, usedWeight: 0 };
     let oeeTotal = 0, perfTotal = 0, perfWeight = 0, availTotal = 0, availWeight = 0, usedWeight = 0;
     detailHourly.forEach((row, i) => {
-      const weight = detailWeights[i] ?? 1;
+      const weight = detailWeights[i] ?? 0;
+      if (weight <= 0) return;
       if (typeof row.actual_oee_pct === "number" && Number.isFinite(row.actual_oee_pct)) { oeeTotal += row.actual_oee_pct * weight; usedWeight += weight; }
       if (typeof row.performance_pct === "number" && Number.isFinite(row.performance_pct)) { perfTotal += row.performance_pct * weight; perfWeight += weight; }
       if (typeof row.availability_pct === "number" && Number.isFinite(row.availability_pct)) { availTotal += row.availability_pct * weight; availWeight += weight; }
@@ -253,10 +256,10 @@ function DailyPage() {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Eye className="h-5 w-5 text-cyan-300" /> Detail denního záznamu</DialogTitle></DialogHeader>
           {detailRecord ? <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Zaměstnanec</p><p className="mt-1 font-semibold">{empName(detailRecord.employee_id)}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Datum / směna</p><p className="mt-1 font-semibold">{formatDate(detailRecord.work_date)} · {detailRecord.shift}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Linka / produkt</p><p className="mt-1 font-semibold">{detailRecord.line} · {detailRecord.product ?? "–"}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Pozice</p><p className="mt-1 font-semibold">{detailRecord.position}</p></Card></div>
-            <div className="grid gap-3 sm:grid-cols-3"><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.oee)}`}><p className="text-xs text-muted-foreground">Skutečné OEE</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.oee)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený výpočet z hodin</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.performance)}`}><p className="text-xs text-muted-foreground">Výkon</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.performance)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr hodin</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.availability)}`}><p className="text-xs text-muted-foreground">Dostupnost</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.availability)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr hodin</p></Card></div>
+            <div className="grid gap-3 sm:grid-cols-3"><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.oee)}`}><p className="text-xs text-muted-foreground">Skutečné OEE</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.oee)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený výpočet z produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.performance)}`}><p className="text-xs text-muted-foreground">Výkon</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.performance)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.availability)}`}><p className="text-xs text-muted-foreground">Dostupnost</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.availability)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card></div>
             {detailImageUrl ? <div className="overflow-hidden rounded-xl border border-border/70 bg-black/30"><img src={detailImageUrl} alt={`Screenshot ${detailRecord.product ?? "výroby"}`} className="max-h-[420px] w-full object-contain" /></div> : <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">Screenshot k tomuto záznamu není k dispozici.</div>}
-            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Váha</th></tr></thead><tbody>{detailHourly.map((row, i) => <tr key={`${row.hour}-${i}`} className="border-b border-border/40"><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{fmt(detailWeights[i], 2)}</td></tr>)}</tbody></table></div> : <p className="py-6 text-center text-sm text-muted-foreground">K tomuto záznamu nejsou dostupná hodinová data. Zobrazuji uložené hodnoty denního záznamu.</p>}</div>
-            {detailHourly.length ? <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm"><p className="font-semibold">Výpočet směny</p><p className="mt-1 text-muted-foreground">Skutečné OEE = součet (OEE hodiny × váha) / součet vah. Použité váhy: první hodina 50/60, poslední 55/60 a prostřední hodiny 30/60; při jediné hodině se používá váha 7,25.</p><p className="mt-2 text-muted-foreground">Celkový použitý součet vah: <strong>{fmt(detailCalc.usedWeight, 2)}</strong>.</p></div> : null}
+            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Produktivní min.</th></tr></thead><tbody>{detailHourly.map((row) => <tr key={`${row.hour}`} className="border-b border-border/40"><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{row.productive_minutes == null ? "–" : fmt(row.productive_minutes, 0)}</td></tr>)}</tbody></table></div> : <p className="py-6 text-center text-sm text-muted-foreground">K tomuto záznamu nejsou dostupná hodinová data. Zobrazuji uložené hodnoty denního záznamu.</p>}</div>
+            {detailHourly.length ? <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm"><p className="font-semibold">Výpočet směny</p><p className="mt-1 text-muted-foreground">Skutečné KPI = vážený průměr hodin podle skutečně produktivních minut. Směna má 438 produktivních minut; započítává se 7 min příprava, 5 min úklid a skutečná 30min přestávka. U screenshotu se poslední hodina ořízne podle času screenshotu.</p><p className="mt-2 text-muted-foreground">Celkový použitý součet produktivních minut: <strong>{fmt(detailCalc.usedWeight, 0)}</strong> min.</p></div> : null}
           </div> : null}
           <DialogFooter><Button variant="outline" onClick={() => setDetailOpen(false)}>Zavřít</Button></DialogFooter>
         </DialogContent>
