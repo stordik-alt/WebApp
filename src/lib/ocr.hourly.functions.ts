@@ -51,7 +51,7 @@ async function loadExistingProfiles(context: HourlyStageContext): Promise<Produc
 async function callAi(provider: AiProvider, imageDataUrl: string, context: HourlyStageContext): Promise<Record<string, unknown>> {
   const profiles = context.profiles ?? [];
   const contextLines = profiles.map((p) => `- profil ${p.id ?? ""} | HA=${p.ha_subassy ?? "NEZNÁMÁ"}, kapacita HA=${p.h_capacity ?? "NEZNÁMÁ"}, norma HA=${p.h_norm_per_hour ?? "NEZNÁMÁ"} ks/h | TUP=${p.tup_subassy ?? "NEZNÁMÁ"}, kapacita TUP=${p.t_capacity ?? "NEZNÁMÁ"}, norma TUP=${p.t_norm_per_hour ?? "NEZNÁMÁ"} ks/h`).join("\n");
-  const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nZÁVAZNÝ KONTEXT:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na lince: ${context.operator_count}\n- role pracoviště z 2. sekvence: ${context.role ?? "NEURČENA"}\n\nNavíc z HLAVIČKY screenshotu přečti skutečný čas pořízení ve formátu HH:MM. Tento čas je autoritativní pro poslední hodinu. Vrať jej jako screenshot_time.\n\nPro KAŽDOU skutečně viditelnou hodinu přečti hour, product_code, actual_output ze sloupce Reálný, performance_pct ze sloupce Výkon a availability_pct ze sloupce Dostupnost pouze pokud jsou skutečně čitelné. Role použij z kontextu, pokud je určena. NORMU ANI KAPACITU NIKDY NEODVOZUJ ZE SCREENSHOTU; použij pouze Product Profile z databáze. Pokud stejný kód existuje jako HA i TUP, použij roli z kontextu.\n\nVýsledné KPI musí být vypočtené aplikací, nikoli OCR Výkonem. Výkon = skutečný výstup / efektivní norma poslední hodiny × 100. U poslední viditelné hodiny je efektivní norma norma z Product Profile × skutečné minuty od celé hodiny do času screenshotu / 60. OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů) / 100. OEE není omezené na 100 %.\nNevymýšlej hodnoty. Vrať pouze JSON.`;
+  const instruction = `Proveď 3. sekvenci OCR: přečti pouze hodinovou výrobní tabulku screenshotu.\n\nZÁVAZNÝ KONTEXT:\n${contextLines || "- žádný produktový profil"}\n- skutečný počet operátorů na lince: ${context.operator_count}\n- role pracoviště z 2. sekvence: ${context.role ?? "NEURČENA"}\n\nNavíc z HLAVIČKY screenshotu přečti skutečný čas pořízení ve formátu HH:MM. Tento čas je autoritativní pro aktuální/poslední hodinu. Vrať jej jako screenshot_time.\n\nPro KAŽDOU skutečně viditelnou hodinu přečti hour, product_code, actual_output ze sloupce Reálný, performance_pct ze sloupce Výkon a availability_pct ze sloupce Dostupnost pouze pokud jsou skutečně čitelné. Role použij z kontextu, pokud je určena. NORMU ANI KAPACITU NIKDY NEODVOZUJ ZE SCREENSHOTU; použij pouze Product Profile z databáze. Pokud stejný kód existuje jako HA i TUP, použij roli z kontextu.\n\nVýsledné KPI musí být vypočtené aplikací, nikoli OCR Výkonem. Efektivní produktivní minuty každé hodinové řádky musí respektovat skutečný čas směny, 7 minut přípravy linky na začátku, 30 minut přestávky a 5 minut úklidu na konci. U aktuální hodiny se produktivní minuty oříznou přesným časem screenshotu a přestávkou. Výkon = skutečný výstup / (norma z Product Profile × efektivní produktivní minuty / 60) × 100. OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů) / 100. OEE není omezené na 100 %.\nNevymýšlej hodnoty. Vrať pouze JSON.`;
   const system = `Jsi třetí sekvence OCR pro výrobní screenshoty DPS. Čteš hodinovou tabulku a čas screenshotu. Product Profile, role a počet operátorů jsou externí kontext a mají absolutní přednost. Výkon a Dostupnost pouze čti ze screenshotu. Vrať pouze JSON {"screenshot_time":"HH:MM nebo null","hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","actual_output":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null}]}.`;
   let res: Response;
   try { res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) }); }
@@ -76,8 +76,36 @@ function profileVariant(p: ProductProfileContext, code: string | null, role: "HA
 }
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
 function parseTime(v: unknown): string | null { const m = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(text(v)); return m ? m[0] : null; }
-function minutesForHour(hour: number | null, lastHour: number | null, screenshotTime: string | null): number { if (hour == null || lastHour == null || hour !== lastHour || !screenshotTime) return 60; const minute = Number(screenshotTime.slice(3, 5)); return minute === 0 ? 60 : minute; }
-function averageWeighted(metrics: HourlyStageMetric[], field: "performance_pct" | "availability_pct", useMinutes = true): number | null { let total = 0; let weight = 0; for (const m of metrics) { const value = m[field]; if (value == null || !Number.isFinite(Number(value))) continue; const w = useMinutes ? (m.actual_minutes ?? 60) : 1; total += Number(value) * w; weight += w; } return weight > 0 ? total / weight : null; }
+
+function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } {
+  if (hour >= 6 && hour < 14) return { start: 6 * 60, pauseStartRel: 4 * 60 + 40, pauseEndRel: 5 * 60 + 10 };
+  if (hour >= 14 && hour < 22) return { start: 14 * 60, pauseStartRel: 4 * 60, pauseEndRel: 4 * 60 + 30 };
+  return { start: 22 * 60, pauseStartRel: 4 * 60, pauseEndRel: 4 * 60 + 30 };
+}
+function relativeMinuteOfHour(hour: number, shiftStart: number): number { return ((hour * 60 - shiftStart) + 1440) % 1440; }
+function screenshotRelativeMinute(screenshotTime: string | null, shiftStart: number): number | null {
+  if (!screenshotTime) return null;
+  const [hh, mm] = screenshotTime.split(":").map(Number);
+  return ((hh * 60 + mm - shiftStart) + 1440) % 1440;
+}
+function productiveMinutesForHour(hour: number | null, screenshotTime: string | null): number {
+  if (hour == null || !Number.isFinite(hour)) return 0;
+  const normalizedHour = ((Math.trunc(hour) % 24) + 24) % 24;
+  const shift = shiftForHour(normalizedHour);
+  const relStart = relativeMinuteOfHour(normalizedHour, shift.start);
+  let relEnd = relStart + 60;
+  const cutoff = screenshotRelativeMinute(screenshotTime, shift.start);
+  if (cutoff != null) {
+    if (cutoff < relStart) return 0;
+    if (cutoff < relEnd) relEnd = cutoff;
+  }
+  const workStart = 7;
+  const workEnd = 8 * 60 - 5;
+  let productive = Math.max(0, Math.min(relEnd, workEnd) - Math.max(relStart, workStart));
+  productive -= Math.max(0, Math.min(relEnd, shift.pauseEndRel) - Math.max(relStart, shift.pauseStartRel));
+  return Math.max(0, Math.min(60, productive));
+}
+function averageWeighted(metrics: HourlyStageMetric[], field: "performance_pct" | "availability_pct"): number | null { let total = 0; let weight = 0; for (const m of metrics) { const value = m[field]; if (value == null || !Number.isFinite(Number(value))) continue; const w = m.actual_minutes ?? 0; if (w <= 0) continue; total += Number(value) * w; weight += w; } return weight > 0 ? total / weight : null; }
 
 export const extractHourlyWithContext = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((input: { imageDataUrl: string; context: HourlyStageContext }) => {
   if (!input?.imageDataUrl?.startsWith("data:image/")) throw new Error("Neplatný obrázek.");
@@ -99,24 +127,25 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
     const variant = findVariant(context, product_code, role);
     return { hour: firstNum(row, ["hour", "hodina"]), product_code, role, actual_output: firstNum(row, ["actual_output", "actual", "realny", "real", "reálný"]), performance_pct: firstNum(row, ["performance_pct", "performance", "vykon", "výkon"]), availability_pct: firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]), norm_per_hour: variant?.norm ?? null, capacity: variant?.capacity ?? null, operator_count: data.context.operator_count, actual_oee_pct: null };
   });
-  const validHours = hourly_metrics.map((m) => m.hour).filter((h): h is number => h != null && Number.isFinite(h));
-  const lastHour = validHours.length ? Math.max(...validHours) : null;
   let actualOutputTotal = 0; let idealOutputTotal = 0;
   for (const m of hourly_metrics) {
-    m.actual_minutes = minutesForHour(m.hour, lastHour, screenshot_time);
-    if (m.norm_per_hour != null && m.norm_per_hour > 0) {
-      m.effective_norm = m.norm_per_hour * m.actual_minutes / 60;
-      if (m.actual_output != null) { const performance = m.actual_output / m.effective_norm * 100; m.performance_pct = performance; }
+    m.actual_minutes = productiveMinutesForHour(m.hour, screenshot_time);
+    if (m.norm_per_hour != null && m.norm_per_hour > 0 && (m.actual_minutes ?? 0) > 0) {
+      m.effective_norm = m.norm_per_hour * (m.actual_minutes ?? 0) / 60;
+      if (m.actual_output != null) m.performance_pct = m.actual_output / m.effective_norm * 100;
       idealOutputTotal += m.effective_norm;
+    } else {
+      m.effective_norm = m.norm_per_hour != null && m.norm_per_hour > 0 ? 0 : null;
+      if (m.actual_minutes === 0) m.performance_pct = null;
     }
     if (m.actual_output != null) actualOutputTotal += m.actual_output;
     if (m.performance_pct != null && m.availability_pct != null && m.capacity != null && m.operator_count > 0) m.actual_oee_pct = m.performance_pct * m.availability_pct * (m.capacity / m.operator_count) / 100;
   }
-  const totalMinutes = hourly_metrics.reduce((sum, m) => sum + (m.actual_minutes ?? 60), 0);
+  const totalMinutes = hourly_metrics.reduce((sum, m) => sum + (m.actual_minutes ?? 0), 0);
   const actual_shift_performance_pct = averageWeighted(hourly_metrics, "performance_pct");
   const actual_shift_availability_pct = averageWeighted(hourly_metrics, "availability_pct");
-  const weightedOee = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct ?? 0) * (m.actual_minutes ?? 60), 0);
-  const oeeWeight = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct != null ? (m.actual_minutes ?? 60) : 0), 0);
+  const weightedOee = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct ?? 0) * (m.actual_minutes ?? 0), 0);
+  const oeeWeight = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct != null ? (m.actual_minutes ?? 0) : 0), 0);
   const actual_shift_oee_pct = oeeWeight > 0 ? weightedOee / oeeWeight : null;
   const predicted_shift_output = idealOutputTotal > 0 ? idealOutputTotal : null;
   return { hourly_metrics, predicted_shift_output, actual_shift_oee_pct, actual_shift_performance_pct, actual_shift_availability_pct, operator_count: data.context.operator_count, screenshot_time, shift: screenshot_time, raw: JSON.stringify({ screenshot_time, actual_minutes_total: totalMinutes, actual_output_total: actualOutputTotal }) };
