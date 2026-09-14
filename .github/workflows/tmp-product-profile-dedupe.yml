@@ -1,0 +1,61 @@
+name: tmp-product-profile-dedupe
+
+on:
+  push:
+    branches:
+      - 2.0-AUTO
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Patch importer
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const path = 'src/components/ProductProfileManagerV2.tsx';
+            const branch = '2.0-AUTO';
+            const { data: file } = await github.rest.repos.getContent({ owner: context.repo.owner, repo: context.repo.repo, path, ref: branch });
+            const text = Buffer.from(file.content, 'base64').toString('utf8');
+
+            const oldType = 'type ImportRow = { line: number; name: string; haCode: string; haNorm: number; haCapacity: number; tupCode: string; tupNorm: number; tupCapacity: number; error?: string; result?: "OK" | "CHYBA" };';
+            const newType = 'type ImportRow = { line: number; name: string; haCode: string; haNorm: number; haCapacity: number; tupCode: string; tupNorm: number; tupCapacity: number; error?: string; result?: "OK" | "CHYBA" | "SKIPPED" };';
+            if (!text.includes(oldType)) core.setFailed('ImportRow type not found');
+
+            const oldChoose = 'const key = keyOf(row.haCode, row.tupCode); if (seen.has(key)) row.error = "Duplicitní Product Profile v souboru."; else seen.add(key);';
+            const newChoose = 'const key = normalizeProfileName(row.name); if (seen.has(key)) row.error = "Duplicitní Product Profile v souboru (stejný název)."; else seen.add(key);';
+            if (!text.includes(oldChoose)) core.setFailed('Import duplicate check not found');
+
+            const oldImport = 'const importProfiles = async () => { const validRows = importRows.filter((row) => !row.error && row.result !== "OK"); if (!validRows.length) return; setBusy(true); try { const date = new Date().toISOString().slice(0, 10); for (const row of validRows) { try { await upsertImportedProductProfile({ profileName: row.name, ha: { code: row.haCode, norm: row.haNorm, capacity: row.haCapacity }, tup: { code: row.tupCode, norm: row.tupNorm, capacity: row.tupCapacity }, validFrom: date }); await syncProduct(row.haCode, row.name, row.haCapacity, "H", date); await syncProduct(row.tupCode, row.name, row.tupCapacity, "T", date); row.result = "OK"; } catch (e) { row.result = "CHYBA"; row.error = (e as Error).message || "Neznámá chyba."; } setImportRows([...importRows]); } await profilesQuery.refetch(); qc.invalidateQueries({ queryKey: ["products"] }); qc.invalidateQueries({ queryKey: ["product_profiles"] }); const ok = importRows.filter((row) => row.result === "OK").length; const failed = importRows.filter((row) => row.result === "CHYBA").length; toast.success(`Import dokončen: ${ok} OK${failed ? `, ${failed} chyb` : ""}.`); } finally { setBusy(false); } };';
+            const newImport = 'const importProfiles = async () => { const validRows = importRows.filter((row) => !row.error && !row.result); if (!validRows.length) return; setBusy(true); try { const date = new Date().toISOString().slice(0, 10); const { data: existingProfiles, error: existingError } = await (supabase.from("product_profiles") as any).select("profile_name"); if (existingError) throw existingError; const existingNames = new Set((existingProfiles ?? []).map((profile: any) => normalizeProfileName(profile.profile_name)).filter(Boolean)); let skipped = 0; for (const row of validRows) { const profileNameKey = normalizeProfileName(row.name); if (profileNameKey && existingNames.has(profileNameKey)) { row.result = "SKIPPED"; row.error = undefined; skipped += 1; setImportRows([...importRows]); continue; } try { await upsertImportedProductProfile({ profileName: row.name, ha: { code: row.haCode, norm: row.haNorm, capacity: row.haCapacity }, tup: { code: row.tupCode, norm: row.tupNorm, capacity: row.tupCapacity }, validFrom: date }); await syncProduct(row.haCode, row.name, row.haCapacity, "H", date); await syncProduct(row.tupCode, row.name, row.tupCapacity, "T", date); row.result = "OK"; if (profileNameKey) existingNames.add(profileNameKey); } catch (e) { row.result = "CHYBA"; row.error = (e as Error).message || "Neznámá chyba."; } setImportRows([...importRows]); } await profilesQuery.refetch(); qc.invalidateQueries({ queryKey: ["products"] }); qc.invalidateQueries({ queryKey: ["product_profiles"] }); const ok = importRows.filter((row) => row.result === "OK").length; const failed = importRows.filter((row) => row.result === "CHYBA").length; toast.success(`Import dokončen: ${ok} OK${skipped ? `, ${skipped} přeskočeno` : ""}${failed ? `, ${failed} chyb` : ""}.`); } finally { setBusy(false); } };';
+            if (!text.includes(oldImport)) core.setFailed('Import function not found');
+
+            const oldCounts = 'const importValidCount = importRows.filter((row) => !row.error && row.result !== "OK").length; const importErrorCount = importRows.filter((row) => !!row.error && row.result !== "CHYBA").length;';
+            const newCounts = 'const importValidCount = importRows.filter((row) => !row.error && !row.result).length; const importErrorCount = importRows.filter((row) => !!row.error && row.result !== "CHYBA").length; const importSkippedCount = importRows.filter((row) => row.result === "SKIPPED").length;';
+            if (!text.includes(oldCounts)) core.setFailed('Import counters not found');
+
+            const oldHeader = 'const headerAliases: Record<string, keyof ImportRow> = { productprofile: "name", profil: "name", profile: "name",';
+            const newHeader = 'const normalizeProfileName = (value: string | null | undefined) => (value ?? "").trim().replace(/\\s+/g, " ").toLocaleLowerCase("cs-CZ");\nconst headerAliases: Record<string, keyof ImportRow> = { productprofile: "name", profil: "name", profile: "name",';
+            if (!text.includes(oldHeader)) core.setFailed('Header aliases not found');
+
+            const oldBadges = '<Badge variant="outline">Připraveno: {importValidCount}</Badge><Badge variant={importErrorCount ? "destructive" : "outline"}>Chyby: {importErrorCount}</Badge>';
+            const newBadges = '<Badge variant="outline">Připraveno: {importValidCount}</Badge><Badge variant="outline">Přeskočeno: {importSkippedCount}</Badge><Badge variant={importErrorCount ? "destructive" : "outline"}>Chyby: {importErrorCount}</Badge>';
+            if (!text.includes(oldBadges)) core.setFailed('Import badges not found');
+
+            const oldStatus = '{row.result === "OK" ? <Badge>OK</Badge> : row.result === "CHYBA" ? <Badge variant="destructive">CHYBA</Badge> : row.error ? <span className="text-destructive">{row.error}</span> : <Badge variant="outline">Připraveno</Badge>}' ;
+            const newStatus = '{row.result === "OK" ? <Badge>OK</Badge> : row.result === "SKIPPED" ? <Badge variant="secondary">Přeskočeno</Badge> : row.result === "CHYBA" ? <Badge variant="destructive">CHYBA</Badge> : row.error ? <span className="text-destructive">{row.error}</span> : <Badge variant="outline">Připraveno</Badge>}';
+            if (!text.includes(oldStatus)) core.setFailed('Import status renderer not found');
+
+            let updated = text.replace(oldType, newType).replace(oldHeader, newHeader).replace(oldChoose, newChoose).replace(oldImport, newImport).replace(oldCounts, newCounts).replace(oldBadges, newBadges).replace(oldStatus, newStatus);
+            if (updated === text) core.setFailed('No changes applied');
+
+            const encoded = Buffer.from(updated, 'utf8').toString('base64');
+            await github.rest.repos.createOrUpdateFileContents({ owner: context.repo.owner, repo: context.repo.repo, path, message: 'fix: skip duplicate Product Profiles by name during import', content: encoded, sha: file.sha, branch });
+
+            const workflowPath = '.github/workflows/tmp-product-profile-dedupe.yml';
+            const { data: workflowFile } = await github.rest.repos.getContent({ owner: context.repo.owner, repo: context.repo.repo, path: workflowPath, ref: branch });
+            await github.rest.repos.deleteFile({ owner: context.repo.owner, repo: context.repo.repo, path: workflowPath, message: 'chore: remove temporary Product Profile import patch workflow', sha: workflowFile.sha, branch });
