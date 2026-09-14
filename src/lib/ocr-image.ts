@@ -6,20 +6,20 @@ export type OcrPreprocessOptions = {
 };
 
 /**
- * Creates a temporary, enlarged JPEG for OCR. The original upload is never
+ * Creates a temporary JPEG optimized for OCR. The original upload is never
  * modified; callers can continue uploading the original File to storage.
- * If browser image processing is unavailable or fails, the original data URL
- * is returned so OCR can continue unchanged.
+ * The output is both enlarged when useful and reduced when the source would
+ * make the AI request unnecessarily large.
  */
 export async function preprocessOcrImage(
   dataUrl: string,
   options: OcrPreprocessOptions = {},
 ): Promise<string> {
   try {
-    const scale = Math.max(1, options.scale ?? 2);
-    const quality = options.quality ?? 0.94;
-    const maxWidth = options.maxWidth ?? 4096;
-    const maxHeight = options.maxHeight ?? 4096;
+    const scale = Math.max(0.25, options.scale ?? 2);
+    const quality = Math.min(1, Math.max(0.5, options.quality ?? 0.9));
+    const maxWidth = Math.max(512, options.maxWidth ?? 4096);
+    const maxHeight = Math.max(512, options.maxHeight ?? 4096);
 
     if (!dataUrl.startsWith("data:image/")) return dataUrl;
 
@@ -37,7 +37,7 @@ export async function preprocessOcrImage(
       maxWidth / sourceWidth,
       maxHeight / sourceHeight,
     );
-    const targetScale = Math.max(1, limitingScale);
+    const targetScale = Math.max(0.25, limitingScale);
     const width = Math.max(1, Math.round(sourceWidth * targetScale));
     const height = Math.max(1, Math.round(sourceHeight * targetScale));
 
