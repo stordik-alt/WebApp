@@ -77,10 +77,10 @@ function profileVariant(p: ProductProfileContext, code: string | null, role: "HA
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
 function parseTime(v: unknown): string | null { const m = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(text(v)); return m ? m[0] : null; }
 
-function shiftForHour(hour: number): { start: number; pauseStart: number; pauseEnd: number } {
-  if (hour >= 6 && hour < 14) return { start: 6 * 60, pauseStart: 10 * 60 + 40, pauseEnd: 11 * 60 + 10 };
-  if (hour >= 14 && hour < 22) return { start: 14 * 60, pauseStart: 18 * 60, pauseEnd: 18 * 60 + 30 };
-  return { start: 22 * 60, pauseStart: 2 * 60, pauseEnd: 2 * 60 + 30 };
+function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } {
+  if (hour >= 6 && hour < 14) return { start: 6 * 60, pauseStartRel: 4 * 60 + 40, pauseEndRel: 5 * 60 + 10 };
+  if (hour >= 14 && hour < 22) return { start: 14 * 60, pauseStartRel: 4 * 60, pauseEndRel: 4 * 60 + 30 };
+  return { start: 22 * 60, pauseStartRel: 4 * 60, pauseEndRel: 4 * 60 + 30 };
 }
 function relativeMinuteOfHour(hour: number, shiftStart: number): number { return ((hour * 60 - shiftStart) + 1440) % 1440; }
 function screenshotRelativeMinute(screenshotTime: string | null, shiftStart: number): number | null {
@@ -102,7 +102,7 @@ function productiveMinutesForHour(hour: number | null, screenshotTime: string | 
   const workStart = 7;
   const workEnd = 8 * 60 - 5;
   let productive = Math.max(0, Math.min(relEnd, workEnd) - Math.max(relStart, workStart));
-  productive -= Math.max(0, Math.min(relEnd, shift.pauseEnd - shift.start) - Math.max(relStart, shift.pauseStart - shift.start));
+  productive -= Math.max(0, Math.min(relEnd, shift.pauseEndRel) - Math.max(relStart, shift.pauseStartRel));
   return Math.max(0, Math.min(60, productive));
 }
 function averageWeighted(metrics: HourlyStageMetric[], field: "performance_pct" | "availability_pct"): number | null { let total = 0; let weight = 0; for (const m of metrics) { const value = m[field]; if (value == null || !Number.isFinite(Number(value))) continue; const w = m.actual_minutes ?? 0; if (w <= 0) continue; total += Number(value) * w; weight += w; } return weight > 0 ? total / weight : null; }
@@ -136,7 +136,7 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
       idealOutputTotal += m.effective_norm;
     } else {
       m.effective_norm = m.norm_per_hour != null && m.norm_per_hour > 0 ? 0 : null;
-      if (m.actual_minutes === 0) m.performance_pct = m.actual_output != null ? null : m.performance_pct;
+      if (m.actual_minutes === 0) m.performance_pct = null;
     }
     if (m.actual_output != null) actualOutputTotal += m.actual_output;
     if (m.performance_pct != null && m.availability_pct != null && m.capacity != null && m.operator_count > 0) m.actual_oee_pct = m.performance_pct * m.availability_pct * (m.capacity / m.operator_count) / 100;
