@@ -16,9 +16,9 @@ BEGIN
   FROM public.import_items
   WHERE id = NEW.import_item_id;
 
-  IF upper(coalesce(v_product_code, '')) LIKE 'H\_%' ESCAPE '\\' THEN
+  IF left(upper(coalesce(v_product_code, '')), 2) = 'H_' THEN
     NEW.position := 'HA';
-  ELSIF upper(coalesce(v_product_code, '')) LIKE 'T\_%' ESCAPE '\\' THEN
+  ELSIF left(upper(coalesce(v_product_code, '')), 2) = 'T_' THEN
     NEW.position := 'TUP';
   END IF;
 
@@ -38,15 +38,12 @@ EXECUTE FUNCTION public.normalize_import_item_row_position();
 -- Repair rows already stored before this rule existed.
 UPDATE public.import_item_rows r
 SET position = CASE
-  WHEN upper(coalesce(i.product_code, '')) LIKE 'H\_%' ESCAPE '\\' THEN 'HA'
-  WHEN upper(coalesce(i.product_code, '')) LIKE 'T\_%' ESCAPE '\\' THEN 'TUP'
+  WHEN left(upper(coalesce(i.product_code, '')), 2) = 'H_' THEN 'HA'
+  WHEN left(upper(coalesce(i.product_code, '')), 2) = 'T_' THEN 'TUP'
   ELSE r.position
 END
 FROM public.import_items i
 WHERE i.id = r.import_item_id
-  AND (
-    upper(coalesce(i.product_code, '')) LIKE 'H\_%' ESCAPE '\\'
-    OR upper(coalesce(i.product_code, '')) LIKE 'T\_%' ESCAPE '\\'
-  );
+  AND left(upper(coalesce(i.product_code, '')), 2) IN ('H_', 'T_');
 
 GRANT EXECUTE ON FUNCTION public.normalize_import_item_row_position() TO authenticated;
