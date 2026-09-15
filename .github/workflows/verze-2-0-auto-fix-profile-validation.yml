@@ -1,0 +1,67 @@
+name: Verze 2.0 AUTO profile validation fix
+
+on:
+  push:
+    branches: [Verze-2.0-Auto]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'fix(2.0-auto): apply profile validation fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: Verze-2.0-Auto
+      - name: Patch import profile resolution and create DB migration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ScreenshotImportV2.tsx')
+          s = p.read_text()
+          old = 'const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null); if (error) throw error; return data ?? []; };'
+          new = 'const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").order("valid_from", { ascending: false }).order("version_no", { ascending: false }); if (error) throw error; return data ?? []; };'
+          if old not in s:
+              raise SystemExit('loadProfiles target not found')
+          s = s.replace(old, new, 1)
+          old = 'const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));'
+          new = '''const workDate = result.work_date ?? null;
+          const profile = loadedProfiles.find((p: any) => {
+            const codeMatches = normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode);
+            if (!codeMatches) return false;
+            if (!workDate) return true;
+            const from = p.valid_from ? String(p.valid_from) : null;
+            const to = p.valid_to ? String(p.valid_to) : null;
+            return (!from || from <= workDate) && (!to || to >= workDate);
+          }) ?? loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));'''
+          if old not in s:
+              raise SystemExit('profile lookup target not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          src = Path('supabase/migrations/20260913201000_verze_2_0_auto_atomic_fix.sql').read_text()
+          start = src.index('create or replace function public.auto_approve_import_item(p_import_item_id uuid)')
+          end = src.index('grant execute on function public.auto_approve_import_item(uuid) to authenticated;', start) + len('grant execute on function public.auto_approve_import_item(uuid) to authenticated;')
+          fn = src[start:end]
+          fn = fn.replace('public.auto_approve_import_item(p_import_item_id uuid)', 'public.auto_approve_import_item_legacy(p_import_item_id uuid)', 1)
+          fn = fn.replace('where pp.valid_to is null\n      and pp.valid_from <= v_item.work_date', 'where pp.valid_from <= v_item.work_date\n      and (pp.valid_to is null or pp.valid_to >= v_item.work_date)', 1)
+          migration = '''-- Verze 2.0 AUTO
+-- Resolve Product Profiles by the import work date, including historical profiles.
+-- This keeps the OCR/import path consistent with the canonical KPI lookup.
+
+''' + fn + '\n'
+          Path('supabase/migrations/20260915073500_verze_2_0_auto_historical_product_profile.sql').write_text(migration)
+          PY
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "stordik-alt"
+          git config user.email "stordik@gmail.com"
+          rm -f .github/workflows/verze-2-0-auto-fix-profile-validation.yml
+          git add src/components/ScreenshotImportV2.tsx supabase/migrations/20260915073500_verze_2_0_auto_historical_product_profile.sql .github/workflows/verze-2-0-auto-fix-profile-validation.yml
+          git commit -m "fix(2.0-auto): apply profile validation fix"
+          git push origin Verze-2.0-Auto
