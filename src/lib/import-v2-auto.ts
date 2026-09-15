@@ -86,8 +86,8 @@ export async function persistOcrResult(itemId: string, input: OcrResult, product
   }
   // 2.01: the database preserves one row per product/hour pair, so never discard a second product in the same hour.
   // Rows with the same product/hour are aggregated because one product may appear in multiple OCR fragments.
-  const grouped = new Map<string, typeof hourlyRows[number]>();
   const hourlyRows = Array.from(hourlyByKey.values()).map((m) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code, role: inferRole(m.product_code), actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: null, capacity: null, operator_count: null, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));
+  const grouped = new Map<string, typeof hourlyRows[number]>();
   for (const row of hourlyRows) {
     const key = `${row.hour}|${normalize(row.product_code)}`;
     const prev = grouped.get(key);
