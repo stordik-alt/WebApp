@@ -84,12 +84,17 @@ export async function persistOcrResult(itemId: string, input: OcrResult, product
     const key = `${hour}|${normalize(code)}`;
     if (!hourlyByKey.has(key)) hourlyByKey.set(key, { ...metric, product_code: code || null });
   }
-  // The database schema is unique by import_item_id + hour. If OCR returns two products for one hour,
-  // preserve the first row for KPI calculation and store the complete product set in ocr_data; never invent or merge products.
+  // 2.01: the database preserves one row per product/hour pair, so never discard a second product in the same hour.
+  // Rows with the same product/hour are aggregated because one product may appear in multiple OCR fragments.
   const hourlyRows = Array.from(hourlyByKey.values()).map((m) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code, role: inferRole(m.product_code), actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: null, capacity: null, operator_count: null, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));
-  const byHour = new Map<number, typeof hourlyRows[number]>();
-  for (const row of hourlyRows) if (!byHour.has(row.hour)) byHour.set(row.hour, row);
-  const persistedHourlyRows = Array.from(byHour.values());
+  const grouped = new Map<string, typeof hourlyRows[number]>();
+  for (const row of hourlyRows) {
+    const key = `${row.hour}|${normalize(row.product_code)}`;
+    const prev = grouped.get(key);
+    if (!prev) grouped.set(key, row);
+    else grouped.set(key, { ...prev, actual_output: Number(prev.actual_output ?? 0) + Number(row.actual_output ?? 0), raw_data: { ...(prev.raw_data ?? {}), fragments: [prev.raw_data, row.raw_data] } });
+  }
+  const persistedHourlyRows = Array.from(grouped.values()).sort((a, b) => a.hour - b.hour || String(a.product_code ?? '').localeCompare(String(b.product_code ?? '')));
   const { error: deleteError } = await db.from("import_item_hourly").delete().eq("import_item_id", itemId); if (deleteError) throw deleteError;
   if (persistedHourlyRows.length) { const { error } = await db.from("import_item_hourly").insert(persistedHourlyRows); if (error) throw error; }
 

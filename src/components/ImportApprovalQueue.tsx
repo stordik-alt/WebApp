@@ -31,7 +31,16 @@ const dataUrlFromBlob = async (blob: Blob) => await new Promise<string>((resolve
 
 function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   const data = item?.ocr_data ?? {};
-  const hourly = Array.isArray(data.hourly_metrics) ? data.hourly_metrics : [];
+  const hourlyQuery = useQuery({
+    queryKey: ["approval-detail-hourly", item?.id],
+    enabled: Boolean(item?.id),
+    queryFn: async () => {
+      const { data: dbRows, error } = await db.from("import_item_hourly").select("*").eq("import_item_id", item!.id).order("hour").order("id");
+      if (error) throw error;
+      return dbRows ?? [];
+    },
+  });
+  const hourly = hourlyQuery.data?.length ? hourlyQuery.data : (Array.isArray(data.hourly_metrics) ? data.hourly_metrics : []);
   const listed = Array.isArray(data.products) ? data.products : [];
   const codes = Array.from(new Set([
     ...hourly.map((m: any) => String(m.product_code ?? "").trim()),
@@ -67,11 +76,26 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
     };
     const output = rows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);
     const hours = rows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);
-    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, profileFound: Boolean(profile), output, hours, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };
+    const reconstruction = rows.reduce((best: any, r: any) => {
+      const calc = r?.raw_data?.calculation;
+      return calc?.reconstruction_status ? calc : best;
+    }, null);
+    const capacity = profile ? Number(isHa ? profile.h_capacity : profile.tup_capacity) : null;
+    const operatorCount = rows.reduce((max: number, r: any) => Math.max(max, Number(r.operator_count) || 0), 0) || Number(data.operator_count) || 1;
+    const expected = rows.reduce((sum: number, r: any) => {
+      const calc = r?.raw_data?.calculation;
+      const minutes = Number(calc?.reconstructed_productive_minutes ?? r.actual_minutes ?? 0);
+      const effectiveNorm = Number(calc?.reconstructed_effective_norm ?? (Number(norm) * minutes / 60));
+      if (!Number.isFinite(effectiveNorm) || effectiveNorm < 0) return sum;
+      const cap = Number(r.capacity ?? capacity);
+      const ops = Number(r.operator_count ?? operatorCount);
+      return sum + (Number.isFinite(cap) && cap > 0 && Number.isFinite(ops) && ops > 0 ? effectiveNorm * cap / ops : effectiveNorm);
+    }, 0);
+    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : null, operatorCount, profileFound: Boolean(profile), output, expected, hours, reconstruction, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };
   });
   return <Card className="border-primary/30 bg-primary/5">
     <div className="flex items-center justify-between gap-3"><div><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs text-muted-foreground">Kontrola všech Product ID nalezených v hodinové tabulce. Norma je vždy načtena z platného Product Profile, ne z OCR.</div></div><Badge variant="secondary">{products.length} {products.length === 1 ? "produkt" : products.length < 5 ? "produkty" : "produktů"}</Badge></div>
-    <div className="mt-3 grid gap-2">{products.map((product) => <div key={product.code} className="rounded-lg border bg-background p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{product.code}</div><div className="text-sm font-medium">Norma: {product.norm != null ? `${product.norm} ks/h` : product.profileFound ? "—" : "Profile MISSING"}</div></div><div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Výstup</div><div className="font-medium">{product.output || "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div></div></div>)}</div>
+    <div className="mt-3 grid gap-2">{products.map((product) => <div key={product.code} className="rounded-lg border bg-background p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{product.code}</div><div className="text-sm font-medium">Norma: {product.norm != null ? `${product.norm} ks/h` : product.profileFound ? "—" : "Profile MISSING"}</div></div><div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-7"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Vyrobeno</div><div className="font-medium">{product.output || "—"} ks</div></div><div><div className="text-muted-foreground">Očekáváno</div><div className="font-medium">{product.expected > 0 ? `${product.expected.toFixed(0)} ks` : "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Kapacita / operátoři</div><div className="font-medium">{product.capacity != null ? `${product.capacity} / ${product.operatorCount}` : "—"}</div></div></div>{product.reconstruction?.reconstruction_status ? <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs"><span className="font-medium">Rekonstruovaný čas:</span> {Number(product.reconstruction.reconstructed_productive_minutes).toFixed(2)} min · odvozeno z výstupu a master normy · jistota: odvozená</div> : null}</div>)}</div>
   </Card>;
 }
 
