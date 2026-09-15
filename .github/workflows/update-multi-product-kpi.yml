@@ -1,0 +1,36 @@
+name: Update multi-product KPI summary
+on:
+  push:
+    branches: [Verze-2.0-Auto]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update approval detail summary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/ImportApprovalQueue.tsx')
+          s=p.read_text()
+          old='''const output = rows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);\n    const hours = rows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);\n    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, profileFound: Boolean(profile), output, hours, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };'''
+          new='''const output = rows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);\n    const hours = rows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);\n    const capacity = profile ? Number(isHa ? profile.h_capacity : profile.tup_capacity) : null;\n    const expected = rows.reduce((sum: number, r: any) => {\n      const minutes = Number(r.actual_minutes ?? 0);\n      const operators = Number(r.operator_count ?? data.operator_count ?? 1);\n      if (!Number.isFinite(norm) || norm <= 0 || !Number.isFinite(capacity) || capacity <= 0 || minutes <= 0 || !Number.isFinite(operators) || operators <= 0) return sum;\n      return sum + Number(norm) * minutes / 60 * (Number(capacity) / Number(operators));\n    }, 0);\n    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : null, profileFound: Boolean(profile), output, expected, hours, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };'''
+          if old not in s: raise SystemExit('target calculation block not found')
+          s=s.replace(old,new,1)
+          old_ui='''<div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Výstup</div><div className="font-medium">{product.output || "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div></div>'''
+          new_ui='''<div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-7"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Vyrobeno</div><div className="font-medium">{product.output || "—"} ks</div></div><div><div className="text-muted-foreground">Očekáváno</div><div className="font-medium">{product.expected > 0 ? `${product.expected.toFixed(0)} ks` : "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Kapacita</div><div className="font-medium">{product.capacity != null ? `${product.capacity} op.` : "—"}</div></div></div>'''
+          if old_ui not in s: raise SystemExit('target UI block not found')
+          s=s.replace(old_ui,new_ui,1)
+          p.write_text(s)
+          PY
+      - name: Remove one-shot workflow
+        if: success()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/ImportApprovalQueue.tsx
+          git commit -m 'Show produced and expected pieces per product' || true
+          rm -f .github/workflows/update-multi-product-kpi.yml
+          git add .github/workflows/update-multi-product-kpi.yml
+          git commit -m 'Remove one-shot KPI workflow' || true
+          git push
