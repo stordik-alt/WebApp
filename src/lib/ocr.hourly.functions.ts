@@ -137,7 +137,7 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
     } catch { /* keep values from the primary OCR pass */ }
   }
 
-  // Only real production rows participate in KPI aggregation. Empty 0/0 rows are kept out.
+  // Empty 0/0 rows are excluded from KPI aggregation.
   const realMetrics = hourly_metrics.filter((m) => (m.actual_output ?? 0) > 0 && m.product_code && m.norm_per_hour != null && m.norm_per_hour > 0).sort((a, b) => Number(a.hour ?? 0) - Number(b.hour ?? 0));
   const firstProductionMetric = realMetrics[0] ?? null;
   let actualOutputTotal = 0;
@@ -160,14 +160,14 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
     const normalizedProduct = normalize(m.product_code);
     const productChanged = previousProduct != null && normalizedProduct !== previousProduct;
     const isFirstProductionHour = firstProductionMetric === m;
-    const downtimeRelevant = downtime != null && (isFirstProductionHour || productChanged || m.downtime_before_production === true);
 
-    // If availability already reflects the same downtime, do not subtract it twice.
-    // If availability is 100% but a relevant pre-production/changeover downtime is explicitly recorded,
-    // honor the concrete downtime instead of treating the hour as a full 60 minutes.
+    // A downtime value in the first production hour blocks teff, but is subtracted
+    // from production time only when it is explicitly before production or is a product changeover.
+    const downtimeRelevant = downtime != null && (productChanged || m.downtime_before_production === true);
+
     let measuredMinutes = availabilityMinutes;
     if (downtimeRelevant) {
-      const downtimeAdjustedMinutes = 60 - (downtime ?? 0);
+      const downtimeAdjustedMinutes = 60 - downtime;
       measuredMinutes = measuredMinutes == null ? downtimeAdjustedMinutes : Math.min(measuredMinutes, downtimeAdjustedMinutes);
     }
 
@@ -213,7 +213,7 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
       actual_minutes_total: hourly_metrics.reduce((s, m) => s + (m.actual_minutes ?? 0), 0),
       actual_output_total: actualOutputTotal,
       availability_recovery: missingAvailability,
-      downtime_rule: "count only for first production hour, pre-production downtime, or product change on same workplace; never double-subtract downtime already represented by availability",
+      downtime_rule: "Concrete downtime affects production time only before production starts or during a product change on the same workplace; downtime in the first production hour blocks teff but is not otherwise subtracted unless one of those conditions applies.",
       hourly_metrics: hourly_metrics.map((m) => ({ hour: m.hour, product_code: m.product_code, actual_output: m.actual_output, ocr_norm_per_hour: m.ocr_norm_per_hour, downtime_minutes: m.downtime_minutes, downtime_before_production: m.downtime_before_production, availability_pct: m.availability_pct, actual_minutes: m.actual_minutes, effective_norm: m.effective_norm }))
     })
   };
