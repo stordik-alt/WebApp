@@ -31,7 +31,16 @@ const dataUrlFromBlob = async (blob: Blob) => await new Promise<string>((resolve
 
 function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   const data = item?.ocr_data ?? {};
-  const hourly = Array.isArray(data.hourly_metrics) ? data.hourly_metrics : [];
+  const hourlyQuery = useQuery({
+    queryKey: ["approval-detail-hourly", item?.id],
+    enabled: Boolean(item?.id),
+    queryFn: async () => {
+      const { data: dbRows, error } = await db.from("import_item_hourly").select("*").eq("import_item_id", item!.id).order("hour").order("id");
+      if (error) throw error;
+      return dbRows ?? [];
+    },
+  });
+  const hourly = hourlyQuery.data?.length ? hourlyQuery.data : (Array.isArray(data.hourly_metrics) ? data.hourly_metrics : []);
   const listed = Array.isArray(data.products) ? data.products : [];
   const codes = Array.from(new Set([
     ...hourly.map((m: any) => String(m.product_code ?? "").trim()),
