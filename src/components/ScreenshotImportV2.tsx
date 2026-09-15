@@ -64,7 +64,6 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
         await (supabase as any).from("import_item_rows").delete().eq("import_item_id", existingItem.id);
         await (supabase as any).from("import_item_hourly").delete().eq("import_item_id", existingItem.id);
       }
-
       const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Soubor se nepodařilo načíst.")); reader.readAsDataURL(file); });
       setPreviewUrl((current) => selectedKey === key || !current ? dataUrl : current);
       const image = await preprocessOcrImage(dataUrl, { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
@@ -84,15 +83,12 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));
       if (profile && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
-        const role = finalRows.find((row: any) => row.position === "HA" || row.position === "TUP")?.position ?? null;
+        const role = /^H_/i.test(productCode) ? "HA" : /^T_/i.test(productCode) ? "TUP" : null;
         const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } });
         hourly = hourlyResult.hourly_metrics ?? [];
         actualOee = hourlyResult.actual_shift_oee_pct ?? null;
         finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;
         if (!hourly.length) blockers.push("HOURLY_DATA_MISSING");
-        const hasPerformance = hourly.some((m) => m.performance_pct != null && Number.isFinite(Number(m.performance_pct)));
-        const hasAvailability = hourly.some((m) => m.availability_pct != null && Number.isFinite(Number(m.availability_pct)));
-        if (!hasPerformance || !hasAvailability || actualOee == null || !Number.isFinite(actualOee)) blockers.push("HOURLY_KPI_MISSING");
         const { error: hourlyDeleteError } = await (supabase as any).from("import_item_hourly").delete().eq("import_item_id", itemId);
         if (hourlyDeleteError) throw hourlyDeleteError;
         const { error: rowDeleteError } = await (supabase as any).from("import_item_rows").delete().eq("import_item_id", itemId);
@@ -104,13 +100,8 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       } else if (finalRows.length && (!finalMatchedProduct || !profile)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");
       else if (!finalRows.length) blockers.push("EMPLOYEE_UNMATCHED");
       blockers = [...new Set(blockers)];
-      if (!blockers.length) {
-        const finalized = await finalizeImportItem(itemId, finalResult, finalRows, finalMatchedProduct, [], hourly, actualOee);
-        updateItem(key, { status: finalized.status, result: finalResult, createdRecords: finalized.createdRecords });
-      } else {
-        await finalizeImportItem(itemId, finalResult, finalRows, finalMatchedProduct, blockers, hourly, actualOee);
-        updateItem(key, { status: "PENDING_APPROVAL", blockers, result: finalResult, message: "Import byl uložen do Ke schválení." });
-      }
+      const finalized = await finalizeImportItem(itemId, finalResult, finalRows, finalMatchedProduct, blockers, hourly, actualOee);
+      updateItem(key, { status: finalized.status, blockers: finalized.blockers, result: finalResult, createdRecords: finalized.createdRecords, message: finalized.status === "PENDING_APPROVAL" ? "Import byl uložen do Ke schválení." : undefined });
     } catch (error) {
       const message = errorMessage(error);
       if (itemId) await markImportItemError(itemId, message);
