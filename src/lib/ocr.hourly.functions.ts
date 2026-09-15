@@ -76,6 +76,7 @@ function profileVariant(p: ProductProfileContext, code: string | null, role: "HA
 }
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
 function parseTime(v: unknown): string | null { const m = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(text(v)); return m ? m[0] : null; }
+function shiftFromScreenshotTime(time: string | null): string | null { if (!time) return null; const hour = Number(time.slice(0, 2)); if (hour >= 6 && hour < 14) return "Ranní"; if (hour >= 14 && hour < 22) return "Odpolední"; return "Noční"; }
 
 function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } {
   if (hour >= 6 && hour < 14) return { start: 6 * 60, pauseStartRel: 4 * 60 + 40, pauseEndRel: 5 * 60 + 10 };
@@ -148,5 +149,5 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
   const oeeWeight = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct != null ? (m.actual_minutes ?? 0) : 0), 0);
   const actual_shift_oee_pct = oeeWeight > 0 ? weightedOee / oeeWeight : null;
   const predicted_shift_output = idealOutputTotal > 0 ? idealOutputTotal : null;
-  return { hourly_metrics, predicted_shift_output, actual_shift_oee_pct, actual_shift_performance_pct, actual_shift_availability_pct, operator_count: data.context.operator_count, screenshot_time, shift: screenshot_time, raw: JSON.stringify({ screenshot_time, actual_minutes_total: totalMinutes, actual_output_total: actualOutputTotal }) };
+  return { hourly_metrics, predicted_shift_output, actual_shift_oee_pct, actual_shift_performance_pct, actual_shift_availability_pct, operator_count: data.context.operator_count, screenshot_time, shift: shiftFromScreenshotTime(screenshot_time), raw: JSON.stringify({ screenshot_time, actual_minutes_total: totalMinutes, actual_output_total: actualOutputTotal }) };
 });
