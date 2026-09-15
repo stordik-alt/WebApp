@@ -2,6 +2,8 @@ name: Patch 2.01 reconstruction UI
 on:
   push:
     branches: [Verze-2.01-Auto]
+permissions:
+  contents: write
 jobs:
   patch:
     runs-on: ubuntu-latest
