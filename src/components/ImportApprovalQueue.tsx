@@ -28,7 +28,6 @@ const normalize = (v: string | null | undefined) => (v ?? "").trim().toLowerCase
 const average = (values: Array<number | null | undefined>) => { const valid = values.filter((v): v is number => v != null && Number.isFinite(Number(v))).map(Number); return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null; };
 const dataUrlFromBlob = async (blob: Blob) => await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Screenshot se nepodařilo načíst pro 3. sekvenci OCR.")); reader.readAsDataURL(blob); });
 
-
 function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   const data = item?.ocr_data ?? {};
   const hourlyQuery = useQuery({
@@ -68,30 +67,61 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
     const profile = validProfiles[0];
     const isHa = /^H_/i.test(code);
     const norm = profile ? Number(isHa ? profile.h_norm_per_hour : profile.t_norm_per_hour) : null;
-    const weighted = (field: string) => {
-      const values = rows.map((r: any) => ({ value: Number(r[field]), weight: Number(r.actual_minutes ?? 0) })).filter((x: any) => Number.isFinite(x.value));
-      const weightedValues = values.filter((x: any) => x.weight > 0);
-      if (weightedValues.length) return weightedValues.reduce((a: number, x: any) => a + x.value * x.weight, 0) / weightedValues.reduce((a: number, x: any) => a + x.weight, 0);
-      return values.length ? values.reduce((a: number, x: any) => a + x.value, 0) / values.length : null;
+    const capacity = profile ? Number(isHa ? profile.h_capacity : profile.tup_capacity) : null;
+    const operatorCount = rows.reduce((max: number, r: any) => Math.max(max, Number(r.operator_count) || 0), 0) || Number(data.operator_count) || 1;
+    const realRows = rows.filter((r: any) => Number(r.actual_output) > 0 && normalize(r.product_code) === normalize(code)).sort((a: any, b: any) => Number(a.hour) - Number(b.hour) || String(a.id ?? "").localeCompare(String(b.id ?? "")));
+    const firstRealIndex = rows.findIndex((r: any) => Number(r.actual_output) > 0 && normalize(r.product_code) === normalize(code));
+    const effectiveMinutes = (r: any, rowIndex: number) => {
+      const calc = r?.raw_data?.calculation ?? {};
+      const persisted = Number(r.actual_minutes);
+      if (Number.isFinite(persisted) && persisted > 0) return Math.min(60, persisted);
+      const calculated = Number(calc.productive_minutes ?? calc.reconstructed_productive_minutes);
+      if (Number.isFinite(calculated) && calculated > 0) return Math.min(60, calculated);
+      const availability = Math.max(0, Math.min(100, Number.isFinite(Number(r.availability_pct)) ? Number(r.availability_pct) : 100));
+      const availabilityMinutes = availability * 0.6;
+      const downtime = Number(calc.downtime_minutes ?? r?.raw_data?.downtime_minutes ?? r?.raw_data?.downtime_min);
+      const concreteDowntime = Number.isFinite(downtime) && downtime > 0 ? Math.min(60, downtime) : 0;
+      const downtimeBefore = String(calc.downtime_before_production ?? r?.raw_data?.downtime_before_production ?? "").toLowerCase() === "true";
+      const reason = String(r?.raw_data?.downtime_reason ?? r?.raw_data?.reason ?? "").toLowerCase();
+      const changeover = reason.includes("změna produktu") || reason.includes("zmena produktu");
+      const relevantDowntime = concreteDowntime > 0 && (downtimeBefore || changeover);
+      if (rowIndex === firstRealIndex && concreteDowntime <= 0 && norm && norm > 0) {
+        const ocrNorm = Number(r?.raw_data?.ocr_norm_per_hour ?? r?.raw_data?.norm_per_hour);
+        if (Number.isFinite(ocrNorm) && ocrNorm > 0 && availability > 0) {
+          const normAt100 = ocrNorm / (availability / 100);
+          const teff = (normAt100 / norm) * 60;
+          if (Number.isFinite(teff) && teff > 0) return Math.min(60, teff);
+        }
+      }
+      return relevantDowntime ? Math.min(availabilityMinutes, Math.max(0, 60 - concreteDowntime)) : availabilityMinutes;
     };
-    const output = rows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);
-    const hours = rows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);
+    const metrics = rows.map((r: any, rowIndex: number) => {
+      const minutes = effectiveMinutes(r, rowIndex);
+      const output = Number(r.actual_output);
+      const rowNorm = Number(norm);
+      const perf = minutes > 0 && Number.isFinite(output) && output > 0 && Number.isFinite(rowNorm) && rowNorm > 0 ? output / (rowNorm * minutes / 60) * 100 : null;
+      const availability = Number.isFinite(Number(r.availability_pct)) ? Math.max(0, Math.min(100, Number(r.availability_pct))) : null;
+      const cap = Number(r.capacity ?? capacity);
+      const ops = Number(r.operator_count ?? operatorCount);
+      const oee = perf != null && availability != null && cap > 0 && ops > 0 ? perf * availability * (cap / ops) / 100 : null;
+      return { r, minutes, perf, availability, oee };
+    }).filter((x: any) => x.minutes > 0 && Number(x.r.actual_output) > 0);
+    const totalMinutes = metrics.reduce((sum: number, x: any) => sum + x.minutes, 0);
+    const weighted = (field: "perf" | "availability" | "oee") => {
+      const values = metrics.filter((x: any) => Number.isFinite(Number(x[field])));
+      const weight = values.reduce((sum: number, x: any) => sum + x.minutes, 0);
+      return weight > 0 ? values.reduce((sum: number, x: any) => sum + Number(x[field]) * x.minutes, 0) / weight : null;
+    };
+    const output = realRows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);
+    const hours = realRows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);
     const reconstruction = rows.reduce((best: any, r: any) => {
       const calc = r?.raw_data?.calculation;
       return calc?.reconstruction_status ? calc : best;
     }, null);
-    const capacity = profile ? Number(isHa ? profile.h_capacity : profile.tup_capacity) : null;
-    const operatorCount = rows.reduce((max: number, r: any) => Math.max(max, Number(r.operator_count) || 0), 0) || Number(data.operator_count) || 1;
-    const expected = rows.reduce((sum: number, r: any) => {
-      const calc = r?.raw_data?.calculation;
-      const minutes = Number(calc?.reconstructed_productive_minutes ?? r.actual_minutes ?? 0);
-      const effectiveNorm = Number(calc?.reconstructed_effective_norm ?? (Number(norm) * minutes / 60));
-      if (!Number.isFinite(effectiveNorm) || effectiveNorm < 0) return sum;
-      const cap = Number(r.capacity ?? capacity);
-      const ops = Number(r.operator_count ?? operatorCount);
-      return sum + (Number.isFinite(cap) && cap > 0 && Number.isFinite(ops) && ops > 0 ? effectiveNorm * cap / ops : effectiveNorm);
-    }, 0);
-    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : null, operatorCount, profileFound: Boolean(profile), output, expected, hours, reconstruction, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };
+    const expected = totalMinutes > 0 && Number.isFinite(Number(norm)) && Number(norm) > 0
+      ? totalMinutes / 60 * Number(norm) * (Number(capacity) > 0 && operatorCount > 0 ? Number(capacity) / operatorCount : 1)
+      : 0;
+    return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : null, operatorCount, profileFound: Boolean(profile), output, expected, hours, reconstruction, performance: weighted("perf"), availability: weighted("availability"), oee: weighted("oee") };
   });
   return <Card className="border-primary/30 bg-primary/5">
     <div className="flex items-center justify-between gap-3"><div><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs text-muted-foreground">Kontrola všech Product ID nalezených v hodinové tabulce. Norma je vždy načtena z platného Product Profile, ne z OCR.</div></div><Badge variant="secondary">{products.length} {products.length === 1 ? "produkt" : products.length < 5 ? "produkty" : "produktů"}</Badge></div>
@@ -123,7 +153,7 @@ export function ImportApprovalQueue() {
     <Dialog open={!!selected && !rejectOpen} onOpenChange={v => { if (!v) { setSelected(null); setPreviewUrl(null); } }}><DialogContent className="max-h-[95vh] max-w-6xl overflow-y-auto">{selected && <><DialogHeader><DialogTitle>Kontrola importu · {selected.product_code ?? "bez produktu"}</DialogTitle></DialogHeader><MultiProductDetailSummary item={selected} /><div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]"><div className="space-y-4"><Card className="overflow-hidden p-2">{previewUrl ? <a href={previewUrl} target="_blank" rel="noreferrer"><img src={previewUrl} alt="Originální screenshot importu" className="max-h-[520px] w-full rounded-lg object-contain" /></a> : <div className="p-8 text-center text-sm text-muted-foreground">Screenshot není dostupný.</div>}<div className="p-2 text-xs text-muted-foreground">Kliknutím otevřete originální screenshot ve větším zobrazení.</div></Card><Card className="p-4"><div className="font-semibold">Důvody kontroly</div><div className="mt-2 flex flex-wrap gap-2">{blockerList.length ? blockerList.map(x => <Badge key={x} variant="destructive">{labelReason(x)}</Badge>) : <Badge variant="outline">Žádný známý blocker</Badge>}</div></Card></div><div className="space-y-4"><Card className="p-4"><div className="font-semibold">OCR data – upravitelná</div><div className="mt-3 grid gap-3 sm:grid-cols-2">{([["work_date","Datum"],["shift","Směna"],["line","Linka"],["product_code","Product ID"],["product_name","Název produktu"],["norm_per_hour","Norma / h"]] as [string,string][]).map(([key,label]) => <label key={key} className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">{label}</span><Input value={editing[key] ?? String((selected as any)[key] ?? "")} onChange={e => setEditing(p => ({ ...p, [key]: e.target.value }))} /></label>)}</div><Button className="mt-3" variant="outline" disabled={saveHeader.isPending} onClick={() => saveHeader.mutate()}>Uložit opravy a znovu validovat</Button></Card>
     <Card className="p-4"><div className="font-semibold">Zaměstnanci – OCR + opravy</div><div className="mt-3 space-y-3">{selectedRows.map(row => { const d = rowEditing[row.id] ?? { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "" }; return <div key={row.id} className="rounded-xl border p-3"><div className="grid gap-2 sm:grid-cols-2"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">OCR jméno – upravitelné</span><Input value={d.employeeName} onFocus={() => openRowEdit(row)} onChange={e => updateDraft(row, "employeeName", e.target.value)} /></label><div className="flex items-end gap-2"><select className="h-10 flex-1 rounded-md border bg-background px-3 text-sm" value={row.employee_id ?? ""} onChange={e => e.target.value && assignEmployee.mutate({ row, employeeId: e.target.value })}><option value="">Vyberte stávajícího zaměstnance…</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.full_name}</option>)}</select><Button variant="outline" onClick={() => openEmployee(row)}><UserPlus className="mr-2 h-4 w-4" />Nový</Button></div></div><div className="mt-3 grid gap-2 sm:grid-cols-3"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={d.position} onChange={e => updateDraft(row, "position", e.target.value)}><option value="">HA/TUP…</option><option value="HA">HA</option><option value="TUP">TUP</option></select><div className="rounded-md border bg-muted/20 px-3 py-2"><div className="text-[11px] text-muted-foreground">Výkon</div><div className="font-medium">{row.performance != null ? `${Number(row.performance).toFixed(2)} %` : "—"}</div></div><div className="rounded-md border bg-muted/20 px-3 py-2"><div className="text-[11px] text-muted-foreground">Dostupnost</div><div className="font-medium">{row.available_time != null ? `${Number(row.available_time).toFixed(2)} %` : "—"}</div></div></div><div className="mt-2 grid gap-2 sm:grid-cols-2"><div className="rounded-md border bg-muted/20 px-3 py-2"><div className="text-[11px] text-muted-foreground">Skutečné OEE</div><div className="font-medium">{row.oee != null ? `${Number(row.oee).toFixed(2)} %` : "—"}</div></div><div className="flex items-center justify-end gap-2"><div className="text-xs text-muted-foreground">Přiřazení: {row.employee_id ? "OK" : "čeká"} · OCR {row.confidence != null ? `${Math.round(Number(row.confidence) * 100)}%` : "–"}</div><Button size="sm" variant="outline" disabled={saveRow.isPending} onClick={() => saveRow.mutate({ row })}>Uložit jméno/pozici</Button></div></div></div>; })}</div></Card>
     <Card className="p-4"><div className="font-semibold">Product Profile</div><div className="mt-1 text-sm text-muted-foreground">Profil musí být skutečně uložen a ověřen. Po vytvoření se znovu spustí 3. sekvence, která dopočítá OEE, Výkon a Dostupnost. Samotný profil import neschvaluje.</div><div className="mt-2 flex items-center gap-2"><Badge variant={selected.product_profile_status === "VALID" ? "default" : "destructive"}>{selected.product_profile_status === "VALID" ? "VALID" : selected.product_profile_status ?? "MISSING"}</Badge><Button variant="outline" onClick={startProfile}><ExternalLink className="mr-2 h-4 w-4" />Vytvořit / upravit Product Profile</Button></div></Card></div></div><DialogFooter className="gap-2"><Button variant="destructive" onClick={() => setRejectOpen(true)}><XCircle className="mr-2 h-4 w-4" />Zamítnout</Button><Button disabled={approve.isPending || blockerList.length > 0 || selected.product_profile_status !== "VALID"} onClick={() => approve.mutate(selected)}><CheckCircle2 className="mr-2 h-4 w-4" />Schválit a zařadit do statistik</Button></DialogFooter></>}</DialogContent></Dialog>
-    <Dialog open={employeeOpen} onOpenChange={setEmployeeOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Nový zaměstnanec – kontrola OCR údajů</DialogTitle></DialogHeader><div className="grid gap-3"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Celé jméno</span><Input value={newEmployee.fullName} onChange={e => setNewEmployee(p => ({ ...p, fullName: e.target.value }))} /></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Jméno</span><Input value={newEmployee.firstName} onChange={e => setNewEmployee(p => ({ ...p, firstName: e.target.value }))} /></label><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Příjmení</span><Input value={newEmployee.lastName} onChange={e => setNewEmployee(p => ({ ...p, lastName: e.target.value }))} /></label></div></div><DialogFooter><Button variant="outline" onClick={() => setEmployeeOpen(false)}>Zrušit</Button><Button disabled={!employeeRow || createEmployee.isPending} onClick={() => employeeRow && createEmployee.mutate({ row: employeeRow })}>Vytvořit a přiřadit</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={employeeOpen} onOpenChange={setEmployeeOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Nový zaměstnanec – kontrola OCR údajů</DialogTitle></DialogHeader><div className="grid gap-3"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Celé jméno</span><Input value={newEmployee.fullName} onChange={e => setNewEmployee(p => ({ ...p, fullName: e.target.value }))} /></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Jméno</span><Input value={newEmployee.firstName} onChange={e => setNewEmployee(p => ({ ...p, firstName: e.target.value }))} /></label><label className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">Příjmení</span><Input value={newEmployee.lastName} onChange={e => setNewEmployee(p => ({ ...p, firstName: e.target.value }))} /></label></div></div><DialogFooter><Button variant="outline" onClick={() => setEmployeeOpen(false)}>Zrušit</Button><Button disabled={!employeeRow || createEmployee.isPending} onClick={() => employeeRow && createEmployee.mutate({ row: employeeRow })}>Vytvořit a přiřadit</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={rejectOpen} onOpenChange={setRejectOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Zamítnout import</DialogTitle></DialogHeader><Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Uveďte důvod zamítnutí…" rows={5} /><DialogFooter><Button variant="outline" onClick={() => setRejectOpen(false)}>Zrušit</Button><Button variant="destructive" disabled={!rejectReason.trim() || reject.isPending || !selected} onClick={() => selected && reject.mutate({ item: selected, reason: rejectReason })}>Zamítnout import</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={profileOpen} onOpenChange={setProfileOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Product Profile – kontrola a vytvoření</DialogTitle></DialogHeader><div className="grid gap-3 sm:grid-cols-2">{([["profileName","Název profilu"],["haCode","HA Product ID"],["haNorm","HA norma / h"],["haCapacity","HA kapacita"],["tupCode","TUP Product ID"],["tupNorm","TUP norma / h"],["tupCapacity","TUP kapacita"],["validFrom","Platnost od"]] as [keyof ProfileDraft,string][]).map(([key,label]) => <label key={key} className="text-sm"><span className="mb-1 block text-xs text-muted-foreground">{label}</span><Input value={profile[key]} onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))} /></label>)}</div><DialogFooter><Button variant="outline" onClick={() => setProfileOpen(false)}>Zrušit</Button><Button disabled={createProfile.isPending} onClick={() => createProfile.mutate()}>Vytvořit Product Profile a přepočítat</Button></DialogFooter></DialogContent></Dialog>
   </div>;
