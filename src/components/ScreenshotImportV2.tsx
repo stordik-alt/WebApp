@@ -83,10 +83,12 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const productCode = result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
       const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));
       if (profile && finalRows.length && finalMatchedProduct) {
-        const hourlyResult = await extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: finalRows.length } } });
+        const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
+        const role = finalRows.find((row: any) => row.position === "HA" || row.position === "TUP")?.position ?? null;
+        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } });
         hourly = hourlyResult.hourly_metrics ?? [];
         actualOee = hourlyResult.actual_shift_oee_pct ?? null;
-        finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;
+        finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;
         if (!hourly.length) blockers.push("HOURLY_DATA_MISSING");
         const hasPerformance = hourly.some((m) => m.performance_pct != null && Number.isFinite(Number(m.performance_pct)));
         const hasAvailability = hourly.some((m) => m.availability_pct != null && Number.isFinite(Number(m.availability_pct)));
@@ -132,9 +134,6 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     finally { setBusy(false); }
   };
 
-  // Browser/mobile Chrome may freeze or discard a background tab. The import itself
-  // is persisted to Supabase before OCR starts, so on return we can reconstruct the
-  // File from the private Storage object and resume every unfinished item.
   useEffect(() => {
     let cancelled = false;
     const recover = async () => {
