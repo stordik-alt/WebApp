@@ -1,4 +1,4 @@
-name: Update 2.0 AUTO product summary
+name: Fix 2.0 AUTO multi-product OCR
 
 on:
   push:
@@ -11,91 +11,150 @@ permissions:
   contents: write
 
 jobs:
-  update:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: Verze-2.0-Auto
           fetch-depth: 1
-      - name: Update screenshot import UI and multi-product hourly extraction
+      - name: Patch multi-product OCR and approval UI
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
+          changed = []
+
+          # 1) Historical Product Profiles must be available to OCR. The previous
+          # active-only query made existing historical profiles look missing.
           p = Path('src/components/ScreenshotImportV2.tsx')
           s = p.read_text()
-          changed = False
+          old = 'const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null); if (error) throw error; return data ?? []; };'
+          new = 'const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").order("valid_from", { ascending: false }); if (error) throw error; return data ?? []; };'
+          if old in s:
+              s = s.replace(old, new, 1)
+              changed.append(str(p))
 
-          old_profile = '''      const productCode = result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
+          old_block = '''      const productCode = result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
       const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));
       if (profile && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
         const role = /^H_/i.test(productCode) ? "HA" : /^T_/i.test(productCode) ? "TUP" : null;
         const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } });
 '''
-          new_profile = '''      const detectedProductCodes = Array.from(new Set([
+          new_block = '''      const detectedProductCodes = Array.from(new Set([
         ...(result.products ?? []).map((p: any) => String(p.product_code ?? "").trim()).filter(Boolean),
         ...(result.hourly_metrics ?? []).map((m: any) => String(m.product_code ?? "").trim()).filter(Boolean),
         result.product_code?.trim() || "",
-      ].filter(Boolean)));
-      const relevantProfiles = loadedProfiles.filter((p: any) => detectedProductCodes.some((code) =>
-        normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code)
-      ));
-      const missingDetectedProducts = detectedProductCodes.filter((code) =>
-        !relevantProfiles.some((p: any) => normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code))
-      );
+      ].filter(Boolean))).filter((code) => /^(?:H|T)_/i.test(code) || allProducts.some((p: any) => normalize(p.code) === normalize(code)));
+      const relevantProfiles = loadedProfiles.filter((p: any) => detectedProductCodes.some((code) => normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code)));
+      const missingDetectedProfiles = detectedProductCodes.filter((code) => !relevantProfiles.some((p: any) => normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code)));
       if (relevantProfiles.length && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
         const roles = new Set(detectedProductCodes.map((code) => /^H_/i.test(code) ? "HA" : /^T_/i.test(code) ? "TUP" : null).filter(Boolean));
         const role = roles.size === 1 ? Array.from(roles)[0] as "HA" | "TUP" : null;
         const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: relevantProfiles, operator_count: finalRows.length, role } } });
 '''
-          if old_profile in s:
-              s = s.replace(old_profile, new_profile, 1)
-              changed = True
+          if old_block in s:
+              s = s.replace(old_block, new_block, 1)
+              if str(p) not in changed: changed.append(str(p))
 
-          old_else = '''      } else if (finalRows.length && (!finalMatchedProduct || !profile)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");
-'''
-          new_else = '''      } else if (finalRows.length && (!finalMatchedProduct || !relevantProfiles.length)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");
-      if (missingDetectedProducts.length) blockers.push("PRODUCT_PROFILE_MISSING");
-'''
+          old_else = '      } else if (finalRows.length && (!finalMatchedProduct || !profile)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");'
+          new_else = '      } else if (finalRows.length && (!finalMatchedProduct || !relevantProfiles.length)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");\n      if (missingDetectedProfiles.length) blockers.push("PRODUCT_PROFILE_MISSING");'
           if old_else in s:
               s = s.replace(old_else, new_else, 1)
-              changed = True
+              if str(p) not in changed: changed.append(str(p))
+          p.write_text(s)
 
-          marker = '''</div> : <div className="text-sm text-muted-foreground">Detail se zobrazí po dokončení OCR.</div>}</div>{selected.status === "PENDING_APPROVAL"'''
-          insert = '''</div> : <div className="text-sm text-muted-foreground">Detail se zobrazí po dokončení OCR.</div>}{selected.result && (() => {
-            const detected = Array.from(new Set([
-              ...(selected.result.products ?? []).map((p: any) => String(p.product_code ?? "").trim()).filter(Boolean),
-              ...(selected.result.hourly_metrics ?? []).map((m: any) => String(m.product_code ?? "").trim()).filter(Boolean),
-              selected.result.product_code?.trim() || "",
-            ].filter(Boolean)));
-            const metricsByProduct = detected.map((code) => {
-              const rows = (selected.result?.hourly_metrics ?? []).filter((m: any) => normalize(m.product_code) === normalize(code));
-              const profile = (selected.result?.products ?? []).find((p: any) => normalize(p.product_code) === normalize(code));
-              const weighted = (field: "performance_pct" | "availability_pct" | "actual_oee_pct") => {
-                let total = 0, weight = 0;
-                for (const row of rows as any[]) { const value = Number(row[field]); const w = Number(row.actual_minutes ?? 0); if (Number.isFinite(value) && w > 0) { total += value * w; weight += w; } }
-                return weight > 0 ? total / weight : null;
-              };
-              const output = rows.reduce((sum: number, row: any) => sum + (Number.isFinite(Number(row.actual_output)) ? Number(row.actual_output) : 0), 0);
-              return { code, norm: profile?.norm_per_hour ?? rows.find((r: any) => r.norm_per_hour != null)?.norm_per_hour ?? null, output, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct"), hours: rows.length };
-            });
-            return <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4"><div className="mb-3 flex items-center justify-between"><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs font-medium text-muted-foreground">{metricsByProduct.length} {metricsByProduct.length === 1 ? "produkt" : metricsByProduct.length < 5 ? "produkty" : "produktů"}</div></div>{metricsByProduct.length ? <div className="space-y-2">{metricsByProduct.map((m) => <div key={m.code} className="rounded-lg border bg-background/70 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{m.code}</div><div className="text-xs text-muted-foreground">Norma {m.norm != null ? `${m.norm} ks/h` : "—"}</div></div><div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{m.hours || "—"}</div></div><div><div className="text-muted-foreground">Výstup</div><div className="font-medium">{m.output || "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{m.performance != null ? `${m.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{m.availability != null ? `${m.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{m.oee != null ? `${m.oee.toFixed(2)} %` : "—"}</div></div></div></div>)}</div> : <div className="text-sm text-muted-foreground">Produkt zatím nebyl jednoznačně rozpoznán.</div>}</div>;
-          })()}</div>{selected.status === "PENDING_APPROVAL"'''
-          if marker in s:
-              s = s.replace(marker, insert, 1)
-              changed = True
+          # 2) Approval queue: show every product found in OCR hourly data,
+          # with its own norm and KPI values. This is intentionally based on
+          # persisted ocr_data so the reviewer can see exactly what OCR found.
+          p = Path('src/components/ImportApprovalQueue.tsx')
+          s = p.read_text()
+          helper = r'''
+function MultiProductApprovalSummary({ item }: { item: PendingImport | null }) {
+  if (!item) return null;
+  const data = item.ocr_data ?? {};
+  const hourly = Array.isArray(data.hourly_metrics) ? data.hourly_metrics : [];
+  const listed = Array.isArray(data.products) ? data.products : [];
+  const codes = Array.from(new Set([
+    ...hourly.map((m: any) => String(m.product_code ?? '').trim()).filter(Boolean),
+    ...listed.map((m: any) => String(m.product_code ?? '').trim()).filter(Boolean),
+    String(data.product_code ?? '').trim(),
+  ].filter(Boolean)));
+  if (!codes.length) return null;
+  const byProduct = codes.map((code) => {
+    const rows = hourly.filter((m: any) => normalize(m.product_code) === normalize(code));
+    const listedProduct = listed.find((m: any) => normalize(m.product_code) === normalize(code));
+    const weighted = (field: string) => {
+      let total = 0;
+      let weight = 0;
+      for (const row of rows) {
+        const value = Number(row[field]);
+        const minutes = Number(row.actual_minutes ?? 0);
+        if (Number.isFinite(value) && minutes > 0) { total += value * minutes; weight += minutes; }
+      }
+      return weight > 0 ? total / weight : null;
+    };
+    const output = rows.reduce((sum: number, row: any) => sum + (Number.isFinite(Number(row.actual_output)) ? Number(row.actual_output) : 0), 0);
+    const norms = rows.map((r: any) => Number(r.norm_per_hour)).filter((n: number) => Number.isFinite(n) && n > 0);
+    const norm = Number(listedProduct?.norm_per_hour) > 0 ? Number(listedProduct.norm_per_hour) : norms[0] ?? null;
+    const hours = rows.map((r: any) => r.hour).filter((h: any) => Number.isFinite(Number(h))).sort((a: any,b: any) => Number(a)-Number(b));
+    return { code, norm, output, performance: weighted('performance_pct'), availability: weighted('availability_pct'), oee: weighted('actual_oee_pct'), hours };
+  });
+  return <Card className="border-primary/30 bg-primary/5">
+    <div className="flex items-center justify-between gap-3">
+      <div><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs text-muted-foreground">OCR rozpoznalo {byProduct.length} {byProduct.length === 1 ? 'produkt' : byProduct.length < 5 ? 'produkty' : 'produktů'}. Hodnoty jsou vedené samostatně pro každý Product ID.</div></div>
+      <Badge variant="secondary">{byProduct.length}</Badge>
+    </div>
+    <div className="mt-3 grid gap-2">
+      {byProduct.map((product) => <div key={product.code} className="rounded-lg border bg-background p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{product.code}</div><div className="text-sm font-medium">Norma: {product.norm != null ? `${product.norm} ks/h` : '—'}</div></div>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+          <div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(', ') : '—'}</div></div>
+          <div><div className="text-muted-foreground">Výstup</div><div className="font-medium">{product.output || '—'}</div></div>
+          <div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : '—'}</div></div>
+          <div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : '—'}</div></div>
+          <div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : '—'}</div></div>
+        </div>
+      </div>)}
+    </div>
+  </Card>;
+}
+'''
+          if 'function MultiProductApprovalSummary' not in s:
+              marker = 'const dataUrlFromBlob = async (blob: Blob) => await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Screenshot se nepodařilo načíst pro 3. sekvenci OCR.")); reader.readAsDataURL(blob); });\n'
+              if marker not in s:
+                  raise SystemExit('Approval queue helper insertion marker not found')
+              s = s.replace(marker, marker + helper, 1)
+              changed.append(str(p))
+
+          # Put the summary directly into the approval page above the selected-item controls.
+          render_marker = '  return <div className="grid gap-4">\n'
+          if '            <MultiProductApprovalSummary item={selected} />' not in s:
+              if render_marker not in s:
+                  raise SystemExit('Approval queue render marker not found')
+              s = s.replace(render_marker, render_marker + '    <MultiProductApprovalSummary item={selected} />\n', 1)
+          p.write_text(s)
 
           if not changed:
-              print('No changes needed')
-              raise SystemExit(0)
-          p.write_text(s)
+              raise SystemExit('No source file changed; refusing to create a no-op commit')
+          print('Changed:', ', '.join(dict.fromkeys(changed)))
           PY
+
+          npm ci
+          npm run build
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/components/ScreenshotImportV2.tsx
-          git diff --cached --quiet || git commit -m 'Show all detected products and extract hourly data per product'
+          git add src/components/ScreenshotImportV2.tsx src/components/ImportApprovalQueue.tsx
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'No staged source changes'; exit 1; } || true
+          git commit -m 'Fix 2.0 AUTO multi-product OCR and approval summary'
+          git push origin HEAD:Verze-2.0-Auto
+
+          # Remove this temporary repair workflow after the source fix is committed.
+          git rm .github/workflows/update-product-summary.yml
+          git commit -m 'Remove temporary multi-product repair workflow'
           git push origin HEAD:Verze-2.0-Auto
