@@ -27,8 +27,8 @@ begin
     from public.product_profiles pp
     where pp.valid_to is null
       and (
-        lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\s+', '', 'g')) = lower(regexp_replace(new.product_code, '\s+', '', 'g'))
-        or lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\s+', '', 'g')) = lower(regexp_replace(new.product_code, '\s+', '', 'g'))
+        lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(new.product_code, '\\s+', '', 'g'))
+        or lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(new.product_code, '\\s+', '', 'g'))
       )
     order by pp.valid_from desc nulls last, pp.version_no desc nulls last
     limit 1;
@@ -87,7 +87,10 @@ begin
   select coalesce(array_agg(reason order by reason), '{}'::text[])
     into v_reasons
   from (
-    select distinct jsonb_array_elements_text(coalesce(new.pending_reasons, '[]'::jsonb)) as reason
+    select distinct reason
+    from (
+      select jsonb_array_elements_text(coalesce(new.pending_reasons, '[]'::jsonb)) as reason
+    ) existing_reasons
     where reason not in ('PRODUCT_PROFILE_MISSING','PRODUCT_PROFILE_INCOMPLETE','OEE_MISSING','PERFORMANCE_MISSING','AVAILABILITY_MISSING','HOURLY_KPI_MISSING','HOURLY_DATA_MISSING')
     union
     select unnest(v_reasons)
