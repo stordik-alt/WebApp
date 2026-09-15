@@ -1,0 +1,97 @@
+name: Fix approval detail multi-product
+
+on:
+  push:
+    branches: [Verze-2.0-Auto]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Verze-2.0-Auto
+          fetch-depth: 1
+      - name: Move multi-product summary into detail and use DB norms
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/ImportApprovalQueue.tsx')
+          s = p.read_text()
+
+          helper = r'''
+          function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
+            const data = item?.ocr_data ?? {};
+            const hourly = Array.isArray(data.hourly_metrics) ? data.hourly_metrics : [];
+            const listed = Array.isArray(data.products) ? data.products : [];
+            const codes = Array.from(new Set([
+              ...hourly.map((m: any) => String(m.product_code ?? "").trim()),
+              ...listed.map((m: any) => String(m.product_code ?? "").trim()),
+              String(data.product_code ?? "").trim(),
+            ].filter((code) => /^(?:H|T)_/i.test(String(code)))));
+            const profileQuery = useQuery({
+              queryKey: ["approval-detail-product-profiles", item?.id, item?.work_date, codes.join("|")],
+              enabled: Boolean(item && codes.length),
+              queryFn: async () => {
+                const { data: profiles, error } = await db.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").order("valid_from", { ascending: false });
+                if (error) throw error;
+                return profiles ?? [];
+              },
+            });
+            if (!item || !codes.length) return null;
+            const profiles = profileQuery.data ?? [];
+            const date = item.work_date ?? "9999-12-31";
+            const products = codes.map((code) => {
+              const rows = hourly.filter((m: any) => normalize(m.product_code) === normalize(code));
+              const validProfiles = profiles.filter((p: any) => {
+                const matches = normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code);
+                return matches && String(p.valid_from ?? "0000-01-01") <= date && (p.valid_to == null || String(p.valid_to) >= date);
+              });
+              const profile = validProfiles[0];
+              const isHa = /^H_/i.test(code);
+              const norm = profile ? Number(isHa ? profile.h_norm_per_hour : profile.t_norm_per_hour) : null;
+              const weighted = (field: string) => {
+                const values = rows.map((r: any) => ({ value: Number(r[field]), weight: Number(r.actual_minutes ?? 0) })).filter((x: any) => Number.isFinite(x.value));
+                const weightedValues = values.filter((x: any) => x.weight > 0);
+                if (weightedValues.length) return weightedValues.reduce((a: number, x: any) => a + x.value * x.weight, 0) / weightedValues.reduce((a: number, x: any) => a + x.weight, 0);
+                return values.length ? values.reduce((a: number, x: any) => a + x.value, 0) / values.length : null;
+              };
+              const output = rows.reduce((sum: number, r: any) => sum + (Number.isFinite(Number(r.actual_output)) ? Number(r.actual_output) : 0), 0);
+              const hours = rows.map((r: any) => Number(r.hour)).filter((h: number) => Number.isFinite(h)).sort((a: number, b: number) => a - b);
+              return { code, rows, norm: Number.isFinite(norm) && norm > 0 ? norm : null, profileFound: Boolean(profile), output, hours, performance: weighted("performance_pct"), availability: weighted("availability_pct"), oee: weighted("actual_oee_pct") };
+            });
+            return <Card className="border-primary/30 bg-primary/5">
+              <div className="flex items-center justify-between gap-3"><div><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs text-muted-foreground">Kontrola všech Product ID nalezených v hodinové tabulce. Norma je vždy načtena z platného Product Profile, ne z OCR.</div></div><Badge variant="secondary">{products.length} {products.length === 1 ? "produkt" : products.length < 5 ? "produkty" : "produktů"}</Badge></div>
+              <div className="mt-3 grid gap-2">{products.map((product) => <div key={product.code} className="rounded-lg border bg-background p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{product.code}</div><div className="text-sm font-medium">Norma: {product.norm != null ? `${product.norm} ks/h` : product.profileFound ? "—" : "Profile MISSING"}</div></div><div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Výstup</div><div className="font-medium">{product.output || "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div></div></div>)}</div>
+            </Card>;
+          }
+          '''
+          if 'function MultiProductDetailSummary' not in s:
+              marker = '\nexport function ImportApprovalQueue() {'
+              if marker not in s:
+                  raise SystemExit('ImportApprovalQueue export marker not found')
+              s = s.replace(marker, '\n' + helper + marker, 1)
+
+          needle = '<DialogHeader><DialogTitle>Kontrola importu · {selected.product_code ?? "bez produktu"}</DialogTitle></DialogHeader>'
+          if '<MultiProductDetailSummary item={selected} />' not in s:
+              if needle not in s:
+                  raise SystemExit('approval detail header marker not found')
+              s = s.replace(needle, needle + '<MultiProductDetailSummary item={selected} />', 1)
+          p.write_text(s)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/ImportApprovalQueue.tsx
+          git commit -m "Show multi-product metrics only in approval detail" || true
+          git push origin Verze-2.0-Auto
+      - name: Remove one-shot workflow
+        shell: bash
+        run: |
+          git rm -f .github/workflows/fix-approval-detail.yml || true
+          git commit -m "Remove one-shot approval detail workflow" || true
+          git push origin Verze-2.0-Auto || true
