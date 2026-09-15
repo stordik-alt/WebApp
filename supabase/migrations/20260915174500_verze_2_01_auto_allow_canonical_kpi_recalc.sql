@@ -19,11 +19,17 @@ begin
   is_system_recalc :=
     coalesce(new.raw_data -> 'calculation' ->> 'model_version', '') in (
       '2.01-AUTO-effective-minutes-v3',
-      '2.01-AUTO-staffing-kpi-v1'
+      '2.01-AUTO-staffing-kpi-v1',
+      '2.01-AUTO-downtime-relevance-v2',
+      '2.01-AUTO-first-output-downtime-v1',
+      '2.01-AUTO-teff-first-hour-downtime-guard-v1'
     )
     or coalesce(new.raw_data ->> 'kpi_model_version', '') in (
       '2.01-AUTO-effective-minutes-v3',
-      '2.01-AUTO-staffing-kpi-v1'
+      '2.01-AUTO-staffing-kpi-v1',
+      '2.01-AUTO-downtime-relevance-v2',
+      '2.01-AUTO-first-output-downtime-v1',
+      '2.01-AUTO-teff-first-hour-downtime-guard-v1'
     );
 
   if tg_op = 'UPDATE'
@@ -45,4 +51,4 @@ before update on public.import_item_rows
 for each row
 execute function public.prevent_manual_import_kpi_edit();
 
-grant execute on function public.prevent_manual_import_kpi_edit(uuid) to authenticated;
+grant execute on function public.prevent_manual_import_kpi_edit() to authenticated;
