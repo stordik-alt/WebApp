@@ -1,14 +1,9 @@
 begin;
 
--- 2.0 AUTO: the admin "Uložit opravy a znovu validovat" path previously only
--- updated header fields and recomputed blocker labels in the browser. It did
--- not run the canonical KPI recalculation, so existing NULL OEE/performance
--- stayed NULL and a stale PRODUCT_PROFILE_MISSING could survive the save.
---
--- Keep the database as the source of truth: whenever an admin saves the
--- header of a pending import, resolve the active Product Profile by product
--- code, run the canonical KPI calculation, then rebuild the blocker list from
--- the persisted rows.
+-- 2.0 AUTO: the admin "Uložit opravy a znovu validovat" path must execute
+-- canonical profile/KPI validation even when the administrator only clicks
+-- save without changing a header value. The UI previously recalculated only
+-- its local blocker list and left NULL OEE/performance untouched.
 create or replace function public.revalidate_import_item_after_admin_header_save()
 returns trigger
 language plpgsql
@@ -21,26 +16,12 @@ declare
   v_has_rows boolean;
   r record;
 begin
-  if new.status <> 'PENDING_APPROVAL' then
+  if new.status <> 'PENDING_APPROVAL' or pg_trigger_depth() > 1 then
     return new;
   end if;
 
-  -- Only react to actual header edits. The internal updates below change KPI
-  -- and blocker columns, not these header fields, so they do not recurse.
-  if not (
-    new.work_date is distinct from old.work_date
-    or new.shift is distinct from old.shift
-    or new.line is distinct from old.line
-    or new.product_code is distinct from old.product_code
-    or new.product_name is distinct from old.product_name
-    or new.norm_per_hour is distinct from old.norm_per_hour
-  ) then
-    return new;
-  end if;
-
-  -- Product Profile is identified by the product code, using the active
-  -- profile as the canonical runtime source. This deliberately does not
-  -- attach a product to another family merely because the work date is old.
+  -- Resolve only the exact Product ID against an active Product Profile.
+  -- Never infer another family/product just because the work date is old.
   if new.product_code is not null then
     select pp.* into v_profile
     from public.product_profiles pp
@@ -56,8 +37,7 @@ begin
   update public.import_items
   set product_profile_status = case
         when v_profile.id is null then 'MISSING'
-        when v_profile.ha_subassy is null
-          or v_profile.tup_subassy is null
+        when v_profile.ha_subassy is null or v_profile.tup_subassy is null
           or coalesce(v_profile.h_norm_per_hour, 0) <= 0
           or coalesce(v_profile.h_capacity, 0) < 1
           or coalesce(v_profile.t_norm_per_hour, 0) <= 0
@@ -67,17 +47,9 @@ begin
       end
   where id = new.id;
 
-  -- Canonical KPI calculation reads the resolved active Product Profile and
-  -- writes performance/availability/OEE into import_item_rows.
+  -- Canonical KPI calculation reads the resolved active profile and writes
+  -- performance/availability/OEE into import_item_rows.
   perform public.recalculate_import_item_kpis(new.id);
-
-  select exists(
-    select 1 from public.import_item_rows r where r.import_item_id = new.id
-  ) into v_has_rows;
-
-  if not coalesce(v_has_rows, false) then
-    v_reasons := array_append(v_reasons, 'EMPLOYEE_UNMATCHED');
-  end if;
 
   if new.work_date is null then v_reasons := array_append(v_reasons, 'MISSING_DATE'); end if;
   if new.shift is null or btrim(new.shift) = '' then v_reasons := array_append(v_reasons, 'MISSING_SHIFT'); end if;
@@ -86,13 +58,17 @@ begin
 
   if v_profile.id is null then
     v_reasons := array_append(v_reasons, 'PRODUCT_PROFILE_MISSING');
-  elsif v_profile.ha_subassy is null
-     or v_profile.tup_subassy is null
+  elsif v_profile.ha_subassy is null or v_profile.tup_subassy is null
      or coalesce(v_profile.h_norm_per_hour, 0) <= 0
      or coalesce(v_profile.h_capacity, 0) < 1
      or coalesce(v_profile.t_norm_per_hour, 0) <= 0
      or coalesce(v_profile.t_capacity, 0) < 1 then
     v_reasons := array_append(v_reasons, 'PRODUCT_PROFILE_INCOMPLETE');
+  end if;
+
+  select exists(select 1 from public.import_item_rows where import_item_id = new.id) into v_has_rows;
+  if not coalesce(v_has_rows, false) then
+    v_reasons := array_append(v_reasons, 'EMPLOYEE_UNMATCHED');
   end if;
 
   for r in
@@ -107,16 +83,12 @@ begin
     if r.oee is null then v_reasons := array_append(v_reasons, 'OEE_MISSING'); end if;
   end loop;
 
-  -- Preserve any non-KPI/non-profile blockers already present on the item.
+  -- Preserve blockers unrelated to profile/KPI validation.
   select coalesce(array_agg(reason order by reason), '{}'::text[])
     into v_reasons
   from (
     select distinct jsonb_array_elements_text(coalesce(new.pending_reasons, '[]'::jsonb)) as reason
-    where reason not in (
-      'PRODUCT_PROFILE_MISSING','PRODUCT_PROFILE_INCOMPLETE',
-      'OEE_MISSING','PERFORMANCE_MISSING','AVAILABILITY_MISSING',
-      'HOURLY_KPI_MISSING','HOURLY_DATA_MISSING'
-    )
+    where reason not in ('PRODUCT_PROFILE_MISSING','PRODUCT_PROFILE_INCOMPLETE','OEE_MISSING','PERFORMANCE_MISSING','AVAILABILITY_MISSING','HOURLY_KPI_MISSING','HOURLY_DATA_MISSING')
     union
     select unnest(v_reasons)
   ) x;
@@ -125,8 +97,7 @@ begin
   set pending_reasons = to_jsonb(v_reasons),
       product_profile_status = case
         when v_profile.id is null then 'MISSING'
-        when v_profile.ha_subassy is null
-          or v_profile.tup_subassy is null
+        when v_profile.ha_subassy is null or v_profile.tup_subassy is null
           or coalesce(v_profile.h_norm_per_hour, 0) <= 0
           or coalesce(v_profile.h_capacity, 0) < 1
           or coalesce(v_profile.t_norm_per_hour, 0) <= 0
@@ -144,17 +115,7 @@ drop trigger if exists trg_import_items_admin_header_revalidate on public.import
 create trigger trg_import_items_admin_header_revalidate
 after update on public.import_items
 for each row
-when (
-  new.status = 'PENDING_APPROVAL'
-  and (
-    new.work_date is distinct from old.work_date
-    or new.shift is distinct from old.shift
-    or new.line is distinct from old.line
-    or new.product_code is distinct from old.product_code
-    or new.product_name is distinct from old.product_name
-    or new.norm_per_hour is distinct from old.norm_per_hour
-  )
-)
+when (new.status = 'PENDING_APPROVAL')
 execute function public.revalidate_import_item_after_admin_header_save();
 
 grant execute on function public.revalidate_import_item_after_admin_header_save() to authenticated;
