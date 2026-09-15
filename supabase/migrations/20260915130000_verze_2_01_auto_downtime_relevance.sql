@@ -1,8 +1,9 @@
 -- Verze 2.01 AUTO: downtime relevance rule.
--- A recorded downtime is relevant to production time only when:
---   1) it is in the first real production hour,
---   2) it is explicitly marked as before production starts in that hour, or
---   3) the product changes on the same workplace and the downtime belongs to that changeover.
+-- A recorded downtime affects production time only when:
+--   1) it is explicitly before production starts in that hour, or
+--   2) the product changes on the same workplace and the downtime belongs to that changeover.
+-- A concrete downtime in the first production hour blocks teff, but is not itself
+-- subtracted unless it also meets one of the two conditions above.
 -- Downtime already represented by availability is never subtracted twice.
 
 create or replace function public.recalculate_import_item_kpis(p_import_item_id uuid)
@@ -41,40 +42,22 @@ declare
   v_product_changed boolean;
   v_downtime_relevant boolean;
 begin
-  select * into v_item
-  from public.import_items
-  where id = p_import_item_id;
-
+  select * into v_item from public.import_items where id = p_import_item_id;
   if not found then return; end if;
 
   select count(*) into v_operator_count
   from public.import_item_rows
-  where import_item_id = p_import_item_id
-    and employee_id is not null;
-
+  where import_item_id = p_import_item_id and employee_id is not null;
   if v_operator_count < 1 then return; end if;
 
   for r in
-    select h.id,
-           h.hour,
-           h.product_code,
-           h.role,
-           h.actual_output,
-           h.availability_pct,
-           h.norm_per_hour as stored_norm,
-           h.raw_data
+    select h.id, h.hour, h.product_code, h.role, h.actual_output, h.availability_pct, h.norm_per_hour as stored_norm, h.raw_data
     from public.import_item_hourly h
     where h.import_item_id = p_import_item_id
-      and not (
-        coalesce(h.actual_output, 0) = 0
-        and coalesce(h.norm_per_hour, 0) = 0
-        and nullif(trim(coalesce(h.product_code, '')), '') is null
-      )
+      and not (coalesce(h.actual_output, 0) = 0 and coalesce(h.norm_per_hour, 0) = 0 and nullif(trim(coalesce(h.product_code, '')), '') is null)
     order by h.hour, h.id
   loop
-    if coalesce(r.actual_output, 0) <= 0 then
-      continue;
-    end if;
+    if coalesce(r.actual_output, 0) <= 0 then continue; end if;
 
     v_is_first_productive := not v_first_productive;
     v_first_productive := true;
@@ -83,25 +66,17 @@ begin
 
     select
       case
-        when upper(coalesce(r.role, '')) = 'HA'
-             and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_norm_per_hour
-        when upper(coalesce(r.role, '')) = 'TUP'
-             and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_norm_per_hour
-        when lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g'))
-             and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_norm_per_hour
-        when lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g'))
-             and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_norm_per_hour
+        when upper(coalesce(r.role, '')) = 'HA' and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_norm_per_hour
+        when upper(coalesce(r.role, '')) = 'TUP' and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_norm_per_hour
+        when lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_norm_per_hour
+        when lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_norm_per_hour
         else null
       end,
       case
-        when upper(coalesce(r.role, '')) = 'HA'
-             and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_capacity
-        when upper(coalesce(r.role, '')) = 'TUP'
-             and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_capacity
-        when lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g'))
-             and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_capacity
-        when lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g'))
-             and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_capacity
+        when upper(coalesce(r.role, '')) = 'HA' and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_capacity
+        when upper(coalesce(r.role, '')) = 'TUP' and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_capacity
+        when lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) and lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.h_capacity
+        when lower(regexp_replace(coalesce(pp.tup_subassy, ''), '\\s+', '', 'g')) = lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) and lower(regexp_replace(coalesce(pp.ha_subassy, ''), '\\s+', '', 'g')) <> lower(regexp_replace(coalesce(r.product_code, ''), '\\s+', '', 'g')) then pp.t_capacity
         else null
       end
     into v_norm, v_capacity
@@ -111,9 +86,7 @@ begin
     order by pp.valid_to is null desc, pp.valid_from desc nulls last, pp.version_no desc nulls last
     limit 1;
 
-    if v_norm is null or v_norm <= 0 then
-      continue;
-    end if;
+    if v_norm is null or v_norm <= 0 then continue; end if;
 
     v_ocr_norm := coalesce(
       nullif(trim(coalesce(r.raw_data ->> 'ocr_norm_per_hour', '')), '')::double precision,
@@ -133,8 +106,9 @@ begin
       else null
     end;
 
+    -- Downtime relevance is deliberately separate from the first-hour teff guard.
     v_downtime_relevant := coalesce(v_downtime_minutes, 0) > 0
-      and (v_is_first_productive or v_product_changed or coalesce(v_downtime_before_production, false));
+      and (coalesce(v_downtime_before_production, false) or v_product_changed);
 
     v_norm_100 := case
       when v_ocr_norm is not null and v_ocr_norm > 0 and r.availability_pct is not null and r.availability_pct > 0
@@ -151,33 +125,27 @@ begin
     v_availability_minutes := 60.0 * greatest(0, least(100, coalesce(r.availability_pct, 100))) / 100.0;
     v_minutes := v_availability_minutes;
 
-    -- teff is exclusively a first-production-hour start reconstruction and is forbidden
-    -- when that first hour contains a concrete downtime value.
+    -- teff is allowed only for the first real production hour and only if there is
+    -- no concrete downtime in that hour. Otherwise measured availability is used.
     if v_is_first_productive
        and coalesce(v_downtime_minutes, 0) <= 0
        and v_teff is not null
        and v_teff > 0 then
       v_minutes := least(60.0, v_teff);
     elsif v_downtime_relevant then
-      -- Availability normally already contains the downtime. This min() only matters
-      -- when availability is 100%/missing while a relevant concrete downtime is present.
+      -- If availability already includes the downtime, min() prevents double subtraction.
       v_minutes := least(v_availability_minutes, greatest(0, 60.0 - v_downtime_minutes));
     end if;
 
     if v_minutes <= 0 then continue; end if;
 
     v_perf := case
-      when r.actual_output is not null and v_norm > 0
-        then (r.actual_output / (v_norm * v_minutes / 60.0)) * 100.0
+      when r.actual_output is not null and v_norm > 0 then (r.actual_output / (v_norm * v_minutes / 60.0)) * 100.0
       else null
     end;
 
     v_oee := case
-      when v_perf is not null
-       and r.availability_pct is not null
-       and v_capacity is not null
-       and v_capacity > 0
-       and v_operator_count > 0
+      when v_perf is not null and r.availability_pct is not null and v_capacity is not null and v_capacity > 0 and v_operator_count > 0
         then v_perf * r.availability_pct * (v_capacity / v_operator_count::double precision) / 100.0
       else null
     end;
@@ -190,7 +158,7 @@ begin
         actual_oee_pct = v_oee,
         raw_data = coalesce(raw_data, '{}'::jsonb) || jsonb_build_object(
           'calculation', jsonb_build_object(
-            'model_version', '2.01-AUTO-downtime-relevance-v1',
+            'model_version', '2.01-AUTO-downtime-relevance-v2',
             'ocr_norm', v_ocr_norm,
             'norm_at_100_availability', v_norm_100,
             'effective_time_minutes', v_teff,
@@ -199,11 +167,12 @@ begin
             'first_productive_row', v_is_first_productive,
             'product_changed', v_product_changed,
             'downtime_relevant', v_downtime_relevant,
+            'teff_blocked_by_downtime', v_is_first_productive and coalesce(v_downtime_minutes, 0) > 0,
             'teff_applied', v_is_first_productive and coalesce(v_downtime_minutes, 0) <= 0 and v_teff is not null,
             'productive_minutes', v_minutes,
             'performance_formula', '(Reálný výstup / (norma z Product Profile × výrobní čas / 60)) × 100',
             'effective_time_formula', '(Norma při 100% dostupnosti / norma z Product Profile) × 60 min',
-            'downtime_rule', 'Odstávka se započítá pouze před začátkem výroby, při změně výrobku na stejném pracovišti, nebo v první výrobní hodině; pokud ji již obsahuje dostupnost, neodečítá se podruhé.',
+            'downtime_rule', 'Konkrétní odstávka ovlivňuje výrobní čas pouze před začátkem výroby nebo při změně výrobku na stejném pracovišti. V první výrobní hodině pouze blokuje teff, pokud není zároveň před začátkem výroby.',
             'oee_formula', '(Výkon × Dostupnost × (kapacita / počet operátorů)) / 100',
             'actual_output', r.actual_output,
             'norm_per_hour', v_norm,
@@ -237,11 +206,8 @@ begin
   v_shift_oee := case when v_oee_weight > 0 then v_oee_total / v_oee_weight else null end;
 
   update public.import_item_rows
-  set performance = v_shift_perf,
-      available_time = v_shift_avail,
-      oee = v_shift_oee
-  where import_item_id = p_import_item_id
-    and daily_record_id is null;
+  set performance = v_shift_perf, available_time = v_shift_avail, oee = v_shift_oee
+  where import_item_id = p_import_item_id and daily_record_id is null;
 
   update public.import_items
   set ocr_data = jsonb_set(
@@ -252,7 +218,7 @@ begin
       ),
       '{actual_shift_oee_pct}', to_jsonb(v_shift_oee), true
     ),
-    '{kpi_model_version}', to_jsonb('2.01-AUTO-downtime-relevance-v1'::text), true
+    '{kpi_model_version}', to_jsonb('2.01-AUTO-downtime-relevance-v2'::text), true
   )
   where id = p_import_item_id;
 end;
@@ -261,8 +227,7 @@ $$;
 grant execute on function public.recalculate_import_item_kpis(uuid) to authenticated;
 
 do $$
-declare
-  r record;
+declare r record;
 begin
   for r in
     select distinct i.id
