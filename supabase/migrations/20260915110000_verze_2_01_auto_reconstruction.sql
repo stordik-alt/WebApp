@@ -12,18 +12,16 @@
 -- approximately 18.46 productive minutes. The row's effective norm is then
 -- 12 ks, while OEE still applies the capacity/operator factor separately.
 
-create or replace function public.auto_reconstruct_import_item(uuid)
+create or replace function public.auto_reconstruct_import_item(p_import_item_id uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  p_import_item_id alias for $1;
   v_item public.import_items%rowtype;
   v_operator_count integer;
   v_first_id uuid;
-  v_first_hour integer;
   v_output numeric;
   v_norm numeric;
   v_capacity numeric;
@@ -31,8 +29,6 @@ declare
   v_minutes numeric;
   v_expected numeric;
   v_oee numeric;
-  v_screenshot_time text;
-  r record;
 begin
   select * into v_item
   from public.import_items
@@ -51,13 +47,10 @@ begin
     return;
   end if;
 
-  v_screenshot_time := nullif(trim(v_item.ocr_data ->> 'screenshot_time'), '');
-
   -- Find the first hourly row with real production, in shift order.
-  select h.id, h.hour, h.actual_output, h.norm_per_hour, h.capacity,
+  select h.id, h.actual_output, h.norm_per_hour, h.capacity,
          h.availability_pct
-    into v_first_id, v_first_hour, v_output, v_norm, v_capacity,
-         v_availability
+    into v_first_id, v_output, v_norm, v_capacity, v_availability
   from public.import_item_hourly h
   where h.import_item_id = p_import_item_id
     and coalesce(h.actual_output, 0) > 0
@@ -77,9 +70,9 @@ begin
   end if;
 
   -- Reconstruction is deliberately conservative. We only infer a late start
-  -- when the row reports full availability and there is no recorded downtime.
-  -- If the first productive hour is already partial for another reason, the
-  -- canonical clock-time model remains the source of truth.
+  -- when the row reports full availability. If the first productive hour is
+  -- already partial for another reason, the canonical clock-time model stays
+  -- the source of truth.
   if coalesce(v_availability, 0) < 99.99 then
     return;
   end if;
@@ -94,7 +87,7 @@ begin
   v_expected := v_norm * v_minutes / 60;
   v_oee := case
     when v_capacity is not null and v_capacity > 0 and v_operator_count > 0
-      then 100 * coalesce(v_availability, 100) * (v_capacity / v_operator_count::numeric) / 100
+      then coalesce(v_availability, 100) * (v_capacity / v_operator_count::numeric)
     else null
   end;
 
@@ -152,6 +145,5 @@ execute function public.recalculate_import_item_kpis_on_validating();
 
 grant execute on function public.recalculate_import_item_kpis_on_validating() to authenticated;
 
--- Also expose the reconstruction model version on future recalculations.
 comment on function public.auto_reconstruct_import_item(uuid) is
 'Verze 2.01 AUTO: conservative reconstruction of late production start from actual output and Product Profile master norm.';
