@@ -1,0 +1,29 @@
+name: Patch 2.01 persist all products
+on:
+  push:
+    branches: [Verze-2.01-Auto]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch import persistence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/import-v2-auto.ts')
+          s = p.read_text()
+          old = '''  // The database schema is unique by import_item_id + hour. If OCR returns two products for one hour,\n  // preserve the first row for KPI calculation and store the complete product set in ocr_data; never invent or merge products.\n  const hourlyRows = Array.from(hourlyByKey.values()).map((m) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code, role: inferRole(m.product_code), actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: null, capacity: null, operator_count: null, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));\n  const byHour = new Map<number, typeof hourlyRows[number]>();\n  for (const row of hourlyRows) if (!byHour.has(row.hour)) byHour.set(row.hour, row);\n  const persistedHourlyRows = Array.from(byHour.values());'''
+          new = '''  // 2.01: the database preserves one row per product/hour pair, so never discard a second product in the same hour.\n  // Rows with the same product/hour are aggregated because one product may appear in multiple OCR fragments.\n  const grouped = new Map<string, typeof hourlyRows[number]>();\n  const hourlyRows = Array.from(hourlyByKey.values()).map((m) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code, role: inferRole(m.product_code), actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: null, capacity: null, operator_count: null, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));\n  for (const row of hourlyRows) {\n    const key = `${row.hour}|${normalize(row.product_code)}`;\n    const prev = grouped.get(key);\n    if (!prev) grouped.set(key, row);\n    else grouped.set(key, { ...prev, actual_output: Number(prev.actual_output ?? 0) + Number(row.actual_output ?? 0), raw_data: { ...(prev.raw_data ?? {}), fragments: [prev.raw_data, row.raw_data] } });\n  }\n  const persistedHourlyRows = Array.from(grouped.values()).sort((a, b) => a.hour - b.hour || String(a.product_code ?? '').localeCompare(String(b.product_code ?? '')));'''
+          if old not in s: raise SystemExit('target block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/import-v2-auto.ts
+          git commit -m 'Persist every product/hour pair for 2.01 reconstruction'
+          git push
