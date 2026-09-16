@@ -170,17 +170,6 @@ export function useHandlerEvaluations() {
   });
 }
 
-export function useWeeklyHandlerEvaluations() {
-  return useQuery({
-    queryKey: ["weekly_handler_evaluations"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("weekly_handler_evaluations").select("*").eq("approval_status", "approved").order("iso_year", { ascending: false }).order("iso_week", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((r) => ({ ...r, avg_score: Number(r.avg_score) })) as unknown as import("@/lib/handler-eval").WeeklyHandlerEvaluation[];
-    },
-  });
-}
-
 export type QualityAlertHistoryEntry = { id: string; weekly_record_id: string; alert_cause: string | null; alert_note: string | null; operator_error: boolean | null; final_quality_score: number | null; alert_resolved: boolean; changed_by_email: string | null; created_at: string };
 
 export function useQualityAlertHistory(weeklyRecordId?: string) {

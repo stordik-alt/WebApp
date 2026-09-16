@@ -9,7 +9,7 @@ export type HourlyStageMetric = {
 export type HourlyStageResult = { hourly_metrics: HourlyStageMetric[]; predicted_shift_output: number | null; actual_shift_oee_pct: number | null; actual_shift_performance_pct?: number | null; actual_shift_availability_pct?: number | null; operator_count: number; screenshot_time?: string | null; shift?: string | null; raw?: string };
 
 type AiProvider = { name: string; url: string; model: string; headers: Record<string, string> };
-function providers(): AiProvider[] { const result: AiProvider[] = []; const key = process.env.OPENROUTER_API_KEY; if (key) result.push({ name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", model: process.env.OPENROUTER_MODEL ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` } }); const lovableKey = process.env.LOVABLE_API_KEY; if (lovableKey) result.push({ name: "Lovable AI", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } }); if (!result.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY)."); return result; }
+function providers(): AiProvider[] { const result: AiProvider[] = []; const key = process.env["OPENROUTER_API_KEY"]; if (key) result.push({ name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", model: process.env["OPENROUTER_MODEL"] ?? "qwen/qwen3-vl-8b-instruct", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` } }); const lovableKey = process.env["LOVABLE_API_KEY"]; if (lovableKey) result.push({ name: "Lovable AI", url: "https://ai.gateway.lovable.dev/v1/chat/completions", model: "google/gemini-3.6-flash", headers: { "Content-Type": "application/json", "Lovable-API-Key": lovableKey } }); if (!result.length) throw new Error("Chybí konfigurace AI služby (OPENROUTER_API_KEY nebo LOVABLE_API_KEY)."); return result; }
 function text(v: unknown): string { return String(v ?? "").trim(); }
 function num(v: unknown): number | null { if (v === null || v === undefined || v === "") return null; if (typeof v === "number") return Number.isFinite(v) ? v : null; let s = String(v).trim().replace(/\s/g, "").replace(/%/g, ""); if (s.includes(",")) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/[^\d.\-]/g, ""); const n = Number(s); return Number.isFinite(n) ? n : null; }
 function firstNum(row: Record<string, unknown>, keys: string[]): number | null { for (const key of keys) { const n = num(row[key]); if (n !== null) return n; } return null; }
@@ -22,7 +22,7 @@ function profileVariant(p: ProductProfileContext, code: string | null, role: "HA
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
 function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } { if (hour >= 6 && hour < 14) return { start: 360, pauseStartRel: 280, pauseEndRel: 310 }; if (hour >= 14 && hour < 22) return { start: 840, pauseStartRel: 240, pauseEndRel: 270 }; return { start: 1320, pauseStartRel: 240, pauseEndRel: 270 }; }
 function relativeMinuteOfShift(hour: number, shiftStart: number): number { return ((hour * 60 - shiftStart) + 1440) % 1440; }
-function screenshotRelativeMinute(time: string | null, shiftStart: number): number | null { if (!time) return null; const [h, m] = time.split(":").map(Number); return ((h * 60 + m - shiftStart) + 1440) % 1440; }
+function screenshotRelativeMinute(time: string | null, shiftStart: number): number | null { if (!time) return null; const parts = time.split(":"); const h = Number(parts[0] ?? 0); const m = Number(parts[1] ?? 0); return ((h * 60 + m - shiftStart) + 1440) % 1440; }
 function baseProductiveMinutesForHour(hour: number | null, screenshotTime: string | null): number { if (hour == null || !Number.isFinite(hour)) return 0; const h = ((Math.trunc(hour) % 24) + 24) % 24; const shift = shiftForHour(h); const start = relativeMinuteOfShift(h, shift.start); let end = start + 60; const cutoff = screenshotRelativeMinute(screenshotTime, shift.start); if (cutoff != null) { if (cutoff <= start) return 0; if (cutoff < end) end = cutoff; } let minutes = Math.max(0, end - start); minutes -= Math.max(0, Math.min(end, shift.pauseEndRel) - Math.max(start, shift.pauseStartRel)); minutes -= Math.max(0, Math.min(end, 7) - Math.max(start, 0)); minutes -= Math.max(0, Math.min(end, 475) - Math.max(start, 475)); return Math.max(0, Math.min(60, minutes)); }
 function averageWeighted(metrics: HourlyStageMetric[], field: "performance_pct" | "availability_pct"): number | null { let total = 0; let weight = 0; for (const m of metrics) { const value = m[field]; const w = m.actual_minutes ?? 0; if (value == null || !Number.isFinite(Number(value)) || w <= 0) continue; total += Number(value) * w; weight += w; } return weight > 0 ? total / weight : null; }
 async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> { const contextProfiles = context.profiles ?? []; const { supabaseAdmin } = await import("@/integrations/supabase/client.server"); const { data, error } = await supabaseAdmin.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour"); if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`); const dbProfiles = (data ?? []) as ProductProfileContext[]; if (!dbProfiles.length) return contextProfiles; const merged = [...contextProfiles]; for (const db of dbProfiles) { if (!merged.some((p) => [p.ha_subassy, p.tup_subassy].map(normalize).some((c) => c && [db.ha_subassy, db.tup_subassy].map(normalize).includes(c)))) merged.push(db); } return merged; }
@@ -45,14 +45,14 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
   const dbProfiles = await loadExistingProfiles(data.context); const context = { ...data.context, profiles: dbProfiles }; if (!(context.profiles ?? []).some((p) => (p.h_norm_per_hour != null && p.h_capacity != null) || (p.t_norm_per_hour != null && p.t_capacity != null))) throw new Error("Pro rozpoznané Product ID nebyl nalezen Product Profile s normou a kapacitou.");
   let parsed: Record<string, unknown> | null = null; let providerUsed: AiProvider | null = null; const errors: string[] = []; for (const provider of providers()) { try { parsed = await callAi(provider, data.imageDataUrl, context, "full"); providerUsed = provider; break; } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); } }
   if (!parsed || !providerUsed) throw new Error(`3. sekvence OCR selhala: ${errors.join(" | ")}`);
-  const screenshot_time = parseTime(parsed.screenshot_time);
-  const parsedRows = Array.isArray(parsed.hourly_metrics) ? parsed.hourly_metrics as Record<string, unknown>[] : [];
+  const screenshot_time = parseTime(parsed["screenshot_time"]);
+  const parsedRows = Array.isArray(parsed["hourly_metrics"]) ? parsed["hourly_metrics"] as Record<string, unknown>[] : [];
   const hourly_metrics: HourlyStageMetric[] = parsedRows.map((row) => {
     const product_code = firstText(row, ["product_code", "product", "produkt", "product_id"]) || null;
-    const role = normalizeRole(row.role) ?? context.role ?? null;
+    const role = normalizeRole(row["role"]) ?? context.role ?? null;
     const variant = findVariant(context, product_code, role);
     const downtime_minutes = firstNum(row, ["downtime_minutes", "downtime_min", "odstavka_minutes", "odstavky_minutes", "odstavka_min", "odstavky_min"]);
-    const downtimeFlagRaw = row.downtime_before_production;
+    const downtimeFlagRaw = row["downtime_before_production"];
     const downtime_before_production = typeof downtimeFlagRaw === "boolean" ? downtimeFlagRaw : null;
     return {
       hour: firstNum(row, ["hour", "hodina"]), product_code, role,
@@ -70,7 +70,7 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
   if (missingAvailability) {
     try {
       const recovery = await callAi(providerUsed, data.imageDataUrl, context, "availability");
-      const recoveryRows = Array.isArray(recovery.hourly_metrics) ? recovery.hourly_metrics as Record<string, unknown>[] : [];
+      const recoveryRows = Array.isArray(recovery["hourly_metrics"]) ? recovery["hourly_metrics"] as Record<string, unknown>[] : [];
       type RecoveryRow = { product_code: string | null; availability: number | null; downtime: number | null; beforeProduction: boolean | null };
       const byKey = new Map<string, RecoveryRow>();
       const byHour = new Map<number, RecoveryRow[]>();
@@ -79,7 +79,7 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
         const productCode = firstText(row, ["product_code", "product", "produkt", "product_id"]);
         const a = firstNum(row, ["availability_pct", "availability", "dostupnost", "dostupnost_pct"]);
         const d = firstNum(row, ["downtime_minutes", "downtime_min", "odstavka_minutes", "odstavky_minutes", "odstavka_min", "odstavky_min"]);
-        const flag = typeof row.downtime_before_production === "boolean" ? row.downtime_before_production : null;
+        const flag = typeof row["downtime_before_production"] === "boolean" ? row["downtime_before_production"] : null;
         const recoveredRow: RecoveryRow = { product_code: productCode || null, availability: a, downtime: d, beforeProduction: flag };
         const hour = Math.round(h); const candidates = byHour.get(hour) ?? []; candidates.push(recoveredRow); byHour.set(hour, candidates);
         if (productCode) byKey.set(`${hour}|${normalize(productCode)}`, recoveredRow);
@@ -113,11 +113,11 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
     const normalizedProduct = normalize(m.product_code); const sameRole = previousRole === m.role;
     const productChanged = previousProduct != null && sameRole && normalizedProduct !== previousProduct;
     const isFirstProductionHour = firstProductionMetric === m;
-    const downtimeReason = normalize(m.downtime_reason);
+    const downtimeReason = normalize(m.downtime_reason ?? null);
     const isChangeoverReason = downtimeReason.includes("zmenaproduktu") || downtimeReason.includes("změnaproduktu");
     const downtimeRelevant = downtime != null && (m.downtime_before_production === true || productChanged || isChangeoverReason);
     const measuredMinutes = downtimeRelevant ? Math.min(availabilityMinutes ?? 60, Math.max(0, 60 - downtime)) : availabilityMinutes;
-    const canUseTeff = isFirstProductionHour && (downtime == null || downtime <= 0) && m.ocr_norm_per_hour != null && m.ocr_norm_per_hour > 0 && m.norm_per_hour > 0;
+    const canUseTeff = isFirstProductionHour && (downtime == null || downtime <= 0) && m.ocr_norm_per_hour != null && m.ocr_norm_per_hour > 0 && m.norm_per_hour != null && m.norm_per_hour > 0;
     if (canUseTeff) {
       const availabilityFactor = availability != null && availability > 0 ? availability / 100 : 1;
       const normAt100Availability = m.ocr_norm_per_hour! / availabilityFactor;

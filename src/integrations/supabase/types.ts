@@ -1027,6 +1027,8 @@ export type Database = {
           approval_status: string;
           approved_at: string | null;
           approved_by: string | null;
+          changed_by: string | null;
+          changed_by_email: string | null;
           created_at: string;
           final_quality_score: number | null;
           id: string;
@@ -1043,6 +1045,8 @@ export type Database = {
           approval_status?: string;
           approved_at?: string | null;
           approved_by?: string | null;
+          changed_by?: string | null;
+          changed_by_email?: string | null;
           created_at?: string;
           final_quality_score?: number | null;
           id?: string;
@@ -1059,6 +1063,8 @@ export type Database = {
           approval_status?: string;
           approved_at?: string | null;
           approved_by?: string | null;
+          changed_by?: string | null;
+          changed_by_email?: string | null;
           created_at?: string;
           final_quality_score?: number | null;
           id?: string;

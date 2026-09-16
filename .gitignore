@@ -34,3 +34,6 @@ dist-ssr
 test-results/
 playwright-report/
 .env
+
+.vercel
+.env*

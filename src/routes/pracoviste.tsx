@@ -27,13 +27,14 @@ function parseImportedLine(value: string): ParsedImport | null {
   const source_line = value.trim();
   const match = source_line.match(/^(\d{3}\.\d{2})\s*-\s*(.+)$/i);
   if (!match) return null;
-  const code = match[1];
-  const remainder = match[2].trim();
+  const code = match[1] ?? "";
+  const remainder = (match[2] ?? "").trim();
   const prefix = code.slice(0, 3);
   if (prefix !== "041" && prefix !== "050") return null;
   const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
   const lineMatch = remainder.match(/(?:^|\s)(L\d+\s*\/\s*\d+(?:\s+HF)?|Olovo)\s*$/i);
-  const line_name = lineMatch ? (/^olovo$/i.test(lineMatch[1]) ? "Olovo" : lineMatch[1].replace(/\s*\/\s*/g, "/").replace(/\s+HF$/i, " HF").toUpperCase()) : "Neurčeno";
+  const lineToken = lineMatch?.[1] ?? "";
+  const line_name = lineMatch ? (/^olovo$/i.test(lineToken) ? "Olovo" : lineToken.replace(/\s*\/\s*/g, "/").replace(/\s+HF$/i, " HF").toUpperCase()) : "Neurčeno";
   const workplace_name = lineMatch ? remainder.slice(0, lineMatch.index).trim() : remainder;
   if (!workplace_name) return null;
   return { code, line_name, workplace_name, area, source_line };
@@ -200,7 +201,7 @@ function WorkplacesPage() {
           <div className="border-b border-border px-4 py-4 sm:px-5">
             <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Porovnání pracovišť</h2><p className="text-xs text-muted-foreground">OEE a dostupnost podle aktuálně filtrovaných pracovišť.</p></div></div><div className="text-xs text-muted-foreground">{filteredWorkplaces.length} / {workplaces.length}</div></div>
           </div>
-          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="h-[320px] w-full p-3 sm:h-[360px] sm:p-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: number | undefined) => value == null ? "–" : `${value.toFixed(1)} %`} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
+          {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="h-[320px] w-full p-3 sm:h-[360px] sm:p-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value: unknown) => { const n = typeof value === "number" ? value : Number(value); return Number.isFinite(n) ? `${n.toFixed(1)} %` : "–"; }} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
         </Card>
 
         <Card className="overflow-hidden p-0">

@@ -14,9 +14,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { completeImportBatch, createImportBatch, createImportItem, finalizeImportItem, markImportItemError, persistOcrResult, sha256File, type ImportBlocker } from "@/lib/import-v2-auto";
 
 type ItemStatus = "QUEUED" | "PROCESSING" | "AUTO_APPROVED" | "PENDING_APPROVAL" | "ERROR" | "DUPLICATE";
-type BatchItem = { key: string; fileName: string; status: ItemStatus; message?: string; itemId?: string; screenshotPath?: string; result?: OcrResult; blockers?: ImportBlocker[]; createdRecords?: number };
+type BatchItem = { key: string; fileName: string; status: ItemStatus; message?: string | undefined; itemId?: string; screenshotPath?: string; result?: OcrResult; blockers?: ImportBlocker[]; createdRecords?: number };
 const normalize = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, "").toLowerCase();
-function errorMessage(error: unknown): string { if (error instanceof Error && error.message.trim()) return error.message; if (typeof error === "string" && error.trim()) return error; if (error && typeof error === "object") { const value = error as Record<string, unknown>; const nested = [value.message, (value.error as any)?.message, (value.cause as any)?.message, value.detail].find((v) => typeof v === "string" && v.trim()); if (nested) return String(nested); try { const json = JSON.stringify(error); if (json && json !== "{}") return json; } catch {} } return "Neznámá chyba."; }
+function errorMessage(error: unknown): string { if (error instanceof Error && error.message.trim()) return error.message; if (typeof error === "string" && error.trim()) return error; if (error && typeof error === "object") { const value = error as Record<string, unknown>; const nested = [value["message"], (value["error"] as any)?.message, (value["cause"] as any)?.message, value["detail"]].find((v) => typeof v === "string" && v.trim()); if (nested) return String(nested); try { const json = JSON.stringify(error); if (json && json !== "{}") return json; } catch {} } return "Neznámá chyba."; }
 function blockerLabel(blocker: ImportBlocker) { const labels: Record<ImportBlocker, string> = { MISSING_DATE: "Chybí datum", MISSING_SHIFT: "Chybí směna", MISSING_LINE: "Chybí linka", PRODUCT_NOT_FOUND: "Product ID není v databázi", PRODUCT_PROFILE_MISSING: "Chybí Product Profile", PRODUCT_PROFILE_INCOMPLETE: "Product Profile není kompletní", EMPLOYEE_UNMATCHED: "Zaměstnanec nebyl jednoznačně přiřazen", POSITION_MISSING: "Chybí pozice HA/TUP", OEE_MISSING: "Chybí OEE", PERFORMANCE_MISSING: "Chybí výkon", AVAILABILITY_MISSING: "Chybí dostupnost", HOURLY_DATA_MISSING: "Chybí hodinová data", HOURLY_KPI_MISSING: "Hodinová data nemají platný výkon/dostupnost", DUPLICATE_RECORD: "Záznam již existuje" }; return labels[blocker]; }
 
 export function ScreenshotImportV2({ employees, onImported }: { employees: Employee[]; onImported?: () => void }) {
@@ -118,7 +118,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     setItems(initial); setSelectedKey(initial[0]?.key ?? null);
     try {
       const batch = await createImportBatch(files.length); setBatchId(batch.id);
-      for (const [index, file] of files.entries()) await processOne(file, initial[index].key, batch.id);
+      for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
       await completeImportBatch(batch.id);
       toast.success(`Hromadný import dokončen: ${files.length} screenshotů.`); onImported?.();
     } catch (error) { toast.error(`Hromadný import se nepodařilo dokončit: ${errorMessage(error)}`); }
