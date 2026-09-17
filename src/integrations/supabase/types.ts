@@ -1385,6 +1385,10 @@ export type Database = {
         Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
         Returns: Json;
       };
+      detect_performance_anomalies: {
+        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null; p_deviation_threshold?: number | null };
+        Returns: Json;
+      };
       ha_tup_linkage_report: {
         Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
         Returns: Json;
