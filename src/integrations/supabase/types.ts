@@ -1411,7 +1411,6 @@ export type Database = {
         Args: { p_import_item_id: string };
         Returns: undefined;
       };
-      resolve_product_id_by_code: { Args: { p_code: string }; Returns: string };
       resolve_product_profile: {
         Args: { p_allow_fallback?: boolean; p_code: string; p_work_date?: string };
         Returns: {
