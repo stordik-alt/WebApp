@@ -4,6 +4,7 @@ import { Building2, ChevronDown, Pencil, Save, SlidersHorizontal, X } from "luci
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
+import { HaTupLinkageReport } from "@/components/HaTupLinkageReport";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -235,6 +236,8 @@ function WorkplacesPage() {
         </Card>
 
         <Card className="p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Pravidlo pracovišť</h2><p className="mt-1 text-sm text-muted-foreground">Kód 041.xx = HA, kód 050.xx = TUP. Linka a název se přebírají z denního záznamu. Olovo je vedeno jako samostatná linka.</p></div></div></Card>
+
+        <HaTupLinkageReport />
       </div>
     </AppShell>
   );
