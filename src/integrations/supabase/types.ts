@@ -1343,6 +1343,19 @@ export type Database = {
       };
       auto_shift_start_minute: { Args: { p_shift: string }; Returns: number };
       classify_downtime_reason: { Args: { p_reason: string }; Returns: string };
+      compute_import_item_product_kpis: {
+        Args: { p_import_item_id: string; p_work_date?: string };
+        Returns: {
+          availability: number | null;
+          oee: number | null;
+          performance: number | null;
+          product_code: string | null;
+          product_id: string | null;
+          product_name: string | null;
+          profile_complete: boolean | null;
+          profile_id: string | null;
+        }[];
+      };
       current_employee_id: { Args: never; Returns: string };
       ensure_import_item_product_profiles: {
         Args: { p_import_item_id: string };
