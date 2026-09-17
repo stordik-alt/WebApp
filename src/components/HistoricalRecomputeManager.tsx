@@ -17,6 +17,7 @@ type RecomputeResult = {
   changed: number;
   unchanged: number;
   needs_review: number;
+  needs_review_details: Array<{ import_item_id: string; work_date: string | null; line: string | null; product_code: string | null; reason: string }>;
   errors: number;
   error_details: Array<{ import_item_id: string; work_date: string | null; error: string }>;
   batches_relinked: number | null;
@@ -34,6 +35,10 @@ function ResultSummary({ result }: { result: RecomputeResult }) {
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-center"><div className="text-xs text-muted-foreground">Chyby</div><div className="text-xl font-bold">{result.errors}</div></div>
       </div>
       <div className="text-xs text-muted-foreground">HA→TUP vazby znovu vyhodnoceny pro {result.batches_relinked ?? 0} dávek.</div>
+      {result.needs_review_details?.length ? <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+        <div className="text-xs font-semibold text-amber-400">Záznamy ke kontrole (schváleny, ale nešlo dopočítat KPI - ponechány na poslední platné hodnotě)</div>
+        <div className="mt-1 grid gap-1 text-xs">{result.needs_review_details.map((n, i) => <div key={`${n.import_item_id}-${n.product_code}-${i}`}>{n.work_date ?? "?"} · {n.line ?? "?"} · <span className="font-medium">{n.product_code ?? "?"}</span> · {n.reason}</div>)}</div>
+      </div> : null}
       {result.error_details.length ? <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
         <div className="text-xs font-semibold text-destructive">Chyby při přepočtu</div>
         <div className="mt-1 grid gap-1 text-xs">{result.error_details.map((e) => <div key={e.import_item_id}>{e.work_date ?? "?"} · {e.import_item_id.slice(0, 8)}… · {e.error}</div>)}</div>
