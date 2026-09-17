@@ -1316,6 +1316,10 @@ export type Database = {
         Args: { p_actor_id?: string; p_import_item_id: string };
         Returns: Json;
       };
+      apply_ha_tup_capping: {
+        Args: { p_tup_import_item_id: string; p_tup_product_code: string };
+        Returns: Json;
+      };
       auto_approve_import_item: {
         Args: { p_import_item_id: string };
         Returns: Json;
@@ -1372,6 +1376,18 @@ export type Database = {
           last_name: string;
           updated_at: string;
         };
+      };
+      evaluate_batch_ha_tup_linkage: {
+        Args: { p_batch_id: string };
+        Returns: Json;
+      };
+      find_ha_tup_link: {
+        Args: { p_line: string; p_shift: string; p_tup_product_code: string; p_work_date: string };
+        Returns: {
+          ha_import_item_id: string | null;
+          ha_product_code: string | null;
+          match_status: string | null;
+        }[];
       };
       has_role: {
         Args: {

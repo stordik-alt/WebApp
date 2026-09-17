@@ -129,6 +129,10 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     try {
       const batch = await createImportBatch(files.length); setBatchId(batch.id);
       for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
+      // HA->TUP linkage is only ever evaluated after the whole batch is
+      // approved (never per-screenshot - the HA and TUP sides are normally
+      // two different screenshots, and processing order isn't guaranteed).
+      await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
       await completeImportBatch(batch.id);
       toast.success(`Hromadný import dokončen: ${files.length} screenshotů.`); onImported?.();
     } catch (error) { toast.error(`Hromadný import se nepodařilo dokončit: ${errorMessage(error)}`); }
@@ -188,6 +192,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
           const file = new File([blob], String(row.screenshot_path).split("/").pop() || `${row.id}.png`, { type });
           await processOne(file, key, batch.id, { id: row.id, screenshotPath: row.screenshot_path });
         }
+        await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
         await completeImportBatch(batch.id);
         if (!cancelled) { setBusy(false); toast.success("Pokračování importu po návratu do aplikace dokončeno."); onImported?.(); }
       } catch (error) {
