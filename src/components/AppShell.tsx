@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart, Building2, Wrench } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart, Building2, Wrench, History } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -30,6 +30,7 @@ const NAV = [
   { to: "/ke-schvaleni", label: "Ke schválení", icon: ShieldCheck, roles: ADMIN_VIEW },
   { to: "/uzivatele", label: "Uživatelé", icon: UserCog, roles: ADMIN_VIEW },
   { to: "/odstavky", label: "Odstávky", icon: Wrench, roles: ADMIN_VIEW },
+  { to: "/hromadny-prepocet", label: "Hromadný přepočet", icon: History, roles: ADMIN_VIEW },
   { to: "/o-aplikaci", label: "O aplikaci", icon: Info, roles: ALL },
 ] as const;
 function navFor(role: AppRole | null) { return NAV.filter((i) => role ? (i.roles as readonly AppRole[]).includes(role) : false); }
