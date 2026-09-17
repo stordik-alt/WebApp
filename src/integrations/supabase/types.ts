@@ -1317,7 +1317,7 @@ export type Database = {
         Returns: Json;
       };
       apply_ha_tup_capping: {
-        Args: { p_tup_import_item_id: string; p_tup_product_code: string };
+        Args: { p_tup_import_item_id: string; p_tup_product_code: string; p_allocation_fraction?: number };
         Returns: Json;
       };
       auto_approve_import_item: {
