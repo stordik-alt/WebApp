@@ -469,6 +469,7 @@ export type Database = {
           created_at: string;
           daily_record_id: string | null;
           employee_id: string | null;
+          help_score: number | null;
           id: string;
           import_item_id: string;
           match_status: string;
@@ -488,6 +489,7 @@ export type Database = {
           created_at?: string;
           daily_record_id?: string | null;
           employee_id?: string | null;
+          help_score?: number | null;
           id?: string;
           import_item_id: string;
           match_status?: string;
@@ -507,6 +509,7 @@ export type Database = {
           created_at?: string;
           daily_record_id?: string | null;
           employee_id?: string | null;
+          help_score?: number | null;
           id?: string;
           import_item_id?: string;
           match_status?: string;
