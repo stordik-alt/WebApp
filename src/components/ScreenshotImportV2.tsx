@@ -156,6 +156,32 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
         for (const row of unfinished) {
           if (cancelled) return;
           const key = `recovery-${row.id}`;
+          // If a previous run got interrupted after the OCR/hourly-extraction
+          // step already wrote import_item_hourly (e.g. the tab was closed or
+          // refreshed right before the final approval RPC), auto_approve_import_item
+          // is self-contained and can finish the item from that data alone -
+          // no need to re-download the screenshot and re-run both OCR passes
+          // again. Try that first; only fall back to a full reprocess if the
+          // item genuinely has no usable hourly data yet (row.status
+          // "PROCESSING", or the RPC itself reports it's missing).
+          if (row.status === "VALIDATING") {
+            // Only a clean AUTO_APPROVED counts as resumed. A PENDING_APPROVAL
+            // result here doesn't necessarily mean the blocker is real - it
+            // could just reflect the incomplete state left by the
+            // interruption - so fall through to a full reprocess in that
+            // case, same as before this shortcut existed, rather than
+            // stranding the item on a blocker a fresh OCR pass might clear.
+            const resumed = await (async () => {
+              try {
+                const { data, error } = await (supabase as any).rpc("auto_approve_import_item", { p_import_item_id: row.id });
+                if (error) return false;
+                const response = data as { status?: string; created_daily_records?: number } | null;
+                if (response?.status === "AUTO_APPROVED") { updateItem(key, { status: "AUTO_APPROVED", createdRecords: Number(response.created_daily_records ?? 0) }); return true; }
+                return false;
+              } catch { return false; }
+            })();
+            if (resumed) continue;
+          }
           const { data: blob, error: downloadError } = await supabase.storage.from("screenshots").download(row.screenshot_path);
           if (downloadError) { updateItem(key, { status: "ERROR", message: `Nelze obnovit screenshot: ${downloadError.message}` }); await markImportItemError(row.id, `Nelze obnovit screenshot po návratu do aplikace: ${downloadError.message}`); continue; }
           const type = blob.type || "image/png";
