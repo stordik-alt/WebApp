@@ -115,6 +115,7 @@ PRODUKTY A HODINY:
 - Hodinová norma v hourly_metrics je vždy null; skutečná norma se doplní z Product ID v aplikaci.
 
 DALŠÍ:
+- Product ID čti znak po znaku a nezaměňuj vizuálně podobné znaky: 0 (nula) vs O, 1 vs I vs l, 5 vs S, 8 vs B, 6 vs G, 2 vs Z. Pokud si nejsi jistý jedním znakem, raději si kód v obrázku znovu najdi a ověř ho, než abys hádal.
 - Procenta vracej jako čísla bez %.
 - Desetinnou čárku převáděj na desetinnou tečku.
 - Nevymýšlej hodnoty.
