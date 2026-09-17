@@ -25,6 +25,12 @@ const reasonLabels: Record<string, string> = { MISSING_DATE: "Chybí datum", MIS
 const labelReason = (v: string) => reasonLabels[v] ?? v;
 const numOrNull = (v: string) => { if (!v.trim()) return null; const n = Number(v.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const normalize = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, "");
+// Same conservative suffix fallback as public.resolve_product_profile() and
+// ocr.hourly.functions.ts's profileVariant(): a literal OCR-read code can
+// carry a trailing 1-3 letter revision marker that isn't part of the
+// profile's registered subassy code, so an exact-only comparison here would
+// wrongly show "Profile MISSING" for a code that actually did resolve.
+const codesMatch = (a: string, b: string) => { if (!a || !b) return false; if (a === b) return true; const stripSuffix = (s: string) => s.replace(/[a-z]{1,3}$/, ""); if (a.length > b.length && stripSuffix(a) === b) return true; if (b.length > a.length && stripSuffix(b) === a) return true; return false; };
 const average = (values: Array<number | null | undefined>) => { const valid = values.filter((v): v is number => v != null && Number.isFinite(Number(v))).map(Number); return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null; };
 const dataUrlFromBlob = async (blob: Blob) => await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Screenshot se nepodařilo načíst pro 3. sekvenci OCR.")); reader.readAsDataURL(blob); });
 
@@ -91,7 +97,7 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   const date = item.work_date ?? "9999-12-31";
   const products = codes.map((code) => {
     const rows = hourly.filter((m: any) => normalize(m.product_code) === normalize(code));
-    const validProfiles = profiles.filter((p: any) => { const matches = normalize(p.ha_subassy) === normalize(code) || normalize(p.tup_subassy) === normalize(code); return matches && String(p.valid_from ?? "0000-01-01") <= date && (p.valid_to == null || String(p.valid_to) >= date); });
+    const validProfiles = profiles.filter((p: any) => { const matches = codesMatch(normalize(p.ha_subassy), normalize(code)) || codesMatch(normalize(p.tup_subassy), normalize(code)); return matches && String(p.valid_from ?? "0000-01-01") <= date && (p.valid_to == null || String(p.valid_to) >= date); });
     const profile = validProfiles[0];
     const isHa = /^H_/i.test(code);
     const norm = profile ? Number(isHa ? profile.h_norm_per_hour : profile.t_norm_per_hour) : null;

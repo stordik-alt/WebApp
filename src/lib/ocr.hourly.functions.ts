@@ -18,7 +18,18 @@ function normalize(v: string | null): string { return (v ?? "").trim().toLowerCa
 function normalizeRole(v: unknown): "HA" | "TUP" | null { const s = text(v).toLowerCase(); if (s === "ha" || s.includes("ha")) return "HA"; if (s === "tup" || s.includes("tup")) return "TUP"; return null; }
 function parseTime(v: unknown): string | null { const m = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(text(v)); return m ? m[0] : null; }
 function shiftFromScreenshotTime(time: string | null): string | null { if (!time) return null; const hour = Number(time.slice(0, 2)); if (hour >= 6 && hour < 14) return "Ranní"; if (hour >= 14 && hour < 22) return "Odpolední"; return "Noční"; }
-function profileVariant(p: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) { const c = normalize(code); const h = normalize(p.ha_subassy) === c; const t = normalize(p.tup_subassy) === c; if (role === "HA" && h) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (role === "TUP" && t) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; if (h && !t) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (t && !h) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; return null; }
+// A per-hour product_code is read literally off the screenshot and may carry
+// a trailing 1-3 letter revision marker (B/U/UCS) that isn't part of the
+// profile's registered subassy code - e.g. public.resolve_product_profile()
+// can resolve "T_S4966V4014B" to a profile whose tup_subassy is the
+// unsuffixed "T_S4966V4014" via its conservative suffix fallback. Without
+// this same fallback here, an exact-only comparison would never find that
+// profile's norm/capacity for such rows, silently nulling out performance
+// and OEE for every hour. Only ever strips from the LONGER side down to
+// match the shorter one, so it can't misattribute two genuinely distinct
+// registered codes to each other.
+function codesMatch(a: string, b: string): boolean { if (!a || !b) return false; if (a === b) return true; const stripSuffix = (s: string) => s.replace(/[a-z]{1,3}$/, ""); if (a.length > b.length && stripSuffix(a) === b) return true; if (b.length > a.length && stripSuffix(b) === a) return true; return false; }
+function profileVariant(p: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) { const c = normalize(code); const h = codesMatch(normalize(p.ha_subassy), c); const t = codesMatch(normalize(p.tup_subassy), c); if (role === "HA" && h) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (role === "TUP" && t) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; if (h && !t) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (t && !h) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; return null; }
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
 function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } { if (hour >= 6 && hour < 14) return { start: 360, pauseStartRel: 280, pauseEndRel: 310 }; if (hour >= 14 && hour < 22) return { start: 840, pauseStartRel: 240, pauseEndRel: 270 }; return { start: 1320, pauseStartRel: 240, pauseEndRel: 270 }; }
 function relativeMinuteOfShift(hour: number, shiftStart: number): number { return ((hour * 60 - shiftStart) + 1440) % 1440; }
