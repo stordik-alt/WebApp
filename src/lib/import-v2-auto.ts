@@ -16,7 +16,11 @@ const clockValue = (value: unknown) => { const s=String(value??"").trim(); retur
 const shiftFromHour = (hour:number|null) => { if(hour==null||!Number.isFinite(Number(hour)))return null; const h=((Math.trunc(Number(hour))%24)+24)%24; return h>=6&&h<14?"Ranní":h>=14&&h<22?"Odpolední":"Noční"; };
 function normalizeImportResult(result: OcrResult): OcrResult { const c=result as OcrResult & {screenshot_time?:unknown}; const raw=String(c.shift??"").trim(); const time=clockValue(c.screenshot_time)??clockValue(raw); let shift=canonicalShift(raw); const hours=(result.hourly_metrics??[]).map(m=>Number(m.hour)).filter(Number.isFinite); if(!shift)shift=shiftFromHour(hours.length?(hours[0]??null):time?Number(time.slice(0,2)):null); return {...result,shift,...(time?{screenshot_time:time}:{})} as OcrResult; }
 function profileForCode(profiles:ProductProfileContext[],code:string){const w=normalize(code);return profiles.find(p=>normalize(p.ha_subassy)===w||normalize(p.tup_subassy)===w);}
-function profileIsComplete(p:ProductProfileContext|undefined){return Boolean(p?.ha_subassy&&p?.tup_subassy&&Number(p.h_norm_per_hour)>0&&Number(p.h_capacity)>=1&&Number(p.t_norm_per_hour)>0&&Number(p.t_capacity)>=1);}
+// Mirrors resolve_product_profile()'s SQL completeness rule: a profile may
+// legitimately cover only HA, only TUP, or both - a side that's genuinely
+// absent (no subassy code) is never a defect. At least one side must be
+// present, and each present side must have a valid norm/capacity.
+function profileIsComplete(p:ProductProfileContext|undefined){if(!p)return false;if(!p.ha_subassy&&!p.tup_subassy)return false;if(p.ha_subassy&&!(Number(p.h_norm_per_hour)>0&&Number(p.h_capacity)>=1))return false;if(p.tup_subassy&&!(Number(p.t_norm_per_hour)>0&&Number(p.t_capacity)>=1))return false;return true;}
 // Canonical product+profile resolution, mirrored from the SQL function
 // public.resolve_product_profile(): exact products.code match first, then
 // product_profiles.ha_subassy/tup_subassy (a code can be a real, registered
