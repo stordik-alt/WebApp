@@ -179,6 +179,36 @@ export type Database = {
           },
         ];
       };
+      downtime_reason_classifications: {
+        Row: {
+          active: boolean;
+          category: string;
+          created_at: string;
+          id: string;
+          note: string | null;
+          reason_text: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          category: string;
+          created_at?: string;
+          id?: string;
+          note?: string | null;
+          reason_text: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          note?: string | null;
+          reason_text?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       employees: {
         Row: {
           active: boolean;
@@ -1291,10 +1321,6 @@ export type Database = {
         Args: { p_import_item_id: string };
         Returns: Json;
       };
-      auto_reconstruct_import_item: {
-        Args: { p_import_item_id: string };
-        Returns: undefined;
-      };
       auto_resolve_import_shift: {
         Args: {
           p_import_item_id: string;
@@ -1313,6 +1339,7 @@ export type Database = {
         Returns: number;
       };
       auto_shift_start_minute: { Args: { p_shift: string }; Returns: number };
+      classify_downtime_reason: { Args: { p_reason: string }; Returns: string };
       current_employee_id: { Args: never; Returns: string };
       ensure_import_item_product_profiles: {
         Args: { p_import_item_id: string };
@@ -1339,10 +1366,7 @@ export type Database = {
       };
       is_tester: { Args: { p_user_id?: string }; Returns: boolean };
       isfinite: { Args: { p_value: number }; Returns: boolean };
-      recalculate_import_item_kpis: {
-        Args: { p_import_item_id: string };
-        Returns: undefined;
-      };
+      normalize_downtime_reason: { Args: { p_text: string }; Returns: string };
       reconstruct_import_item_hourly: {
         Args: { p_import_item_id: string };
         Returns: undefined;

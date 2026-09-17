@@ -17,6 +17,7 @@ import { Route as HodnoceniRouteImport } from './routes/hodnoceni'
 import { Route as KeSchvaleniRouteImport } from './routes/ke-schvaleni'
 import { Route as MojeVysledkyRouteImport } from './routes/moje-vysledky'
 import { Route as OAplikaciRouteImport } from './routes/o-aplikaci'
+import { Route as OdstavkyRouteImport } from './routes/odstavky'
 import { Route as PracovisteRouteImport } from './routes/pracoviste'
 import { Route as PremereniNoremRouteImport } from './routes/premereni-norem'
 import { Route as ProduktyRouteImport } from './routes/produkty'
@@ -66,6 +67,11 @@ const MojeVysledkyRoute = MojeVysledkyRouteImport.update({
 const OAplikaciRoute = OAplikaciRouteImport.update({
   id: '/o-aplikaci',
   path: '/o-aplikaci',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OdstavkyRoute = OdstavkyRouteImport.update({
+  id: '/odstavky',
+  path: '/odstavky',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PracovisteRoute = PracovisteRouteImport.update({
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
   '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
@@ -148,6 +155,7 @@ export interface FileRoutesByTo {
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
   '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
   '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
     | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
     | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
     | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
@@ -252,6 +264,7 @@ export interface RootRouteChildren {
   KeSchvaleniRoute: typeof KeSchvaleniRoute
   MojeVysledkyRoute: typeof MojeVysledkyRoute
   OAplikaciRoute: typeof OAplikaciRoute
+  OdstavkyRoute: typeof OdstavkyRoute
   PracovisteRoute: typeof PracovisteRoute
   PremereniNoremRoute: typeof PremereniNoremRoute
   ProduktyRoute: typeof ProduktyRoute
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       path: '/o-aplikaci'
       fullPath: '/o-aplikaci'
       preLoaderRoute: typeof OAplikaciRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/odstavky': {
+      id: '/odstavky'
+      path: '/odstavky'
+      fullPath: '/odstavky'
+      preLoaderRoute: typeof OdstavkyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pracoviste': {
@@ -404,6 +424,7 @@ const rootRouteChildren: RootRouteChildren = {
   KeSchvaleniRoute: KeSchvaleniRoute,
   MojeVysledkyRoute: MojeVysledkyRoute,
   OAplikaciRoute: OAplikaciRoute,
+  OdstavkyRoute: OdstavkyRoute,
   PracovisteRoute: PracovisteRoute,
   PremereniNoremRoute: PremereniNoremRoute,
   ProduktyRoute: ProduktyRoute,
