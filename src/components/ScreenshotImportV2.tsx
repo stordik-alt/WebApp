@@ -36,6 +36,24 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
   const selected = useMemo(() => items.find((item) => item.key === selectedKey) ?? null, [items, selectedKey]);
   const counts = useMemo(() => ({ total: items.length, auto: items.filter((x) => x.status === "AUTO_APPROVED").length, pending: items.filter((x) => x.status === "PENDING_APPROVAL").length, error: items.filter((x) => x.status === "ERROR" || x.status === "DUPLICATE").length, processing: items.filter((x) => x.status === "PROCESSING" || x.status === "QUEUED").length }), [items]);
   const updateItem = (key: string, patch: Partial<BatchItem>) => setItems((prev) => prev.map((item) => item.key === key ? { ...item, ...patch } : item));
+  // Reads the actual up-to-date items state (not a stale closure capture),
+  // since setState's functional form always receives the latest committed value.
+  const readItems = () => new Promise<BatchItem[]>((resolve) => setItems((prev) => { resolve(prev); return prev; }));
+  // Reports what the batch actually did, based on each item's real persisted
+  // status - never a blanket success/failure. Every screenshot's outcome is
+  // already saved by the time this runs (processOne persists per-item,
+  // independent of whatever runs after it), so the summary must reflect that
+  // even if a later bookkeeping step (completeImportBatch) itself failed.
+  const reportBatchOutcome = async (label: string) => {
+    const finalItems = await readItems();
+    const auto = finalItems.filter((x) => x.status === "AUTO_APPROVED").length;
+    const pending = finalItems.filter((x) => x.status === "PENDING_APPROVAL").length;
+    const errored = finalItems.filter((x) => x.status === "ERROR" || x.status === "DUPLICATE").length;
+    const createdRecords = finalItems.reduce((sum, x) => sum + (x.createdRecords ?? 0), 0);
+    const summary = `${label}: ${finalItems.length} screenshotů zpracováno, ${auto} automaticky schváleno (${createdRecords} výrobních záznamů), ${pending} ke schválení${errored ? `, ${errored} s chybou` : ""}.`;
+    if (auto === 0 && pending === 0 && errored > 0) toast.error(summary); else toast.success(summary);
+    onImported?.();
+  };
   const reset = () => { setBusy(false); processingKeysRef.current.clear(); setItems([]); setBatchId(null); setSelectedKey(null); setPreviewUrl(null); recoveryStartedRef.current = false; if (fileRef.current) fileRef.current.value = ""; };
   const close = () => { if (busy) return; setOpen(false); reset(); };
   const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null); if (error) throw error; return data ?? []; };
@@ -126,17 +144,27 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     setOpen(true); setBusy(true);
     const initial = files.map((file, index) => ({ key: `${Date.now()}-${index}-${file.name}`, fileName: file.name, status: "QUEUED" as const }));
     setItems(initial); setSelectedKey(initial[0]?.key ?? null);
+    let batch: { id: string };
     try {
-      const batch = await createImportBatch(files.length); setBatchId(batch.id);
-      for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
-      // HA->TUP linkage is only ever evaluated after the whole batch is
-      // approved (never per-screenshot - the HA and TUP sides are normally
-      // two different screenshots, and processing order isn't guaranteed).
-      await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
-      await completeImportBatch(batch.id);
-      toast.success(`Hromadný import dokončen: ${files.length} screenshotů.`); onImported?.();
-    } catch (error) { toast.error(`Hromadný import se nepodařilo dokončit: ${errorMessage(error)}`); }
-    finally { setBusy(false); }
+      batch = await createImportBatch(files.length); setBatchId(batch.id);
+    } catch (error) {
+      // Nothing was processed yet - this genuinely is a full failure.
+      toast.error(`Hromadný import se nepodařilo zahájit: ${errorMessage(error)}`);
+      setBusy(false);
+      return;
+    }
+    for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
+    // HA->TUP linkage is only ever evaluated after the whole batch is
+    // approved (never per-screenshot - the HA and TUP sides are normally
+    // two different screenshots, and processing order isn't guaranteed).
+    await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
+    // completeImportBatch only aggregates already-persisted per-item results
+    // into import_batches' summary counters - it never creates or mutates
+    // import_items/daily_records. Its failure must never surface as "import
+    // failed": every screenshot's real outcome is already saved regardless.
+    try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
+    await reportBatchOutcome("Hromadný import dokončen");
+    setBusy(false);
   };
 
   useEffect(() => {
@@ -193,8 +221,10 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
           await processOne(file, key, batch.id, { id: row.id, screenshotPath: row.screenshot_path });
         }
         await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
-        await completeImportBatch(batch.id);
-        if (!cancelled) { setBusy(false); toast.success("Pokračování importu po návratu do aplikace dokončeno."); onImported?.(); }
+        // Same reasoning as startBatch: this is bookkeeping only, its failure
+        // must not overwrite the accurate per-item outcome already persisted.
+        try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
+        if (!cancelled) { setBusy(false); await reportBatchOutcome("Pokračování importu po návratu do aplikace dokončeno"); }
       } catch (error) {
         if (!cancelled) { setBusy(false); toast.error(`Obnovení importu se nepodařilo dokončit: ${errorMessage(error)}`); }
       }
