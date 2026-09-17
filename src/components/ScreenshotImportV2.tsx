@@ -79,12 +79,22 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       let finalRows = persisted.employeeRows;
       let finalMatchedProduct = persisted.matchedProduct;
       let blockers = [...persisted.blockers];
-      const productCode = result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
-      const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));
+      // Reuse the SAME resolution persistOcrResult already computed (canonical
+      // resolveProducts, which checks product_profiles.ha_subassy/tup_subassy,
+      // not just products.code) instead of re-deriving product code and profile
+      // locally - two independent lookups could disagree and silently skip the
+      // hourly OCR pass even when the product/profile were actually valid.
+      const profile = persisted.matchedProfile;
+      const productCode = finalMatchedProduct?.code || result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
+      const allProfilesForItem = [...new Map(
+        [profile, ...persisted.resolutions.map((r) => r.resolution.profile)]
+          .filter((p): p is NonNullable<typeof p> => Boolean(p))
+          .map((p) => [normalize(p.ha_subassy) || normalize(p.tup_subassy), p])
+      ).values()];
       if (profile && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
         const role = /^H_/i.test(productCode) ? "HA" : /^T_/i.test(productCode) ? "TUP" : null;
-        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } });
+        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: allProfilesForItem.length ? allProfilesForItem : [profile], operator_count: finalRows.length, role } } });
         hourly = hourlyResult.hourly_metrics ?? [];
         actualOee = hourlyResult.actual_shift_oee_pct ?? null;
         finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;

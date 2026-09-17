@@ -1383,6 +1383,23 @@ export type Database = {
         Returns: undefined;
       };
       resolve_product_id_by_code: { Args: { p_code: string }; Returns: string };
+      resolve_product_profile: {
+        Args: { p_allow_fallback?: boolean; p_code: string; p_work_date?: string };
+        Returns: {
+          h_capacity: number | null;
+          h_norm_per_hour: number | null;
+          match_source: string | null;
+          product_code: string | null;
+          product_id: string | null;
+          product_name: string | null;
+          profile_complete: boolean | null;
+          profile_ha_subassy: string | null;
+          profile_id: string | null;
+          profile_tup_subassy: string | null;
+          t_capacity: number | null;
+          t_norm_per_hour: number | null;
+        }[];
+      };
       sync_effective_last_hour_norm: {
         Args: { p_import_item_id: string };
         Returns: undefined;
