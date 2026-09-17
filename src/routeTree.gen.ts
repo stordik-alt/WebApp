@@ -12,10 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalyzaRouteImport } from './routes/analyza'
 import { Route as DenniDataRouteImport } from './routes/denni-data'
+import { Route as GrafyRouteImport } from './routes/grafy'
 import { Route as HodnoceniRouteImport } from './routes/hodnoceni'
+import { Route as HromadnyPrepocetRouteImport } from './routes/hromadny-prepocet'
 import { Route as KeSchvaleniRouteImport } from './routes/ke-schvaleni'
 import { Route as MojeVysledkyRouteImport } from './routes/moje-vysledky'
 import { Route as OAplikaciRouteImport } from './routes/o-aplikaci'
+import { Route as OdstavkyRouteImport } from './routes/odstavky'
+import { Route as PracovisteRouteImport } from './routes/pracoviste'
 import { Route as PremereniNoremRouteImport } from './routes/premereni-norem'
 import { Route as ProduktyRouteImport } from './routes/produkty'
 import { Route as QualityAlertyRouteImport } from './routes/quality-alerty'
@@ -41,9 +45,19 @@ const DenniDataRoute = DenniDataRouteImport.update({
   path: '/denni-data',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GrafyRoute = GrafyRouteImport.update({
+  id: '/grafy',
+  path: '/grafy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HodnoceniRoute = HodnoceniRouteImport.update({
   id: '/hodnoceni',
   path: '/hodnoceni',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HromadnyPrepocetRoute = HromadnyPrepocetRouteImport.update({
+  id: '/hromadny-prepocet',
+  path: '/hromadny-prepocet',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KeSchvaleniRoute = KeSchvaleniRouteImport.update({
@@ -59,6 +73,16 @@ const MojeVysledkyRoute = MojeVysledkyRouteImport.update({
 const OAplikaciRoute = OAplikaciRouteImport.update({
   id: '/o-aplikaci',
   path: '/o-aplikaci',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OdstavkyRoute = OdstavkyRouteImport.update({
+  id: '/odstavky',
+  path: '/odstavky',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PracovisteRoute = PracovisteRouteImport.update({
+  id: '/pracoviste',
+  path: '/pracoviste',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PremereniNoremRoute = PremereniNoremRouteImport.update({
@@ -111,10 +135,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
+  '/hromadny-prepocet': typeof HromadnyPrepocetRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
+  '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
   '/quality-alerty': typeof QualityAlertyRoute
@@ -129,10 +157,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
+  '/hromadny-prepocet': typeof HromadnyPrepocetRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
+  '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
   '/quality-alerty': typeof QualityAlertyRoute
@@ -148,10 +180,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
   '/denni-data': typeof DenniDataRoute
+  '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
+  '/hromadny-prepocet': typeof HromadnyPrepocetRoute
   '/ke-schvaleni': typeof KeSchvaleniRoute
   '/moje-vysledky': typeof MojeVysledkyRoute
   '/o-aplikaci': typeof OAplikaciRoute
+  '/odstavky': typeof OdstavkyRoute
+  '/pracoviste': typeof PracovisteRoute
   '/premereni-norem': typeof PremereniNoremRoute
   '/produkty': typeof ProduktyRoute
   '/quality-alerty': typeof QualityAlertyRoute
@@ -168,10 +204,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/grafy'
     | '/hodnoceni'
+    | '/hromadny-prepocet'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
+    | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
     | '/quality-alerty'
@@ -186,10 +226,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/grafy'
     | '/hodnoceni'
+    | '/hromadny-prepocet'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
+    | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
     | '/quality-alerty'
@@ -204,10 +248,14 @@ export interface FileRouteTypes {
     | '/'
     | '/analyza'
     | '/denni-data'
+    | '/grafy'
     | '/hodnoceni'
+    | '/hromadny-prepocet'
     | '/ke-schvaleni'
     | '/moje-vysledky'
     | '/o-aplikaci'
+    | '/odstavky'
+    | '/pracoviste'
     | '/premereni-norem'
     | '/produkty'
     | '/quality-alerty'
@@ -223,10 +271,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyzaRoute: typeof AnalyzaRoute
   DenniDataRoute: typeof DenniDataRoute
+  GrafyRoute: typeof GrafyRoute
   HodnoceniRoute: typeof HodnoceniRoute
+  HromadnyPrepocetRoute: typeof HromadnyPrepocetRoute
   KeSchvaleniRoute: typeof KeSchvaleniRoute
   MojeVysledkyRoute: typeof MojeVysledkyRoute
   OAplikaciRoute: typeof OAplikaciRoute
+  OdstavkyRoute: typeof OdstavkyRoute
+  PracovisteRoute: typeof PracovisteRoute
   PremereniNoremRoute: typeof PremereniNoremRoute
   ProduktyRoute: typeof ProduktyRoute
   QualityAlertyRoute: typeof QualityAlertyRoute
@@ -261,11 +313,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DenniDataRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/grafy': {
+      id: '/grafy'
+      path: '/grafy'
+      fullPath: '/grafy'
+      preLoaderRoute: typeof GrafyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hodnoceni': {
       id: '/hodnoceni'
       path: '/hodnoceni'
       fullPath: '/hodnoceni'
       preLoaderRoute: typeof HodnoceniRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hromadny-prepocet': {
+      id: '/hromadny-prepocet'
+      path: '/hromadny-prepocet'
+      fullPath: '/hromadny-prepocet'
+      preLoaderRoute: typeof HromadnyPrepocetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ke-schvaleni': {
@@ -287,6 +353,20 @@ declare module '@tanstack/react-router' {
       path: '/o-aplikaci'
       fullPath: '/o-aplikaci'
       preLoaderRoute: typeof OAplikaciRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/odstavky': {
+      id: '/odstavky'
+      path: '/odstavky'
+      fullPath: '/odstavky'
+      preLoaderRoute: typeof OdstavkyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pracoviste': {
+      id: '/pracoviste'
+      path: '/pracoviste'
+      fullPath: '/pracoviste'
+      preLoaderRoute: typeof PracovisteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/premereni-norem': {
@@ -359,10 +439,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyzaRoute: AnalyzaRoute,
   DenniDataRoute: DenniDataRoute,
+  GrafyRoute: GrafyRoute,
   HodnoceniRoute: HodnoceniRoute,
+  HromadnyPrepocetRoute: HromadnyPrepocetRoute,
   KeSchvaleniRoute: KeSchvaleniRoute,
   MojeVysledkyRoute: MojeVysledkyRoute,
   OAplikaciRoute: OAplikaciRoute,
+  OdstavkyRoute: OdstavkyRoute,
+  PracovisteRoute: PracovisteRoute,
   PremereniNoremRoute: PremereniNoremRoute,
   ProduktyRoute: ProduktyRoute,
   QualityAlertyRoute: QualityAlertyRoute,

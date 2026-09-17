@@ -80,8 +80,8 @@ function ChartsPage() {
       .filter((r) => productId === "all" || r.product_id === productId)
       .forEach((r) => {
         const row = grouped.get(r.work_date) ?? { date: r.work_date };
-        const existingCount = Number(row.__count ?? 0);
-        row.__count = existingCount + 1;
+        const existingCount = Number(row["__count"] ?? 0);
+        row["__count"] = existingCount + 1;
         for (const metric of selectedMetrics) {
           const value = r[metric];
           const key = `${r.employee_id}__${metric}`;
@@ -95,9 +95,9 @@ function ChartsPage() {
       });
 
     return [...grouped.values()]
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      .sort((a, b) => String(a["date"]).localeCompare(String(b["date"])))
       .map((row) => {
-        const out: Record<string, number | string | null> = { date: row.date };
+        const out: Record<string, number | string | null> = { date: row["date"] ?? null };
         for (const employeeId of effectiveEmployees) {
           for (const metric of selectedMetrics) {
             const key = `${employeeId}__${metric}`;

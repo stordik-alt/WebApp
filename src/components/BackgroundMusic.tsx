@@ -62,7 +62,6 @@ export function BackgroundMusic() {
       audio.id = AUDIO_ID;
       audio.loop = true;
       audio.preload = "auto";
-      audio.playsInline = true;
       audio.volume = MUSIC_VOLUME;
 
       button = document.createElement("button");

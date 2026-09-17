@@ -50,6 +50,19 @@ describe("směnová agregace", () => {
     expect(a.map((x) => x.oee).sort((p, q) => (p ?? 0) - (q ?? 0))).toEqual([80, 100]);
   });
 
+  it("1 pracovník / 1 linka / 2 produkty = lineCount 1, productCount 2 (ne 2 linky)", () => {
+    const a = aggregateShifts([
+      rec({ id: "1", employee_id: "e1", line: "A", product: "P1", oee: 100, performance: 90, available_time: 80 }),
+      rec({ id: "2", employee_id: "e1", line: "A", product: "P2", oee: 110, performance: 100, available_time: 90 }),
+    ]);
+    expect(a).toHaveLength(1);
+    expect(a[0]!.lines).toEqual(["A"]);
+    expect(a[0]!.lineCount).toBe(1);
+    expect(a[0]!.products).toEqual(["P1", "P2"]);
+    expect(a[0]!.productCount).toBe(2);
+    expect(a[0]!.records).toHaveLength(2);
+  });
+
   it("druhý import stejného pracovníka na jinou linku přidá linku, nepřepíše", () => {
     const first = [rec({ id: "1", employee_id: "e1", line: "A", oee: 100 })];
     const afterSecond = [...first, rec({ id: "2", employee_id: "e1", line: "B", oee: 110 })];

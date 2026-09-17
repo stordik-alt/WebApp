@@ -14,9 +14,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { completeImportBatch, createImportBatch, createImportItem, finalizeImportItem, markImportItemError, persistOcrResult, sha256File, type ImportBlocker } from "@/lib/import-v2-auto";
 
 type ItemStatus = "QUEUED" | "PROCESSING" | "AUTO_APPROVED" | "PENDING_APPROVAL" | "ERROR" | "DUPLICATE";
-type BatchItem = { key: string; fileName: string; status: ItemStatus; message?: string; itemId?: string; screenshotPath?: string; result?: OcrResult; blockers?: ImportBlocker[]; createdRecords?: number };
+type BatchItem = { key: string; fileName: string; status: ItemStatus; message?: string | undefined; itemId?: string; screenshotPath?: string; result?: OcrResult; blockers?: ImportBlocker[]; createdRecords?: number };
 const normalize = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, "").toLowerCase();
-function errorMessage(error: unknown): string { if (error instanceof Error && error.message.trim()) return error.message; if (typeof error === "string" && error.trim()) return error; if (error && typeof error === "object") { const value = error as Record<string, unknown>; const nested = [value.message, (value.error as any)?.message, (value.cause as any)?.message, value.detail].find((v) => typeof v === "string" && v.trim()); if (nested) return String(nested); try { const json = JSON.stringify(error); if (json && json !== "{}") return json; } catch {} } return "Neznámá chyba."; }
+function errorMessage(error: unknown): string { if (error instanceof Error && error.message.trim()) return error.message; if (typeof error === "string" && error.trim()) return error; if (error && typeof error === "object") { const value = error as Record<string, unknown>; const nested = [value["message"], (value["error"] as any)?.message, (value["cause"] as any)?.message, value["detail"]].find((v) => typeof v === "string" && v.trim()); if (nested) return String(nested); try { const json = JSON.stringify(error); if (json && json !== "{}") return json; } catch {} } return "Neznámá chyba."; }
 function blockerLabel(blocker: ImportBlocker) { const labels: Record<ImportBlocker, string> = { MISSING_DATE: "Chybí datum", MISSING_SHIFT: "Chybí směna", MISSING_LINE: "Chybí linka", PRODUCT_NOT_FOUND: "Product ID není v databázi", PRODUCT_PROFILE_MISSING: "Chybí Product Profile", PRODUCT_PROFILE_INCOMPLETE: "Product Profile není kompletní", EMPLOYEE_UNMATCHED: "Zaměstnanec nebyl jednoznačně přiřazen", POSITION_MISSING: "Chybí pozice HA/TUP", OEE_MISSING: "Chybí OEE", PERFORMANCE_MISSING: "Chybí výkon", AVAILABILITY_MISSING: "Chybí dostupnost", HOURLY_DATA_MISSING: "Chybí hodinová data", HOURLY_KPI_MISSING: "Hodinová data nemají platný výkon/dostupnost", DUPLICATE_RECORD: "Záznam již existuje" }; return labels[blocker]; }
 
 export function ScreenshotImportV2({ employees, onImported }: { employees: Employee[]; onImported?: () => void }) {
@@ -36,6 +36,24 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
   const selected = useMemo(() => items.find((item) => item.key === selectedKey) ?? null, [items, selectedKey]);
   const counts = useMemo(() => ({ total: items.length, auto: items.filter((x) => x.status === "AUTO_APPROVED").length, pending: items.filter((x) => x.status === "PENDING_APPROVAL").length, error: items.filter((x) => x.status === "ERROR" || x.status === "DUPLICATE").length, processing: items.filter((x) => x.status === "PROCESSING" || x.status === "QUEUED").length }), [items]);
   const updateItem = (key: string, patch: Partial<BatchItem>) => setItems((prev) => prev.map((item) => item.key === key ? { ...item, ...patch } : item));
+  // Reads the actual up-to-date items state (not a stale closure capture),
+  // since setState's functional form always receives the latest committed value.
+  const readItems = () => new Promise<BatchItem[]>((resolve) => setItems((prev) => { resolve(prev); return prev; }));
+  // Reports what the batch actually did, based on each item's real persisted
+  // status - never a blanket success/failure. Every screenshot's outcome is
+  // already saved by the time this runs (processOne persists per-item,
+  // independent of whatever runs after it), so the summary must reflect that
+  // even if a later bookkeeping step (completeImportBatch) itself failed.
+  const reportBatchOutcome = async (label: string) => {
+    const finalItems = await readItems();
+    const auto = finalItems.filter((x) => x.status === "AUTO_APPROVED").length;
+    const pending = finalItems.filter((x) => x.status === "PENDING_APPROVAL").length;
+    const errored = finalItems.filter((x) => x.status === "ERROR" || x.status === "DUPLICATE").length;
+    const createdRecords = finalItems.reduce((sum, x) => sum + (x.createdRecords ?? 0), 0);
+    const summary = `${label}: ${finalItems.length} screenshotů zpracováno, ${auto} automaticky schváleno (${createdRecords} výrobních záznamů), ${pending} ke schválení${errored ? `, ${errored} s chybou` : ""}.`;
+    if (auto === 0 && pending === 0 && errored > 0) toast.error(summary); else toast.success(summary);
+    onImported?.();
+  };
   const reset = () => { setBusy(false); processingKeysRef.current.clear(); setItems([]); setBatchId(null); setSelectedKey(null); setPreviewUrl(null); recoveryStartedRef.current = false; if (fileRef.current) fileRef.current.value = ""; };
   const close = () => { if (busy) return; setOpen(false); reset(); };
   const loadProfiles = async () => { const { data, error } = await supabase.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null); if (error) throw error; return data ?? []; };
@@ -79,12 +97,22 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       let finalRows = persisted.employeeRows;
       let finalMatchedProduct = persisted.matchedProduct;
       let blockers = [...persisted.blockers];
-      const productCode = result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
-      const profile = loadedProfiles.find((p: any) => normalize(p.ha_subassy) === normalize(productCode) || normalize(p.tup_subassy) === normalize(productCode));
+      // Reuse the SAME resolution persistOcrResult already computed (canonical
+      // resolveProducts, which checks product_profiles.ha_subassy/tup_subassy,
+      // not just products.code) instead of re-deriving product code and profile
+      // locally - two independent lookups could disagree and silently skip the
+      // hourly OCR pass even when the product/profile were actually valid.
+      const profile = persisted.matchedProfile;
+      const productCode = finalMatchedProduct?.code || result.product_code?.trim() || result.products?.[0]?.product_code?.trim() || "";
+      const allProfilesForItem = [...new Map(
+        [profile, ...persisted.resolutions.map((r) => r.resolution.profile)]
+          .filter((p): p is NonNullable<typeof p> => Boolean(p))
+          .map((p) => [normalize(p.ha_subassy) || normalize(p.tup_subassy), p])
+      ).values()];
       if (profile && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
         const role = /^H_/i.test(productCode) ? "HA" : /^T_/i.test(productCode) ? "TUP" : null;
-        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } });
+        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: allProfilesForItem.length ? allProfilesForItem : [profile], operator_count: finalRows.length, role } } });
         hourly = hourlyResult.hourly_metrics ?? [];
         actualOee = hourlyResult.actual_shift_oee_pct ?? null;
         finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;
@@ -116,13 +144,27 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
     setOpen(true); setBusy(true);
     const initial = files.map((file, index) => ({ key: `${Date.now()}-${index}-${file.name}`, fileName: file.name, status: "QUEUED" as const }));
     setItems(initial); setSelectedKey(initial[0]?.key ?? null);
+    let batch: { id: string };
     try {
-      const batch = await createImportBatch(files.length); setBatchId(batch.id);
-      for (const [index, file] of files.entries()) await processOne(file, initial[index].key, batch.id);
-      await completeImportBatch(batch.id);
-      toast.success(`Hromadný import dokončen: ${files.length} screenshotů.`); onImported?.();
-    } catch (error) { toast.error(`Hromadný import se nepodařilo dokončit: ${errorMessage(error)}`); }
-    finally { setBusy(false); }
+      batch = await createImportBatch(files.length); setBatchId(batch.id);
+    } catch (error) {
+      // Nothing was processed yet - this genuinely is a full failure.
+      toast.error(`Hromadný import se nepodařilo zahájit: ${errorMessage(error)}`);
+      setBusy(false);
+      return;
+    }
+    for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
+    // HA->TUP linkage is only ever evaluated after the whole batch is
+    // approved (never per-screenshot - the HA and TUP sides are normally
+    // two different screenshots, and processing order isn't guaranteed).
+    await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
+    // completeImportBatch only aggregates already-persisted per-item results
+    // into import_batches' summary counters - it never creates or mutates
+    // import_items/daily_records. Its failure must never surface as "import
+    // failed": every screenshot's real outcome is already saved regardless.
+    try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
+    await reportBatchOutcome("Hromadný import dokončen");
+    setBusy(false);
   };
 
   useEffect(() => {
@@ -146,14 +188,43 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
         for (const row of unfinished) {
           if (cancelled) return;
           const key = `recovery-${row.id}`;
+          // If a previous run got interrupted after the OCR/hourly-extraction
+          // step already wrote import_item_hourly (e.g. the tab was closed or
+          // refreshed right before the final approval RPC), auto_approve_import_item
+          // is self-contained and can finish the item from that data alone -
+          // no need to re-download the screenshot and re-run both OCR passes
+          // again. Try that first; only fall back to a full reprocess if the
+          // item genuinely has no usable hourly data yet (row.status
+          // "PROCESSING", or the RPC itself reports it's missing).
+          if (row.status === "VALIDATING") {
+            // Only a clean AUTO_APPROVED counts as resumed. A PENDING_APPROVAL
+            // result here doesn't necessarily mean the blocker is real - it
+            // could just reflect the incomplete state left by the
+            // interruption - so fall through to a full reprocess in that
+            // case, same as before this shortcut existed, rather than
+            // stranding the item on a blocker a fresh OCR pass might clear.
+            const resumed = await (async () => {
+              try {
+                const { data, error } = await (supabase as any).rpc("auto_approve_import_item", { p_import_item_id: row.id });
+                if (error) return false;
+                const response = data as { status?: string; created_daily_records?: number } | null;
+                if (response?.status === "AUTO_APPROVED") { updateItem(key, { status: "AUTO_APPROVED", createdRecords: Number(response.created_daily_records ?? 0) }); return true; }
+                return false;
+              } catch { return false; }
+            })();
+            if (resumed) continue;
+          }
           const { data: blob, error: downloadError } = await supabase.storage.from("screenshots").download(row.screenshot_path);
           if (downloadError) { updateItem(key, { status: "ERROR", message: `Nelze obnovit screenshot: ${downloadError.message}` }); await markImportItemError(row.id, `Nelze obnovit screenshot po návratu do aplikace: ${downloadError.message}`); continue; }
           const type = blob.type || "image/png";
           const file = new File([blob], String(row.screenshot_path).split("/").pop() || `${row.id}.png`, { type });
           await processOne(file, key, batch.id, { id: row.id, screenshotPath: row.screenshot_path });
         }
-        await completeImportBatch(batch.id);
-        if (!cancelled) { setBusy(false); toast.success("Pokračování importu po návratu do aplikace dokončeno."); onImported?.(); }
+        await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
+        // Same reasoning as startBatch: this is bookkeeping only, its failure
+        // must not overwrite the accurate per-item outcome already persisted.
+        try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
+        if (!cancelled) { setBusy(false); await reportBatchOutcome("Pokračování importu po návratu do aplikace dokončeno"); }
       } catch (error) {
         if (!cancelled) { setBusy(false); toast.error(`Obnovení importu se nepodařilo dokončit: ${errorMessage(error)}`); }
       }

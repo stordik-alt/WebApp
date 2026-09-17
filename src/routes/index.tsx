@@ -116,7 +116,7 @@ function Dashboard() {
   const shiftPerformance = useMemo(() => {
     const buckets = new Map<string, number[]>();
     last30.forEach((d) => {
-      const key = d.shift_name ?? "Směna";
+      const key = d.shift || "Směna";
       if (d.oee !== null) buckets.set(key, [...(buckets.get(key) ?? []), d.oee]);
     });
     return [...buckets.entries()].map(([shift, values]) => ({

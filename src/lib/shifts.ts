@@ -26,6 +26,7 @@ export type ShiftAggregate = {
   lines: string[];
   lineCount: number;
   products: string[];
+  productCount: number;
   records: DailyRecord[];
   /** Aritmetický průměr z dostupných hodnot dané metriky (chybějící ≠ 0). */
   oee: number | null;
@@ -97,8 +98,12 @@ export function aggregateShifts(
       work_date: first.work_date,
       shift: first.shift,
       lines: Array.from(new Set(recs.map((r) => r.line).filter(Boolean))),
-      lineCount: recs.length,
+      // recs.length is now record count, not line count: a multi-product
+      // shift on one line produces one daily_records row per product on
+      // that same line, so lineCount must come from the deduplicated set.
+      lineCount: new Set(recs.map((r) => r.line).filter(Boolean)).size,
       products: Array.from(new Set(recs.map((r) => r.product).filter((p): p is string => !!p))),
+      productCount: new Set(recs.map((r) => r.product).filter(Boolean)).size,
       records: recs,
       oee: avgValid(recs.map((r) => r.oee)),
       performance: avgValid(recs.map((r) => r.performance)),

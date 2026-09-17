@@ -52,7 +52,7 @@ function usePercentTextColoring() {
         const raw = node.nodeValue?.trim() ?? "";
         const match = raw.match(/^(-?\d+(?:[.,]\d+)?)\s*%$/);
         if (!match) continue;
-        const numeric = Number(match[1].replace(",", "."));
+        const numeric = Number((match[1] ?? "").replace(",", "."));
         const style = percentColor(numeric);
         if (!style) continue;
         parent.style.color = String(style.color);

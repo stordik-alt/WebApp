@@ -6,10 +6,14 @@ export type OcrPreprocessOptions = {
 };
 
 /**
- * Creates a temporary JPEG optimized for OCR. The original upload is never
- * modified; callers can continue uploading the original File to storage.
- * The output is both enlarged when useful and reduced when the source would
- * make the AI request unnecessarily large.
+ * Creates a temporary PNG optimized for OCR. PNG (not JPEG) is used deliberately:
+ * these are UI screenshots with small digits/letters in dense tables, and JPEG's
+ * lossy block/chroma-subsampling compression measurably degrades exactly that kind
+ * of content (and the artifacts get amplified by the upscale below). Flat-color
+ * screenshot content compresses well under PNG regardless, so this costs little.
+ * The original upload is never modified; callers can continue uploading the
+ * original File to storage. The output is both enlarged when useful and reduced
+ * when the source would make the AI request unnecessarily large.
  */
 export async function preprocessOcrImage(
   dataUrl: string,
@@ -53,7 +57,8 @@ export async function preprocessOcrImage(
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(image, 0, 0, width, height);
 
-    return canvas.toDataURL("image/jpeg", quality);
+    void quality; // PNG is lossless; no quality knob applies.
+    return canvas.toDataURL("image/png");
   } catch {
     return dataUrl;
   }

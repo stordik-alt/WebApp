@@ -22,7 +22,7 @@ function readScheme(): ThemeScheme {
 function apply(theme: Theme, scheme: ThemeScheme) {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", theme === "dark");
-  document.documentElement.dataset.theme = scheme;
+  document.documentElement.dataset["theme"] = scheme;
   document.documentElement.classList.remove("theme-original", "theme-blue", "theme-green", "theme-teal", "theme-orange", "theme-red");
   document.documentElement.classList.add(`theme-${scheme}`);
   document.documentElement.style.colorScheme = theme;
