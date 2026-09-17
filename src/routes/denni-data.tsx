@@ -60,7 +60,7 @@ function DailyPage() {
   const qc = useQueryClient();
   const approval = useApprovalFields();
   const { data: employees = [] } = useEmployees();
-  const { records, links, shifts: shiftAggregates } = useShiftAggregates();
+  const { records, links, evaluations, shifts: shiftAggregates } = useShiftAggregates();
 
   const [workDate, setWorkDate] = useState(today());
   const [shift, setShift] = useState<string>(SHIFTS[0]);
@@ -188,9 +188,15 @@ function DailyPage() {
       if (!recordId) throw new Error("Chybí ID záznamu");
       const { error } = await supabase.from("daily_records").update({ work_date: workDate, shift, line: line.trim(), product: product.trim() || null, employee_id: employeeId, position, oee: oee === "" ? null : Number(oee), help_score: 0, note: note.trim() || null, ...approval() }).eq("id", recordId).select("id").single();
       if (error) throw error;
+      // Výpomoc lives in shift_evaluations (one row per employee/date/shift,
+      // not per daily_records line) - create already upserted it here, but
+      // update never did, so editing an existing record's Výpomoc silently
+      // had no effect.
+      const { error: he } = await supabase.from("shift_evaluations").upsert({ employee_id: employeeId, work_date: workDate, shift, help_score: Number(help || 0), ...approval() }, { onConflict: "employee_id,work_date,shift" });
+      if (he) throw he;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["daily"] }); qc.invalidateQueries({ queryKey: ["coworkers"] });
+      qc.invalidateQueries({ queryKey: ["daily"] }); qc.invalidateQueries({ queryKey: ["coworkers"] }); qc.invalidateQueries({ queryKey: ["shift_evaluations"] });
       setEditingRecord(null); setManualOpen(false); setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setEmployeeId(""); setProduct(""); toast.success("Záznam upraven");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -224,7 +230,13 @@ function DailyPage() {
     return { records: pool.reduce((sum, s) => sum + s.records.length, 0), oee: avg(pool.map((s) => s.oee)), performance: avg(pool.map((s) => s.performance)), availability: avg(pool.map((s) => s.availableTime)) };
   }, [shiftAggregates, dailyFilterDate]);
 
-  const loadForEdit = (record: DailyRecord) => { setEditingRecord(record); setWorkDate(record.work_date); setShift(record.shift); setLine(record.line); setProduct(record.product ?? ""); setEmployeeId(record.employee_id); setPosition(record.position); setOee(record.oee?.toString() ?? ""); setHelp(record.help_score.toString()); setNote(record.note ?? ""); setManualOpen(true); };
+  const loadForEdit = (record: DailyRecord) => {
+    // record.help_score (daily_records) is not the real Výpomoc value - it's
+    // always 0 there. The actual current value lives in shift_evaluations,
+    // one row per employee/date/shift.
+    const currentEval = evaluations.find((ev) => ev.employee_id === record.employee_id && ev.work_date === record.work_date && ev.shift === record.shift);
+    setEditingRecord(record); setWorkDate(record.work_date); setShift(record.shift); setLine(record.line); setProduct(record.product ?? ""); setEmployeeId(record.employee_id); setPosition(record.position); setOee(record.oee?.toString() ?? ""); setHelp((currentEval?.help_score ?? 0).toString()); setNote(record.note ?? ""); setManualOpen(true);
+  };
   const openNewManual = () => { setEditingRecord(null); setWorkDate(today()); setShift(SHIFTS[0]); setLine(""); setProduct(""); setEmployeeId(""); setPosition("HA"); setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setManualOpen(true); };
   const cancelEdit = () => { setEditingRecord(null); setManualOpen(false); };
 
