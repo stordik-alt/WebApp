@@ -90,20 +90,26 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   const hourlyQuery = useQuery({ queryKey: ["approval-detail-hourly", item?.id], enabled: Boolean(item?.id), queryFn: async () => { const { data: dbRows, error } = await db.from("import_item_hourly").select("*").eq("import_item_id", item!.id).order("hour").order("id"); if (error) throw error; return dbRows ?? []; } });
   const hourly = hourlyQuery.data?.length ? hourlyQuery.data : (Array.isArray(data.hourly_metrics) ? data.hourly_metrics : []);
   const listed = Array.isArray(data.products) ? data.products : [];
-  const codes = Array.from(new Set([...hourly.map((m: any) => String(m.product_code ?? "").trim()), ...listed.map((m: any) => String(m.product_code ?? "").trim()), String(data.product_code ?? "").trim()].filter((code) => /^(?:H|T)_/i.test(String(code)))));
+  // Same suffix-fallback merge as resolve_product_profile()/compute_import_item_product_kpis():
+  // a literal OCR spelling variance (e.g. "T_S4966V4014B" vs "T_S4966V4014") across different
+  // hours of the same screenshot must not show as two separate products here when the backend
+  // now correctly treats them as one.
+  const rawCodes = [...hourly.map((m: any) => String(m.product_code ?? "").trim()), ...listed.map((m: any) => String(m.product_code ?? "").trim()), String(data.product_code ?? "").trim()].filter((code) => /^(?:H|T)_/i.test(String(code)));
+  const codes: string[] = [];
+  for (const code of rawCodes) { if (!codes.some((existing) => codesMatch(normalize(existing), normalize(code)))) codes.push(code); }
   const profileQuery = useQuery({ queryKey: ["approval-detail-product-profiles", item?.id, item?.work_date, codes.join("|")], enabled: Boolean(item && codes.length), queryFn: async () => { const { data: profiles, error } = await db.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").order("valid_from", { ascending: false }); if (error) throw error; return profiles ?? []; } });
   if (!item || !codes.length) return null;
   const profiles = profileQuery.data ?? [];
   const date = item.work_date ?? "9999-12-31";
   const products = codes.map((code) => {
-    const rows = hourly.filter((m: any) => normalize(m.product_code) === normalize(code));
+    const rows = hourly.filter((m: any) => codesMatch(normalize(m.product_code), normalize(code)));
     const validProfiles = profiles.filter((p: any) => { const matches = codesMatch(normalize(p.ha_subassy), normalize(code)) || codesMatch(normalize(p.tup_subassy), normalize(code)); return matches && String(p.valid_from ?? "0000-01-01") <= date && (p.valid_to == null || String(p.valid_to) >= date); });
     const profile = validProfiles[0];
     const isHa = /^H_/i.test(code);
     const norm = profile ? Number(isHa ? profile.h_norm_per_hour : profile.t_norm_per_hour) : null;
     const capacity = profile ? Number(isHa ? profile.h_capacity : profile.tup_capacity) : null;
     const operatorCount = rows.reduce((max: number, r: any) => Math.max(max, Number(r.operator_count) || 0), 0) || Number(data.operator_count) || 1;
-    const realRows = rows.filter((r: any) => Number(r.actual_output) > 0 && normalize(r.product_code) === normalize(code)).sort((a: any, b: any) => Number(a.hour) - Number(b.hour) || String(a.id ?? "").localeCompare(String(b.id ?? "")));
+    const realRows = rows.filter((r: any) => Number(r.actual_output) > 0 && codesMatch(normalize(r.product_code), normalize(code))).sort((a: any, b: any) => Number(a.hour) - Number(b.hour) || String(a.id ?? "").localeCompare(String(b.id ?? "")));
     // Performance/availability/OEE are never recomputed here - they are read
     // straight from import_item_hourly, which the backend (V19 downtime-
     // classification reconstruction) already computed correctly. Reimplementing
