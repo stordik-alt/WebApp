@@ -12,12 +12,17 @@
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
 
-  /* Light mode: clean surfaces, high contrast, deep mint accent. */
+  /* Light mode: layered tinted surfaces, high contrast, deep mint accent.
+     Card/popover stay lighter than the app background (preserving the
+     visual hierarchy) but keep the SAME hue family instead of dropping to
+     0% saturation pure white - a stark colorless card next to a tinted
+     background is what reads as "harsh"/disharmonious, not the lightness
+     gap itself. */
   --background: 220 42% 97%;
   --foreground: 222 35% 15%;
-  --card: 0 0% 100%;
+  --card: 220 22% 99%;
   --card-foreground: 222 35% 15%;
-  --popover: 0 0% 100%;
+  --popover: 220 22% 99%;
   --popover-foreground: 222 35% 15%;
   --primary: 2 55% 52%;
   --primary-foreground: 0 0% 100%;
@@ -252,13 +257,17 @@ html:not(.dark) .bg-card\/70 {
   border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
 }
 
+/* Scheme-aware, not a fixed hue - a hardcoded color here would clash with
+   whichever appearance scheme (blue/green/teal/orange/red/...) is active,
+   since this selector's specificity otherwise beats appearance-themes.css's
+   own scheme-aware table rule. */
 html:not(.dark) table thead {
-  background: hsl(158 30% 94%) !important;
+  background: hsl(var(--muted) / 0.75) !important;
 }
 html:not(.dark) table thead th {
   color: hsl(var(--foreground) / 0.82) !important;
   font-weight: 600;
-  border-bottom-color: hsl(158 24% 78%) !important;
+  border-bottom-color: hsl(var(--border)) !important;
 }
 html:not(.dark) table tbody tr {
   border-bottom-color: hsl(var(--border) / 0.9) !important;
@@ -377,7 +386,7 @@ html.dark .bg-slate-900\/80 { background-color: hsl(223 34% 15.5%) !important; }
 html.dark .bg-card\/70 { background-color: hsl(var(--card) / 0.86) !important; }
 html.dark .bg-card\/90 { background-color: hsl(var(--card) / 0.94) !important; }
 
-html.dark table thead { background: hsl(223 30% 18%) !important; }
+html.dark table thead { background: hsl(var(--muted) / 0.85) !important; }
 html.dark table tbody tr { border-bottom-color: hsl(223 24% 24%) !important; }
 html.dark table tbody tr:hover { background: hsl(183 28% 14% / 0.5) !important; }
 
