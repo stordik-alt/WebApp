@@ -1381,6 +1381,10 @@ export type Database = {
         Args: { p_batch_id: string };
         Returns: Json;
       };
+      downtime_pareto: {
+        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
+        Returns: Json;
+      };
       historical_recompute_preview: {
         Args: { p_work_date_from?: string | null; p_work_date_to?: string | null; p_sample_limit?: number | null };
         Returns: Json;
