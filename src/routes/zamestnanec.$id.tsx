@@ -55,7 +55,8 @@ import {
   isoWeekMonday,
   quarterOf,
 } from "@/lib/metrics";
-import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingDown, TrendingUp, BarChart3, CalendarRange, ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/zamestnanec/$id")({
   head: () => ({
@@ -308,8 +309,8 @@ function EmployeeProfile() {
               <TableBody>
                 {[...quarters, ...halves].length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground">
-                      Zatím žádná data.
+                    <TableCell colSpan={6}>
+                      <EmptyState icon={BarChart3} title="Zatím žádná data." description="Statistiky se zobrazí po prvních schválených směnách." />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -337,7 +338,7 @@ function EmployeeProfile() {
           </div>
           <div className="space-y-2 md:hidden">
             {[...quarters, ...halves].length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádná data.</p>
+              <EmptyState icon={BarChart3} title="Zatím žádná data." description="Statistiky se zobrazí po prvních schválených směnách." />
             ) : (
               [...quarters, ...halves].map(({ key, perf }) => (
                 <div key={key} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
@@ -380,8 +381,8 @@ function EmployeeProfile() {
             <TableBody>
               {myWeekly.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
-                    Zatím žádné týdenní záznamy.
+                  <TableCell colSpan={5}>
+                    <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -411,7 +412,7 @@ function EmployeeProfile() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {myWeekly.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádné týdenní záznamy.</p>
+            <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
           ) : (
             myWeekly.map((w) => (
               <div key={w.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
@@ -567,10 +568,8 @@ function EmployeeProfile() {
             <TableBody>
               {filteredAlerts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">
-                    {myAlerts.length === 0
-                      ? "Žádné Quality Alerty."
-                      : "Žádné alerty neodpovídají filtrům."}
+                  <TableCell colSpan={8}>
+                    <EmptyState icon={ShieldCheck} title={myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."} />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -616,7 +615,7 @@ function EmployeeProfile() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {filteredAlerts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."}</p>
+            <EmptyState icon={ShieldCheck} title={myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."} />
           ) : (
             filteredAlerts.map((w) => (
               <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>

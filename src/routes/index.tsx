@@ -24,8 +24,10 @@ import {
   CalendarDays,
   Boxes,
   CircleCheck,
+  LineChart as LineChartIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { EmptyState } from "@/components/EmptyState";
 import { KpiCard } from "@/components/Kpi";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -472,5 +474,5 @@ function InsightRow({ icon, title, value, tone = "default" }: { icon: React.Reac
 }
 
 function EmptyChart() {
-  return <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/70 bg-background/15 text-sm text-muted-foreground">Zatím žádná data.</div>;
+  return <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/70 bg-background/15"><EmptyState icon={LineChartIcon} title="Zatím žádná data." description="Graf se zobrazí, jakmile budou k dispozici schválené záznamy." className="py-0" /></div>;
 }

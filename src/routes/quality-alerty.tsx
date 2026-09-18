@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { EmptyState } from "@/components/EmptyState";
 import { KpiCard } from "@/components/Kpi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,8 +88,8 @@ function QualityAlertsPage() {
             <TableBody>
               {alerts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">
-                    Žádné Quality Alerty.
+                  <TableCell colSpan={9}>
+                    <EmptyState icon={ShieldCheck} title="Žádné Quality Alerty." description="Všechny týdenní záznamy jsou v pořádku." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -135,7 +136,7 @@ function QualityAlertsPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {alerts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Žádné Quality Alerty.</p>
+            <EmptyState icon={ShieldCheck} title="Žádné Quality Alerty." description="Všechny týdenní záznamy jsou v pořádku." />
           ) : (
             alerts.map((w) => (
               <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>

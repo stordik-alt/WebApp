@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { EmptyState } from "@/components/EmptyState";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -154,8 +156,8 @@ function RankingPage() {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
-                    Pro zvolené filtry nejsou žádná data.
+                  <TableCell colSpan={7}>
+                    <EmptyState icon={Trophy} title="Pro zvolené filtry nejsou žádná data." description="Zkuste rozšířit období nebo snížit minimální počet směn." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -191,7 +193,7 @@ function RankingPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Pro zvolené filtry nejsou žádná data.</p>
+            <EmptyState icon={Trophy} title="Pro zvolené filtry nejsou žádná data." description="Zkuste rozšířit období nebo snížit minimální počet směn." />
           ) : (
             rows.map(({ employee, perf }, i) => (
               <div key={employee.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">

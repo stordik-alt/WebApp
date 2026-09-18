@@ -26,6 +26,7 @@ import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
 import { aggregateShifts, avgValid } from "@/lib/shifts";
 import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
 import { FileText } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/reporty")({
   head: () => ({
@@ -250,8 +251,8 @@ function ReportsPage() {
             <TableBody>
               {perEmployee.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">
-                    Pro zvolené filtry nejsou žádná data.
+                  <TableCell colSpan={9}>
+                    <EmptyState icon={FileText} title="Pro zvolené filtry nejsou žádná data." description="Zkuste upravit filtry nebo zvolit jiné období." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -284,7 +285,7 @@ function ReportsPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {perEmployee.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Pro zvolené filtry nejsou žádná data.</p>
+            <EmptyState icon={FileText} title="Pro zvolené filtry nejsou žádná data." description="Zkuste upravit filtry nebo zvolit jiné období." />
           ) : (
             perEmployee.map((r) => (
               <div key={r.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">

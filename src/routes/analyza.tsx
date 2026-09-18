@@ -30,6 +30,7 @@ import {
   quarterOf,
 } from "@/lib/metrics";
 import { FlaskConical } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/analyza")({
   head: () => ({
@@ -150,8 +151,8 @@ function AnalysisPage() {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
-                    Pro zvolené období nejsou data.
+                  <TableCell colSpan={7}>
+                    <EmptyState icon={FlaskConical} title="Pro zvolené období nejsou data." description="Zkuste zvolit jiné období nebo vyčkejte na další záznamy." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -190,7 +191,7 @@ function AnalysisPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {rows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Pro zvolené období nejsou data.</p>
+            <EmptyState icon={FlaskConical} title="Pro zvolené období nejsou data." description="Zkuste zvolit jiné období nebo vyčkejte na další záznamy." />
           ) : (
             rows.map(({ employee, perf }) => (
               <div key={employee.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">

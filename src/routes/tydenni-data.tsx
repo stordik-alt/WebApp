@@ -35,7 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangle, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarRange, Save, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { useApprovalFields } from "@/lib/auth";
 
 export const Route = createFileRoute("/tydenni-data")({
@@ -298,8 +299,8 @@ function WeeklyPage() {
               <TableBody>
                 {weekly.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-muted-foreground">
-                      Zatím žádné týdenní záznamy.
+                    <TableCell colSpan={8}>
+                      <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -349,7 +350,7 @@ function WeeklyPage() {
           </div>
           <div className="space-y-2 p-3 md:hidden">
             {weekly.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádné týdenní záznamy.</p>
+              <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
             ) : (
               filteredWeekly.map((w) => (
                 <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-slate-950/35"}`}>

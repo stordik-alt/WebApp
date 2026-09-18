@@ -27,7 +27,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ClipboardCheck } from "lucide-react";
+import { TableRowSkeleton, CardSkeletonList } from "@/components/TableSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/hodnoceni")({
   head: () => ({
@@ -281,15 +283,11 @@ function HandlerEvaluationPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow aria-busy="true">
-                  <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Načítání…</span>
-                  </TableCell>
-                </TableRow>
+                <TableRowSkeleton columns={6} />
               ) : evaluations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
-                    Zatím žádné hodnocení.
+                  <TableCell colSpan={6}>
+                    <EmptyState icon={ClipboardCheck} title="Zatím žádné hodnocení." description="Hodnocení se zde objeví po prvním záznamu." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -336,9 +334,9 @@ function HandlerEvaluationPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {isLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Načítání…</p>
+            <CardSkeletonList count={4} />
           ) : evaluations.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádné hodnocení.</p>
+            <EmptyState icon={ClipboardCheck} title="Zatím žádné hodnocení." description="Hodnocení se zde objeví po prvním záznamu." />
           ) : (
             evaluations.map((ev) => (
               <div key={ev.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
