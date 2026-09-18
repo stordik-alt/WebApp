@@ -4,13 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTheme, type ThemeScheme } from "@/lib/use-theme";
 
+// Swatch hex values are computed from each scheme's own dark-mode HSL
+// tokens in appearance-themes.css (background/primary/chart-2/secondary),
+// not picked independently - keeps this preview accurate to what's
+// actually applied instead of drifting from the real design tokens.
 const SCHEMES: Array<{ id: ThemeScheme; name: string; subtitle: string; colors: string[] }> = [
-  { id: "original", name: "Původní", subtitle: "Modro-tyrkysová", colors: ["#081220", "#14F195", "#0EA5E9", "#1E293B"] },
-  { id: "blue", name: "Modrá", subtitle: "Professional", colors: ["#0A1F44", "#2563EB", "#60A5FA", "#1E3A8A"] },
-  { id: "green", name: "Zelená", subtitle: "Nature", colors: ["#052E16", "#22C55E", "#84CC16", "#14532D"] },
-  { id: "teal", name: "Teal", subtitle: "Modern", colors: ["#081F2A", "#14B8A6", "#06B6D4", "#164E63"] },
-  { id: "orange", name: "Oranžová", subtitle: "Energetic", colors: ["#241B0E", "#F59E0B", "#F97316", "#C2410C"] },
-  { id: "red", name: "Červená", subtitle: "Focus", colors: ["#2A0F14", "#EF4444", "#F87171", "#7F1D1D"] },
+  { id: "original", name: "Původní", subtitle: "Mintovo-tyrkysová", colors: ["#0c1322", "#28e29d", "#14b2f5", "#232b3e"] },
+  { id: "blue", name: "Modrošedé", subtitle: "Moderní", colors: ["#091020", "#447aee", "#5fabf7", "#1e273e"] },
+  { id: "warm-neutral", name: "Teplé neutrální", subtitle: "Elegantní", colors: ["#171412", "#af8a6a", "#599dc0", "#332e28"] },
+  { id: "orange", name: "Krémovo-oranžové", subtitle: "Přívětivé", colors: ["#17120d", "#f9891f", "#f5743d", "#372b20"] },
+  { id: "green", name: "Mintové", subtitle: "Svěží", colors: ["#0a1a12", "#26d985", "#96da2f", "#1f372b"] },
+  { id: "lavender", name: "Levandulové", subtitle: "Jemné", colors: ["#160f1f", "#a57cde", "#d685d6", "#2e243d"] },
+  { id: "sand", name: "Pískové", subtitle: "Přirozené", colors: ["#191510", "#c1a367", "#cf7659", "#352f27"] },
+  { id: "teal", name: "Světle zelenošedé", subtitle: "Profesionální", colors: ["#101815", "#54b68d", "#55b1c3", "#27342f"] },
+  { id: "red", name: "Růžově šedé", subtitle: "Moderní, jemné", colors: ["#1a0f12", "#cf6e86", "#d08d6c", "#35272a"] },
 ];
 
 export function AppearanceSettings() {
