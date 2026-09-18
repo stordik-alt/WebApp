@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractScreenshotStage, type OcrResult } from "@/lib/ocr.functions";
 import { extractHourlyWithContext } from "@/lib/ocr.hourly.functions";
 import { preprocessOcrImage } from "@/lib/ocr-image";
+import { withTimeout } from "@/lib/with-timeout";
 import { useProducts } from "@/lib/data";
 import type { Product } from "@/lib/products";
 import type { Employee } from "@/lib/metrics";
@@ -85,8 +86,8 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Soubor se nepodařilo načíst.")); reader.readAsDataURL(file); });
       setPreviewUrl((current) => selectedKey === key || !current ? dataUrl : current);
       const image = await preprocessOcrImage(dataUrl, { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
-      const header = await extractStage({ data: { imageDataUrl: image, stage: "products" } });
-      const employeeResult = await extractStage({ data: { imageDataUrl: image, stage: "employees" } });
+      const header = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "products" } }), 90_000, "OCR časový limit vypršel při rozpoznávání produktů. Zkuste import znovu.");
+      const employeeResult = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "employees" } }), 90_000, "OCR časový limit vypršel při rozpoznávání zaměstnanců. Zkuste import znovu.");
       const result: OcrResult = { ...header, rows: employeeResult.rows ?? [] };
       const loadedProfiles = await loadProfiles();
       if (!itemId) throw new Error("Importní záznam nebyl vytvořen.");
@@ -112,7 +113,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       if (profile && finalRows.length && finalMatchedProduct) {
         const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
         const role = /^H_/i.test(productCode) ? "HA" : /^T_/i.test(productCode) ? "TUP" : null;
-        const hourlyResult = await extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: allProfilesForItem.length ? allProfilesForItem : [profile], operator_count: finalRows.length, role } } });
+        const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: allProfilesForItem.length ? allProfilesForItem : [profile], operator_count: finalRows.length, role } } }), 90_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste import znovu.");
         hourly = hourlyResult.hourly_metrics ?? [];
         actualOee = hourlyResult.actual_shift_oee_pct ?? null;
         finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) } as OcrResult;

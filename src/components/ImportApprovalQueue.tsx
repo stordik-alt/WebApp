@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth";
 import { upsertImportedProductProfile } from "@/lib/productProfiles";
 import { extractHourlyWithContext } from "@/lib/ocr.hourly.functions";
 import { preprocessOcrImage } from "@/lib/ocr-image";
+import { withTimeout } from "@/lib/with-timeout";
 
 const db = supabase as any;
 type PendingImport = { id: string; batch_id: string; created_at: string; screenshot_path: string | null; work_date: string | null; shift: string | null; line: string | null; product_code: string | null; product_name: string | null; norm_per_hour: number | null; ocr_confidence: number | null; ocr_data: any; admin_corrections: any; pending_reasons: string[] | null; product_id: string | null; product_match_status: string | null; product_profile_status: string | null };
@@ -66,7 +67,7 @@ async function runHourlyExtractionForItem(params: {
   const { data: blob, error: downloadError } = await supabase.storage.from("screenshots").download(screenshotPath);
   if (downloadError) throw downloadError;
   const image = await preprocessOcrImage(await dataUrlFromBlob(blob), { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
-  const hourlyResult = await extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } });
+  const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } }), 90_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste to znovu.");
   const hourly = hourlyResult.hourly_metrics ?? [];
   const performance = average(hourly.map((m: any) => m.performance_pct));
   const availability = average(hourly.map((m: any) => m.availability_pct));
