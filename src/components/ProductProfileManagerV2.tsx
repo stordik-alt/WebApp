@@ -41,7 +41,8 @@ function parseProductProfileText(text: string): ImportRow[] {
     const cells = line.split(separator).map((cell) => cell.trim().replace(/^"|"$/g, "")); const get = (key: keyof ImportRow) => { const i = mapped.indexOf(key); return i >= 0 ? cells[i] ?? "" : ""; };
     const name = get("name"); const haCode = get("haCode"); const tupCode = get("tupCode"); const haNorm = parseNumber(get("haNorm")); const tupNorm = parseNumber(get("tupNorm")); const haCapacity = parseNumber(get("haCapacity")); const tupCapacity = parseNumber(get("tupCapacity")); const hasHa = haCode.length > 0; const hasTup = tupCode.length > 0; let error = "";
     // A row may legitimately leave one side blank (HA-only or TUP-only product) - only a side that IS filled in must be fully valid.
-    if (!name) error = "Chybí product_profile."; else if (!hasHa && !hasTup) error = "Chybí HA i TUP Product ID (musí být vyplněné alespoň jedno)."; else if (hasHa && !/^H_/i.test(haCode)) error = "HA Product ID musí začínat H_."; else if (hasHa && (!Number.isFinite(haNorm) || haNorm <= 0)) error = "HA norma musí být kladné číslo."; else if (hasHa && (!Number.isInteger(haCapacity) || haCapacity < 1)) error = "HA kapacita musí být celé číslo alespoň 1."; else if (hasTup && (!Number.isFinite(tupNorm) || tupNorm <= 0)) error = "TUP norma musí být kladné číslo."; else if (hasTup && (!Number.isInteger(tupCapacity) || tupCapacity < 1)) error = "TUP kapacita musí být celé číslo alespoň 1.";
+    // BUG-003: no H_/T_ prefix requirement here either - see save()'s hasHa branch.
+    if (!name) error = "Chybí product_profile."; else if (!hasHa && !hasTup) error = "Chybí HA i TUP Product ID (musí být vyplněné alespoň jedno)."; else if (hasHa && (!Number.isFinite(haNorm) || haNorm <= 0)) error = "HA norma musí být kladné číslo."; else if (hasHa && (!Number.isInteger(haCapacity) || haCapacity < 1)) error = "HA kapacita musí být celé číslo alespoň 1."; else if (hasTup && (!Number.isFinite(tupNorm) || tupNorm <= 0)) error = "TUP norma musí být kladné číslo."; else if (hasTup && (!Number.isInteger(tupCapacity) || tupCapacity < 1)) error = "TUP kapacita musí být celé číslo alespoň 1.";
     return { line: index + 2, name, haCode, haNorm, haCapacity, tupCode, tupNorm, tupCapacity, error: error || undefined };
   });
 }
@@ -86,7 +87,10 @@ export function ProductProfileManagerV2() {
     // be fully valid.
     let haNorm: number | null = null, haCapacity: number | null = null;
     if (hasHa) {
-      if (!/^H_/i.test(haCode)) throw new Error("HA Product ID musí začínat H_.");
+      // BUG-003: ha_subassy/tup_subassy are a free-text subassembly code,
+      // not always H_/T_-prefixed in practice - only norm/capacity are
+      // actually required (matches the DB constraint
+      // product_profiles_active_complete_check, which has no prefix check).
       haNorm = Number(draft.haNorm); haCapacity = Number(draft.haCapacity);
       if (!Number.isFinite(haNorm) || haNorm <= 0) throw new Error("Zadejte platnou HA normu.");
       if (!Number.isInteger(haCapacity) || haCapacity < 1) throw new Error("HA kapacita je povinná a musí být celé číslo alespoň 1.");

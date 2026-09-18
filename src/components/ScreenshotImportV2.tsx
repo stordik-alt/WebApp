@@ -154,17 +154,27 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       return;
     }
     for (const [index, file] of files.entries()) await processOne(file, initial[index]?.key ?? `${Date.now()}-${index}-${file.name}`, batch.id);
-    // HA->TUP linkage is only ever evaluated after the whole batch is
-    // approved (never per-screenshot - the HA and TUP sides are normally
-    // two different screenshots, and processing order isn't guaranteed).
-    await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
-    // completeImportBatch only aggregates already-persisted per-item results
-    // into import_batches' summary counters - it never creates or mutates
-    // import_items/daily_records. Its failure must never surface as "import
-    // failed": every screenshot's real outcome is already saved regardless.
-    try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
-    await reportBatchOutcome("Hromadný import dokončen");
-    setBusy(false);
+    // BUG-001: everything below is bookkeeping/reporting on top of already-
+    // persisted per-item results - none of it may leave `busy` stuck true,
+    // or the dialog's Close button (and outside-click/Escape, both gated on
+    // `busy` too) becomes permanently unresponsive and the only way out is
+    // a full page refresh. Wrapped in try/finally so any failure here -
+    // including one bubbling up from the caller-supplied onImported
+    // callback inside reportBatchOutcome - still resets busy.
+    try {
+      // HA->TUP linkage is only ever evaluated after the whole batch is
+      // approved (never per-screenshot - the HA and TUP sides are normally
+      // two different screenshots, and processing order isn't guaranteed).
+      await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
+      // completeImportBatch only aggregates already-persisted per-item results
+      // into import_batches' summary counters - it never creates or mutates
+      // import_items/daily_records. Its failure must never surface as "import
+      // failed": every screenshot's real outcome is already saved regardless.
+      try { await completeImportBatch(batch.id); } catch (error) { console.error("Souhrn dávky se nepodařilo uložit (záznamy byly přesto zpracovány):", error); }
+      await reportBatchOutcome("Hromadný import dokončen");
+    } finally {
+      setBusy(false);
+    }
   };
 
   useEffect(() => {
