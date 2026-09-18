@@ -185,6 +185,7 @@ function Dashboard() {
         </div>
       }
     >
+      <div className="space-y-5">
       <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-3 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-4">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -237,7 +238,7 @@ function Dashboard() {
       </div>
 
       {openAlerts.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm">
+        <div className="rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
@@ -261,14 +262,14 @@ function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Průměrné OEE (30 dní)" value={fmt(avgOee)} unit="%" hint={`${last30.length} směn v období`} icon={<Gauge className="h-4 w-4" />} />
         <KpiCard label="Průměrné Quality Score" value={fmt(avgQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
         <KpiCard label="Průměrná výpomoc" value={fmt(avgHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
         <KpiCard label="Aktivní zaměstnanci" value={activeEmployees.length} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
         <Card className="relative overflow-hidden p-5 shadow-[var(--shadow-card)]">
           <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
           <div className="mt-4 h-72">
@@ -340,7 +341,7 @@ function Dashboard() {
         </Card>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
+      <div className="grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
         <Card className="p-5 shadow-[var(--shadow-card)]">
           <CardHeaderRow title="OEE podle směn" icon={<Gauge className="h-4 w-4" />} action="Srovnání" />
           <div className="mt-4 space-y-3">
@@ -380,6 +381,7 @@ function Dashboard() {
             ) : null}
           </div>
         </Card>
+      </div>
       </div>
     </AppShell>
   );

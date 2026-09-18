@@ -210,13 +210,13 @@ function WorkplacesPage() {
 
         <Card className="overflow-hidden p-0">
           <div className="border-b border-border px-4 py-4 sm:px-5">
-            <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Porovnání pracovišť</h2><p className="text-xs text-muted-foreground">OEE a dostupnost podle aktuálně filtrovaných pracovišť.</p></div></div><div className="text-xs text-muted-foreground">{filteredWorkplaces.length} / {workplaces.length}</div></div>
+            <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="text-lg font-semibold">Porovnání pracovišť</h2><p className="text-xs text-muted-foreground">OEE a dostupnost podle aktuálně filtrovaných pracovišť.</p></div></div><div className="text-xs text-muted-foreground">{filteredWorkplaces.length} / {workplaces.length}</div></div>
           </div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Filtru neodpovídá žádné pracoviště.</div> : <div className="h-[320px] w-full p-3 sm:h-[360px] sm:p-5"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 28 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-35} textAnchor="end" height={65} interval={0} fontSize={11} stroke="hsl(var(--muted-foreground))" /><YAxis domain={[0, "auto"]} tickFormatter={(value) => `${value}%`} fontSize={11} stroke="hsl(var(--muted-foreground))" width={40} /><Tooltip formatter={(value: unknown) => { const n = typeof value === "number" ? value : Number(value); return Number.isFinite(n) ? `${n.toFixed(1)} %` : "–"; }} /><Legend /><Bar dataKey="oee" name="OEE" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Bar dataKey="availability" name="Dostupnost" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>}
         </Card>
 
         <Card className="overflow-hidden p-0">
-          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div></div>
+          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="text-lg font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div></div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-rose-300">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
             <>
             <div className="hidden overflow-x-auto md:block"><div className="min-w-[720px]">
@@ -250,7 +250,7 @@ function WorkplacesPage() {
           )}
         </Card>
 
-        <Card className="p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="font-semibold">Pravidlo pracovišť</h2><p className="mt-1 text-sm text-muted-foreground">Kód 041.xx = HA, kód 050.xx = TUP. Linka a název se přebírají z denního záznamu. Olovo je vedeno jako samostatná linka.</p></div></div></Card>
+        <Card className="p-4 sm:p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="text-lg font-semibold">Pravidlo pracovišť</h2><p className="mt-1 text-sm text-muted-foreground">Kód 041.xx = HA, kód 050.xx = TUP. Linka a název se přebírají z denního záznamu. Olovo je vedeno jako samostatná linka.</p></div></div></Card>
 
         <HaTupLinkageReport />
       </div>
