@@ -170,6 +170,33 @@ export function useHandlerEvaluations() {
   });
 }
 
+export type SystemHealth = { stuckImports: number; pendingApproval: number };
+
+// Admin-only signal (import_items RLS restricts SELECT to has_role(admin)) so
+// operational problems - an import stuck in PROCESSING/VALIDATING, or an
+// item silently reopened for review by a bulk recompute - surface on the
+// dashboard proactively instead of relying on someone noticing by chance,
+// which is exactly how the two incidents this fixes went unnoticed for
+// hours. "Stuck" = still PROCESSING/VALIDATING 10+ minutes after creation;
+// a healthy import normally finishes in well under a minute.
+export function useSystemHealth(enabled = true) {
+  return useQuery({
+    queryKey: ["system-health"],
+    enabled,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<SystemHealth> => {
+      const stuckCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const [stuckResult, pendingResult] = await Promise.all([
+        supabase.from("import_items").select("id", { count: "exact", head: true }).in("status", ["PROCESSING", "VALIDATING"]).lt("created_at", stuckCutoff),
+        supabase.from("import_items").select("id", { count: "exact", head: true }).eq("status", "PENDING_APPROVAL"),
+      ]);
+      if (stuckResult.error) throw stuckResult.error;
+      if (pendingResult.error) throw pendingResult.error;
+      return { stuckImports: stuckResult.count ?? 0, pendingApproval: pendingResult.count ?? 0 };
+    },
+  });
+}
+
 export type QualityAlertHistoryEntry = { id: string; weekly_record_id: string; alert_cause: string | null; alert_note: string | null; operator_error: boolean | null; final_quality_score: number | null; alert_resolved: boolean; changed_by_email: string | null; created_at: string };
 
 export function useQualityAlertHistory(weeklyRecordId?: string) {

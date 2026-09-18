@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnalyzaRouteImport } from './routes/analyza'
+import { Route as AnomalieRouteImport } from './routes/anomalie'
 import { Route as DenniDataRouteImport } from './routes/denni-data'
 import { Route as GrafyRouteImport } from './routes/grafy'
 import { Route as HodnoceniRouteImport } from './routes/hodnoceni'
@@ -38,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const AnalyzaRoute = AnalyzaRouteImport.update({
   id: '/analyza',
   path: '/analyza',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnomalieRoute = AnomalieRouteImport.update({
+  id: '/anomalie',
+  path: '/anomalie',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DenniDataRoute = DenniDataRouteImport.update({
@@ -134,6 +140,7 @@ const ZamestnanecIdRoute = ZamestnanecIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
+  '/anomalie': typeof AnomalieRoute
   '/denni-data': typeof DenniDataRoute
   '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
+  '/anomalie': typeof AnomalieRoute
   '/denni-data': typeof DenniDataRoute
   '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analyza': typeof AnalyzaRoute
+  '/anomalie': typeof AnomalieRoute
   '/denni-data': typeof DenniDataRoute
   '/grafy': typeof GrafyRoute
   '/hodnoceni': typeof HodnoceniRoute
@@ -203,6 +212,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/analyza'
+    | '/anomalie'
     | '/denni-data'
     | '/grafy'
     | '/hodnoceni'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/analyza'
+    | '/anomalie'
     | '/denni-data'
     | '/grafy'
     | '/hodnoceni'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/analyza'
+    | '/anomalie'
     | '/denni-data'
     | '/grafy'
     | '/hodnoceni'
@@ -270,6 +282,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyzaRoute: typeof AnalyzaRoute
+  AnomalieRoute: typeof AnomalieRoute
   DenniDataRoute: typeof DenniDataRoute
   GrafyRoute: typeof GrafyRoute
   HodnoceniRoute: typeof HodnoceniRoute
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/analyza'
       fullPath: '/analyza'
       preLoaderRoute: typeof AnalyzaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/anomalie': {
+      id: '/anomalie'
+      path: '/anomalie'
+      fullPath: '/anomalie'
+      preLoaderRoute: typeof AnomalieRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/denni-data': {
@@ -438,6 +458,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyzaRoute: AnalyzaRoute,
+  AnomalieRoute: AnomalieRoute,
   DenniDataRoute: DenniDataRoute,
   GrafyRoute: GrafyRoute,
   HodnoceniRoute: HodnoceniRoute,

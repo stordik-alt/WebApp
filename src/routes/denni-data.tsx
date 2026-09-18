@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEmployees, useShiftAggregates } from "@/lib/data";
 import { isDuplicateLine, type ShiftAggregate } from "@/lib/shifts";
 import { type DailyRecord, SHIFTS, fmt } from "@/lib/metrics";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/form-draft";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +57,24 @@ type HourlyDetail = {
   productive_minutes: number | null;
   expected_output: number | null;
   reconstruction_status: string | null;
+  calculation_mode: string | null;
+  availability_measured: number | null;
+  availability_applied_to_oee: number | null;
   ha_tup_linkage: { ha_product_code?: string | null; ha_cumulative_available?: number | null; allocation_fraction?: number | null; capped?: boolean | null } | null;
 };
+
+// Master Prompt Problem 11's required hourly-audit field "stav hodiny vůči
+// výrobě" (this hour's status relative to production) - read straight from
+// reconstruct_import_item_hourly()'s own calculation_mode, never re-derived.
+function hourProductionStatusLabel(mode: string | null): string {
+  switch (mode) {
+    case "EMPTY": return "Prázdná hodina";
+    case "LAST_HOUR_SCREENSHOT_TIME": return "Poslední hodina (čas screenshotu)";
+    case "TEFF": return "Začátek/konec výroby (TEFF)";
+    case "CLASSIC": return "Pokračující výroba";
+    default: return "–";
+  }
+}
 
 function DailyPage() {
   const qc = useQueryClient();
@@ -82,6 +99,31 @@ function DailyPage() {
   const [detailImageUrl, setDetailImageUrl] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+
+  // A background tab discarded and reloaded by the browser (common on
+  // mobile, also happens on desktop under memory pressure) would otherwise
+  // silently lose an in-progress manual entry - restore it on mount, and
+  // keep it saved while the dialog is open. Scoped to NEW entries only
+  // (editingRecord is null); editing an existing record already loads its
+  // real current values from the database, and restoring a stale draft
+  // over that would be more confusing than helpful.
+  const MANUAL_DRAFT_KEY = "denni-data-manual-new";
+  type ManualDraft = { workDate: string; shift: string; line: string; product: string; employeeId: string; position: "HA" | "TUP"; oee: string; help: string; note: string; coworkers: string[] };
+  useEffect(() => {
+    const draft = loadDraft<ManualDraft>(MANUAL_DRAFT_KEY);
+    if (!draft) return;
+    if (!(draft.line || draft.product || draft.employeeId || draft.note || draft.oee)) return;
+    setWorkDate(draft.workDate); setShift(draft.shift); setLine(draft.line); setProduct(draft.product); setEmployeeId(draft.employeeId); setPosition(draft.position); setOee(draft.oee); setHelp(draft.help); setNote(draft.note); setCoworkers(draft.coworkers);
+    setManualOpen(true);
+    toast.info("Obnoven rozepsaný záznam, který se neuložil (např. po obnovení stránky na pozadí).");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (editingRecord || !manualOpen) return;
+    const hasContent = Boolean(line || product || employeeId || note || (oee && oee !== ""));
+    if (hasContent) saveDraft<ManualDraft>(MANUAL_DRAFT_KEY, { workDate, shift, line, product, employeeId, position, oee, help, note, coworkers });
+    else clearDraft(MANUAL_DRAFT_KEY);
+  }, [workDate, shift, line, product, employeeId, position, oee, help, note, coworkers, editingRecord, manualOpen]);
   const [dailyFilterText, setDailyFilterText] = useState("");
   const [dailyFilterShift, setDailyFilterShift] = useState("all");
   const [dailyFilterDate, setDailyFilterDate] = useState("");
@@ -143,6 +185,9 @@ function DailyPage() {
               productive_minutes: Number.isFinite(productiveMinutes) ? productiveMinutes : null,
               expected_output: Number.isFinite(expectedOutput) ? expectedOutput : null,
               reconstruction_status: typeof calculation.reconstruction_status === "string" ? calculation.reconstruction_status : null,
+              calculation_mode: typeof calculation.calculation_mode === "string" ? calculation.calculation_mode : null,
+              availability_measured: Number.isFinite(Number(calculation.availability_measured)) ? Number(calculation.availability_measured) : null,
+              availability_applied_to_oee: Number.isFinite(Number(calculation.availability_applied_to_oee)) ? Number(calculation.availability_applied_to_oee) : null,
               ha_tup_linkage: calculation.ha_tup_linkage && typeof calculation.ha_tup_linkage === "object" ? calculation.ha_tup_linkage : null,
             } as HourlyDetail;
           });
@@ -189,6 +234,7 @@ function DailyPage() {
     onSuccess: (_d, mode) => {
       qc.invalidateQueries({ queryKey: ["daily"] }); qc.invalidateQueries({ queryKey: ["coworkers"] }); qc.invalidateQueries({ queryKey: ["shift_evaluations"] });
       setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setEmployeeId(""); if (mode === "single") setProduct(""); setManualOpen(false);
+      clearDraft(MANUAL_DRAFT_KEY);
       toast.success(mode === "another" ? "Uloženo – zadejte další" : "Záznam uložen");
     },
     onError: (e: Error) => toast.error(e.message.includes("duplicate") ? "Tento pracovník už má záznam na této lince v dané směně." : e.message),
@@ -249,7 +295,7 @@ function DailyPage() {
     setEditingRecord(record); setWorkDate(record.work_date); setShift(record.shift); setLine(record.line); setProduct(record.product ?? ""); setEmployeeId(record.employee_id); setPosition(record.position); setOee(record.oee?.toString() ?? ""); setHelp((currentEval?.help_score ?? 0).toString()); setNote(record.note ?? ""); setManualOpen(true);
   };
   const openNewManual = () => { setEditingRecord(null); setWorkDate(today()); setShift(SHIFTS[0]); setLine(""); setProduct(""); setEmployeeId(""); setPosition("HA"); setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setManualOpen(true); };
-  const cancelEdit = () => { setEditingRecord(null); setManualOpen(false); };
+  const cancelEdit = () => { setEditingRecord(null); setManualOpen(false); clearDraft(MANUAL_DRAFT_KEY); };
 
   const exportCsv = () => {
     const header = ["Datum", "Směna", "Zaměstnanec", "Linky", "OEE", "Výkon", "Dostupnost", "Výpomoc"].join(";");
@@ -262,8 +308,8 @@ function DailyPage() {
     <AppShell title="Denní data" subtitle="Záznam se vytváří pouze když byl pracovník v práci – absence průměr OEE neovlivní.">
       <div className="space-y-5">
         <section className="grid gap-4 xl:grid-cols-2">
-          <Card className="relative overflow-hidden border-rose-400/30 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(244,63,94,0.08)]"><div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-rose-400 to-transparent" /><div className="p-5 sm:p-6"><div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl border border-rose-400/30 bg-rose-400/10 text-rose-300"><UploadCloud className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300">Import dat</p><h2 className="text-xl font-semibold">Screenshoty výroby</h2></div></div><div className="rounded-2xl border border-dashed border-rose-400/50 bg-slate-900/70 p-2"><ScreenshotImport employees={employees} /></div></div></Card>
-          <Card className="relative overflow-hidden border-fuchsia-400/25 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(217,70,239,0.08)]"><div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent" /><div className="flex h-full flex-col justify-between p-5 sm:p-6"><div><div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300"><FilePlus2 className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-300">Ruční zápis</p><h2 className="text-xl font-semibold">Zadat denní záznam ručně</h2></div></div><p className="max-w-xl text-sm leading-6 text-muted-foreground">Otevře se dialog s kompletním formulářem pro jeden denní záznam. Tabulka zůstává čistá a přehledná.</p></div><Button onClick={openNewManual} className="mt-6 h-12 w-full bg-rose-500 text-slate-950 shadow-[0_0_22px_rgba(244,63,94,0.25)] hover:bg-rose-400"><FilePlus2 className="mr-2 h-4 w-4" /> Zadat denní záznam ručně</Button></div></Card>
+          <Card className="relative overflow-hidden border-rose-400/30 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(244,63,94,0.08)]"><div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-rose-400 to-transparent" /><div className="p-5 sm:p-6"><div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl border border-rose-400/30 bg-rose-400/10 text-rose-300"><UploadCloud className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300">Import dat</p><h2 className="text-lg font-semibold">Screenshoty výroby</h2></div></div><div className="rounded-2xl border border-dashed border-rose-400/50 bg-slate-900/70 p-2"><ScreenshotImport employees={employees} /></div></div></Card>
+          <Card className="relative overflow-hidden border-fuchsia-400/25 bg-slate-950/60 p-0 shadow-[0_0_35px_rgba(217,70,239,0.08)]"><div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-400 to-transparent" /><div className="flex h-full flex-col justify-between p-5 sm:p-6"><div><div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl border border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300"><FilePlus2 className="h-5 w-5" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-300">Ruční zápis</p><h2 className="text-lg font-semibold">Zadat denní záznam ručně</h2></div></div><p className="max-w-xl text-sm leading-6 text-muted-foreground">Otevře se dialog s kompletním formulářem pro jeden denní záznam. Tabulka zůstává čistá a přehledná.</p></div><Button onClick={openNewManual} className="mt-6 w-full"><FilePlus2 className="mr-2 h-4 w-4" /> Zadat denní záznam ručně</Button></div></Card>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: `Záznamy${dailyFilterDate ? ` (${formatDate(dailyFilterDate)})` : ""}`, value: summary.records.toLocaleString("cs-CZ"), detail: "záznamů celkem", tone: "text-foreground" },{ label: "Průměrné OEE", value: summary.oee == null ? "–" : `${fmt(summary.oee)} %`, detail: "ze směnových hodnocení", tone: metricTone(summary.oee) },{ label: "Průměrný výkon", value: summary.performance == null ? "–" : `${fmt(summary.performance)} %`, detail: "bez horního limitu", tone: metricTone(summary.performance) },{ label: "Průměrná dostupnost", value: summary.availability == null ? "–" : `${fmt(summary.availability)} %`, detail: "z vybraných záznamů", tone: metricTone(summary.availability) }].map((item) => <Card key={item.label} className="border-border/70 bg-slate-950/45 px-4 py-4"><p className="text-sm text-muted-foreground">{item.label}</p><div className={`mt-2 text-2xl font-semibold tabular-nums ${item.tone}`}>{item.value}</div><p className="mt-1 text-xs text-muted-foreground">{item.detail}</p></Card>)}</section>
@@ -281,10 +327,11 @@ function DailyPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Zaměstnanec</p><p className="mt-1 font-semibold">{empName(detailRecord.employee_id)}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Datum / směna</p><p className="mt-1 font-semibold">{formatDate(detailRecord.work_date)} · {detailRecord.shift}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Linka / produkt</p><p className="mt-1 font-semibold">{detailRecord.line} · {detailRecord.product ?? "–"}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Pozice</p><p className="mt-1 font-semibold">{detailRecord.position}</p></Card></div>
             <div className="grid gap-3 sm:grid-cols-3"><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.oee)}`}><p className="text-xs text-muted-foreground">Skutečné OEE</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.oee)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený výpočet z produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.performance)}`}><p className="text-xs text-muted-foreground">Výkon</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.performance)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.availability)}`}><p className="text-xs text-muted-foreground">Dostupnost</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.availability)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card></div>
             {detailImageUrl ? <div className="overflow-hidden rounded-xl border border-border/70 bg-black/30"><img src={detailImageUrl} alt={`Screenshot ${detailRecord.product ?? "výroby"}`} className="max-h-[420px] w-full object-contain" /></div> : <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">Screenshot k tomuto záznamu není k dispozici.</div>}
-            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Očekáváno/h</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Produktivní min.</th></tr></thead><tbody>{detailHourly.map((row) => <Fragment key={row.hour}>
-              <tr className="border-b border-border/40"><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.expected_output == null ? "–" : fmt(row.expected_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{row.productive_minutes == null ? "–" : fmt(row.productive_minutes, 0)}</td></tr>
-              {(row.reconstruction_status || row.ha_tup_linkage) ? <tr className="border-b border-border/40 bg-amber-500/5"><td colSpan={9} className="px-2 py-1 text-[11px] text-amber-200/80">
+            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2">Stav vůči výrobě</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Očekáváno/h</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Produktivní min.</th></tr></thead><tbody>{detailHourly.map((row) => <Fragment key={row.hour}>
+              <tr className="border-b border-border/40"><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2"><Badge variant="outline" className="text-[10px]">{hourProductionStatusLabel(row.calculation_mode)}</Badge></td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.expected_output == null ? "–" : fmt(row.expected_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{row.productive_minutes == null ? "–" : fmt(row.productive_minutes, 0)}</td></tr>
+              {(row.reconstruction_status || row.ha_tup_linkage || (row.availability_measured != null && row.availability_applied_to_oee != null && row.availability_measured !== row.availability_applied_to_oee)) ? <tr className="border-b border-border/40 bg-amber-500/5"><td colSpan={10} className="px-2 py-1 text-[11px] text-amber-200/80">
                 {row.reconstruction_status ? <span className="mr-3">Mezivýpočet: {row.reconstruction_status}</span> : null}
+                {row.availability_measured != null && row.availability_applied_to_oee != null && row.availability_measured !== row.availability_applied_to_oee ? <span className="mr-3">Dostupnost {fmt(row.availability_measured)} % naměřená, do OEE se nezapočítává znovu (už je zohledněna ve zkráceném produktivním čase)</span> : null}
                 {row.ha_tup_linkage ? <span>HA→TUP vazba: {row.ha_tup_linkage.ha_product_code ?? "?"} · dostupné HA {row.ha_tup_linkage.ha_cumulative_available ?? "–"} ks{row.ha_tup_linkage.allocation_fraction != null && row.ha_tup_linkage.allocation_fraction !== 1 ? ` · alokace ${Math.round(Number(row.ha_tup_linkage.allocation_fraction) * 100)} %` : ""}{row.ha_tup_linkage.capped ? " · limitováno" : ""}</span> : null}
               </td></tr> : null}
             </Fragment>)}</tbody></table></div> : <p className="py-6 text-center text-sm text-muted-foreground">K tomuto záznamu nejsou dostupná hodinová data. Zobrazuji uložené hodnoty denního záznamu.</p>}</div>

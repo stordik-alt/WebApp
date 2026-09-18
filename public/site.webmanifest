@@ -1,0 +1,12 @@
+{
+  "name": "OptiShift – Výkonnost operátorů",
+  "short_name": "OptiShift",
+  "description": "Hodnocení pracovníků výroby DPS. Data. Lidé. Výsledky.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+  ]
+}

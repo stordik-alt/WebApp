@@ -27,7 +27,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ClipboardCheck } from "lucide-react";
+import { TableRowSkeleton, CardSkeletonList } from "@/components/TableSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/hodnoceni")({
   head: () => ({
@@ -157,7 +159,7 @@ function HandlerEvaluationPage() {
                 <Plus className="h-4 w-4" /> Nové hodnocení
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[92vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editing ? "Upravit hodnocení" : "Nové hodnocení"}
@@ -267,71 +269,90 @@ function HandlerEvaluationPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Datum</TableHead>
-              <TableHead>Zaměstnanec</TableHead>
-              <TableHead>Směna</TableHead>
-              <TableHead>Skóre</TableHead>
-              <TableHead>Poznámka</TableHead>
-              <TableHead className="text-right">Akce</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow aria-busy="true">
-                <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Načítání…</span>
-                </TableCell>
-              </TableRow>
-            ) : evaluations.length === 0 ? (
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6} className="py-5 text-center text-sm text-muted-foreground">
-                  Zatím žádné hodnocení.
-                </TableCell>
+                <TableHead>Datum</TableHead>
+                <TableHead>Zaměstnanec</TableHead>
+                <TableHead>Směna</TableHead>
+                <TableHead>Skóre</TableHead>
+                <TableHead>Poznámka</TableHead>
+                <TableHead className="text-right">Akce</TableHead>
               </TableRow>
-            ) : (
-              evaluations.map((ev) => (
-                <TableRow key={ev.id}>
-                  <TableCell>{ev.work_date}</TableCell>
-                  <TableCell>
-                    {employeeNames.get(ev.employee_id) || "Neznámý"}
-                  </TableCell>
-                  <TableCell>{ev.shift}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        ev.score >= 80
-                          ? "default"
-                          : ev.score >= 60
-                          ? "secondary"
-                          : "destructive"
-                      }
-                    >
-                      {ev.score}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                    {ev.note ?? "–"}
-                  </TableCell>
-                  <TableCell className="space-x-2 text-right">
-                    <Button size="sm" variant="ghost" onClick={() => openEdit(ev)}>
-                      <Pencil className="h-3.5 w-3.5" /> Upravit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => del.mutate(ev.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRowSkeleton columns={6} />
+              ) : evaluations.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyState icon={ClipboardCheck} title="Zatím žádné hodnocení." description="Hodnocení se zde objeví po prvním záznamu." />
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                evaluations.map((ev) => (
+                  <TableRow key={ev.id}>
+                    <TableCell>{ev.work_date}</TableCell>
+                    <TableCell>
+                      {employeeNames.get(ev.employee_id) || "Neznámý"}
+                    </TableCell>
+                    <TableCell>{ev.shift}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          ev.score >= 80
+                            ? "default"
+                            : ev.score >= 60
+                            ? "secondary"
+                            : "destructive"
+                        }
+                      >
+                        {ev.score}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                      {ev.note ?? "–"}
+                    </TableCell>
+                    <TableCell className="space-x-2 text-right">
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(ev)}>
+                        <Pencil className="h-3.5 w-3.5" /> Upravit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => del.mutate(ev.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {isLoading ? (
+            <CardSkeletonList count={4} />
+          ) : evaluations.length === 0 ? (
+            <EmptyState icon={ClipboardCheck} title="Zatím žádné hodnocení." description="Hodnocení se zde objeví po prvním záznamu." />
+          ) : (
+            evaluations.map((ev) => (
+              <div key={ev.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><p className="truncate font-medium">{employeeNames.get(ev.employee_id) || "Neznámý"}</p><p className="mt-0.5 text-xs text-muted-foreground">{ev.work_date} · {ev.shift}</p></div>
+                  <Badge variant={ev.score >= 80 ? "default" : ev.score >= 60 ? "secondary" : "destructive"} className="shrink-0">{ev.score}</Badge>
+                </div>
+                {ev.note ? <p className="mt-2 truncate text-xs text-muted-foreground">{ev.note}</p> : null}
+                <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(ev)}><Pencil className="h-3.5 w-3.5" /> Upravit</Button>
+                  <Button size="sm" variant="outline" onClick={() => del.mutate(ev.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </AppShell>
   );

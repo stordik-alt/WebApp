@@ -238,8 +238,8 @@ function ChartsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 24, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                  <XAxis dataKey="date" tickFormatter={(v) => new Date(v).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit" })} minTickGap={28} />
-                  <YAxis domain={[0, "auto"]} tickFormatter={(v) => `${v}%`} />
+                  <XAxis dataKey="date" tickFormatter={(v) => new Date(v).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit" })} minTickGap={28} fontSize={11} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis domain={[0, "auto"]} tickFormatter={(v) => `${v}%`} fontSize={11} stroke="hsl(var(--muted-foreground))" width={40} />
                   <Tooltip labelFormatter={(v) => new Date(v).toLocaleDateString("cs-CZ")} formatter={(value, name) => [value == null ? "–" : `${Number(value).toFixed(1)} %`, String(name)]} />
                   <Legend />
                   {effectiveEmployees.flatMap((employeeId, employeeIndex) => selectedMetrics.map((metric) => {

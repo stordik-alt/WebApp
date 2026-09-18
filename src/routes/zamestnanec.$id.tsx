@@ -55,7 +55,8 @@ import {
   isoWeekMonday,
   quarterOf,
 } from "@/lib/metrics";
-import { AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingDown, TrendingUp, BarChart3, CalendarRange, ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/zamestnanec/$id")({
   head: () => ({
@@ -293,46 +294,72 @@ function EmployeeProfile() {
 
         <Card className="gap-4 p-5 shadow-[var(--shadow-card)]">
           <h2 className="text-sm font-semibold">Čtvrtletní a půlroční výkonnost</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Období</TableHead>
-                <TableHead className="text-right">Směny</TableHead>
-                <TableHead className="text-right">Ø OEE</TableHead>
-                <TableHead className="text-right">Ø Quality</TableHead>
-                <TableHead className="text-right">IPI</TableHead>
-                <TableHead>Data</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...quarters, ...halves].length === 0 ? (
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
-                    Zatím žádná data.
-                  </TableCell>
+                  <TableHead>Období</TableHead>
+                  <TableHead className="text-right">Směny</TableHead>
+                  <TableHead className="text-right">Ø OEE</TableHead>
+                  <TableHead className="text-right">Ø Quality</TableHead>
+                  <TableHead className="text-right">IPI</TableHead>
+                  <TableHead>Data</TableHead>
                 </TableRow>
-              ) : (
-                [...quarters, ...halves].map(({ key, perf }) => (
-                  <TableRow key={key}>
-                    <TableCell className="font-medium">{key}</TableCell>
-                    <TableCell className="text-right tabular-nums">{perf.shifts}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(perf.avgOee)} %</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(perf.avgQuality)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(perf.ipi)}</TableCell>
-                    <TableCell>
-                      {perf.enoughData ? (
-                        <Badge className="bg-success text-success-foreground">Dostatečná</Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-warning text-warning">
-                          Málo dat
-                        </Badge>
-                      )}
+              </TableHeader>
+              <TableBody>
+                {[...quarters, ...halves].length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <EmptyState icon={BarChart3} title="Zatím žádná data." description="Statistiky se zobrazí po prvních schválených směnách." />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  [...quarters, ...halves].map(({ key, perf }) => (
+                    <TableRow key={key}>
+                      <TableCell className="font-medium">{key}</TableCell>
+                      <TableCell className="text-right tabular-nums">{perf.shifts}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(perf.avgOee)} %</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(perf.avgQuality)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(perf.ipi)}</TableCell>
+                      <TableCell>
+                        {perf.enoughData ? (
+                          <Badge className="bg-success text-success-foreground">Dostatečná</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-warning text-warning">
+                            Málo dat
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="space-y-2 md:hidden">
+            {[...quarters, ...halves].length === 0 ? (
+              <EmptyState icon={BarChart3} title="Zatím žádná data." description="Statistiky se zobrazí po prvních schválených směnách." />
+            ) : (
+              [...quarters, ...halves].map(({ key, perf }) => (
+                <div key={key} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{key}</span>
+                    {perf.enoughData ? (
+                      <Badge className="bg-success text-success-foreground">Dostatečná</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-warning text-warning">Málo dat</Badge>
+                    )}
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-4 gap-2 border-t border-border/50 pt-2.5 text-center">
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">IPI</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.ipi)}</p></div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </Card>
       </div>
 
@@ -340,47 +367,74 @@ function EmployeeProfile() {
         <div className="border-b border-border px-4 py-3 text-sm font-semibold">
           Týdenní Quality záznamy
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Týden</TableHead>
-              <TableHead className="text-right">Yield</TableHead>
-              <TableHead className="text-right">Auto skóre</TableHead>
-              <TableHead className="text-right">Finální skóre</TableHead>
-              <TableHead>Stav / příčina</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {myWeekly.length === 0 ? (
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
-                  Zatím žádné týdenní záznamy.
-                </TableCell>
+                <TableHead>Týden</TableHead>
+                <TableHead className="text-right">Yield</TableHead>
+                <TableHead className="text-right">Auto skóre</TableHead>
+                <TableHead className="text-right">Finální skóre</TableHead>
+                <TableHead>Stav / příčina</TableHead>
               </TableRow>
-            ) : (
-              myWeekly.map((w) => (
-                <TableRow key={w.id}>
-                  <TableCell>
-                    {w.iso_year}/T{w.iso_week}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(w.auto_quality_score)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(w.final_quality_score)}</TableCell>
-                  <TableCell className="text-xs">
-                    {w.is_alert ? (
-                      <span className="text-destructive">
-                        QUALITY ALERT{w.alert_cause ? ` – ${w.alert_cause}` : ""}
-                        {w.operator_error ? " (chyba operátora)" : ""}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">OK</span>
-                    )}
+            </TableHeader>
+            <TableBody>
+              {myWeekly.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                myWeekly.map((w) => (
+                  <TableRow key={w.id}>
+                    <TableCell>
+                      {w.iso_year}/T{w.iso_week}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(w.auto_quality_score)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(w.final_quality_score)}</TableCell>
+                    <TableCell className="text-xs">
+                      {w.is_alert ? (
+                        <span className="text-destructive">
+                          QUALITY ALERT{w.alert_cause ? ` – ${w.alert_cause}` : ""}
+                          {w.operator_error ? " (chyba operátora)" : ""}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">OK</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {myWeekly.length === 0 ? (
+            <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
+          ) : (
+            myWeekly.map((w) => (
+              <div key={w.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{w.iso_year}/T{w.iso_week}</span>
+                  <span className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} % yield</span>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center">
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Auto skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.auto_quality_score)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Finální skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
+                </div>
+                <p className="mt-2.5 text-xs">
+                  {w.is_alert ? (
+                    <span className="text-destructive">QUALITY ALERT{w.alert_cause ? ` – ${w.alert_cause}` : ""}{w.operator_error ? " (chyba operátora)" : ""}</span>
+                  ) : (
+                    <span className="text-muted-foreground">OK</span>
+                  )}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
       </Card>
 
       <Card className="mt-6 gap-0 p-0 shadow-[var(--shadow-card)]">
@@ -497,68 +551,89 @@ function EmployeeProfile() {
           )}
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Týden</TableHead>
-              <TableHead className="text-right">Yield</TableHead>
-              <TableHead>Příčina</TableHead>
-              <TableHead>Poznámka</TableHead>
-              <TableHead>Chyba operátora</TableHead>
-              <TableHead className="text-right">Finální skóre</TableHead>
-              <TableHead>Stav</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAlerts.length === 0 ? (
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground">
-                  {myAlerts.length === 0
-                    ? "Žádné Quality Alerty."
-                    : "Žádné alerty neodpovídají filtrům."}
-                </TableCell>
+                <TableHead>Týden</TableHead>
+                <TableHead className="text-right">Yield</TableHead>
+                <TableHead>Příčina</TableHead>
+                <TableHead>Poznámka</TableHead>
+                <TableHead>Chyba operátora</TableHead>
+                <TableHead className="text-right">Finální skóre</TableHead>
+                <TableHead>Stav</TableHead>
+                <TableHead />
               </TableRow>
-            ) : (
-              filteredAlerts.map((w) => (
-                <TableRow key={w.id} className={w.alert_resolved ? "" : "bg-destructive/5"}>
-                  <TableCell>
-                    {w.iso_year}/T{w.iso_week}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
-                  <TableCell className="max-w-[180px] truncate text-xs">
-                    {w.alert_cause ?? "–"}
-                  </TableCell>
-                  <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
-                    {w.alert_note ?? "–"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {w.operator_error === null || w.operator_error === undefined
-                      ? "–"
-                      : w.operator_error
-                        ? "Ano"
-                        : "Ne"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {fmt(w.final_quality_score)}
-                  </TableCell>
-                  <TableCell>
-                    {w.alert_resolved ? (
-                      <Badge variant="outline">Vyřešeno</Badge>
-                    ) : (
-                      <Badge variant="destructive">Nevyřešeno</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => setAlertRow(w)}>
-                      {w.alert_resolved ? "Upravit" : "Vyšetřit"}
-                    </Button>
+            </TableHeader>
+            <TableBody>
+              {filteredAlerts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8}>
+                    <EmptyState icon={ShieldCheck} title={myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."} />
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                filteredAlerts.map((w) => (
+                  <TableRow key={w.id} className={w.alert_resolved ? "" : "bg-destructive/5"}>
+                    <TableCell>
+                      {w.iso_year}/T{w.iso_week}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
+                    <TableCell className="max-w-[180px] truncate text-xs">
+                      {w.alert_cause ?? "–"}
+                    </TableCell>
+                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
+                      {w.alert_note ?? "–"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {w.operator_error === null || w.operator_error === undefined
+                        ? "–"
+                        : w.operator_error
+                          ? "Ano"
+                          : "Ne"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmt(w.final_quality_score)}
+                    </TableCell>
+                    <TableCell>
+                      {w.alert_resolved ? (
+                        <Badge variant="outline">Vyřešeno</Badge>
+                      ) : (
+                        <Badge variant="destructive">Nevyřešeno</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => setAlertRow(w)}>
+                        {w.alert_resolved ? "Upravit" : "Vyšetřit"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {filteredAlerts.length === 0 ? (
+            <EmptyState icon={ShieldCheck} title={myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."} />
+          ) : (
+            filteredAlerts.map((w) => (
+              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><span className="font-medium">{w.iso_year}/T{w.iso_week}</span><p className="mt-0.5 truncate text-xs text-muted-foreground">{w.alert_cause ?? "Bez příčiny"}</p></div>
+                  {w.alert_resolved ? <Badge variant="outline" className="shrink-0">Vyřešeno</Badge> : <Badge variant="destructive" className="shrink-0">Nevyřešeno</Badge>}
+                </div>
+                {w.alert_note ? <p className="mt-2 truncate text-xs text-muted-foreground">{w.alert_note}</p> : null}
+                <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Yield</p><p className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} %</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Chyba op.</p><p className="text-sm font-semibold">{w.operator_error === null || w.operator_error === undefined ? "–" : w.operator_error ? "Ano" : "Ne"}</p></div>
+                </div>
+                <div className="mt-3 flex justify-end border-t border-border/50 pt-2"><Button size="sm" variant="outline" onClick={() => setAlertRow(w)}>{w.alert_resolved ? "Upravit" : "Vyšetřit"}</Button></div>
+              </div>
+            ))
+          )}
+        </div>
       </Card>
 
       <QualityAlertDialog

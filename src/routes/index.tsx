@@ -24,13 +24,17 @@ import {
   CalendarDays,
   Boxes,
   CircleCheck,
+  LineChart as LineChartIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { EmptyState } from "@/components/EmptyState";
 import { KpiCard } from "@/components/Kpi";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
+import { useEmployees, useShiftAggregates, useSystemHealth, useWeeklyRecords } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
+import { useCountUp } from "@/lib/use-count-up";
 import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
 
 export const Route = createFileRoute("/")({
@@ -46,9 +50,11 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const { isAdmin } = useAuth();
   const { data: employees = [] } = useEmployees();
   const { shifts: allShifts } = useShiftAggregates();
   const { data: weekly = [] } = useWeeklyRecords();
+  const { data: health } = useSystemHealth(isAdmin);
 
   const today = new Date();
   const defaultTo = today.toISOString().slice(0, 10);
@@ -83,6 +89,11 @@ function Dashboard() {
   const avgQuality = avg(qualityValues);
   const openAlerts = weeklyInRange.filter((w) => w.is_alert && !w.alert_resolved);
   const activeEmployees = employees.filter((e) => e.active);
+
+  const animatedOee = useCountUp(avgOee);
+  const animatedQuality = useCountUp(avgQuality);
+  const animatedHelp = useCountUp(avgHelp);
+  const animatedActiveCount = useCountUp(activeEmployees.length);
 
   const oeeTrend = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -185,6 +196,7 @@ function Dashboard() {
         </div>
       }
     >
+      <div className="space-y-5">
       <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-3 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-4">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -236,8 +248,37 @@ function Dashboard() {
         </div>
       </div>
 
+      {isAdmin && health && (health.stuckImports > 0 || health.pendingApproval > 0) ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {health.stuckImports > 0 ? (
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm transition-colors hover:bg-destructive/10">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold">{health.stuckImports} zaseklý{health.stuckImports === 1 ? "" : "ch"} import{health.stuckImports === 1 ? "" : "ů"}</div>
+                  <div className="text-xs text-muted-foreground">Zpracovává se déle než 10 minut - zkontrolujte.</div>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-destructive" />
+            </Link>
+          ) : null}
+          {health.pendingApproval > 0 ? (
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-warning/45 bg-warning/5 p-4 shadow-sm transition-colors hover:bg-warning/10">
+              <div className="flex items-center gap-2 text-warning">
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold">{health.pendingApproval} položek čeká na schválení</div>
+                  <div className="text-xs text-muted-foreground">Vyžadují kontrolu v Ke schválení.</div>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-warning" />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
       {openAlerts.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm">
+        <div className="rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
@@ -261,14 +302,14 @@ function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Průměrné OEE (30 dní)" value={fmt(avgOee)} unit="%" hint={`${last30.length} směn v období`} icon={<Gauge className="h-4 w-4" />} />
-        <KpiCard label="Průměrné Quality Score" value={fmt(avgQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
-        <KpiCard label="Průměrná výpomoc" value={fmt(avgHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
-        <KpiCard label="Aktivní zaměstnanci" value={activeEmployees.length} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OeeGaugeCard value={avgOee} animatedValue={animatedOee} hint={`${last30.length} směn v období`} />
+        <KpiCard label="Průměrné Quality Score" value={fmt(animatedQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
+        <KpiCard label="Průměrná výpomoc" value={fmt(animatedHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
+        <KpiCard label="Aktivní zaměstnanci" value={animatedActiveCount == null ? activeEmployees.length : Math.round(animatedActiveCount)} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
         <Card className="relative overflow-hidden p-5 shadow-[var(--shadow-card)]">
           <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
           <div className="mt-4 h-72">
@@ -340,7 +381,7 @@ function Dashboard() {
         </Card>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
+      <div className="grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
         <Card className="p-5 shadow-[var(--shadow-card)]">
           <CardHeaderRow title="OEE podle směn" icon={<Gauge className="h-4 w-4" />} action="Srovnání" />
           <div className="mt-4 space-y-3">
@@ -380,6 +421,7 @@ function Dashboard() {
             ) : null}
           </div>
         </Card>
+      </div>
       </div>
     </AppShell>
   );
@@ -469,6 +511,37 @@ function InsightRow({ icon, title, value, tone = "default" }: { icon: React.Reac
   );
 }
 
+function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; animatedValue: number | null; hint: string }) {
+  const displayValue = animatedValue ?? value;
+  const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
+  const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
+  return (
+    <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
+        <Gauge className="h-4 w-4 text-muted-foreground" />
+      </div>
+      {/* Plain CSS conic-gradient ring instead of a recharts RadialBarChart:
+          the SVG chart's auto-computed box model made the ring and the
+          centered percentage text overlap in a way that couldn't be
+          reliably tuned without visual feedback - a punched-out circle
+          (outer ring + smaller solid-card circle on top) guarantees
+          correct centering by construction. */}
+      <div className="mt-3 flex items-center justify-center">
+        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${color} ${pct * 3.6}deg, hsl(var(--muted)) 0deg)` }}>
+          <div className="grid h-[60px] w-[60px] place-items-center rounded-full bg-card">
+            <span className="text-lg font-semibold tabular-nums" style={{ color }}>
+              {displayValue == null ? "–" : fmt(displayValue)}
+              <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">%</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 text-center text-xs text-muted-foreground">{hint}</div>
+    </Card>
+  );
+}
+
 function EmptyChart() {
-  return <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/70 bg-background/15 text-sm text-muted-foreground">Zatím žádná data.</div>;
+  return <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/70 bg-background/15"><EmptyState icon={LineChartIcon} title="Zatím žádná data." description="Graf se zobrazí, jakmile budou k dispozici schválené záznamy." className="py-0" /></div>;
 }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, FileText, Pencil, Plus, Save, Upload, X } from "lucide-react";
@@ -7,6 +7,7 @@ import { useProducts } from "@/lib/data";
 import { useApprovalFields } from "@/lib/auth";
 import type { Product } from "@/lib/products";
 import { upsertImportedProductProfile } from "@/lib/productProfiles";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/form-draft";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,8 @@ function parseProductProfileText(text: string): ImportRow[] {
     const cells = line.split(separator).map((cell) => cell.trim().replace(/^"|"$/g, "")); const get = (key: keyof ImportRow) => { const i = mapped.indexOf(key); return i >= 0 ? cells[i] ?? "" : ""; };
     const name = get("name"); const haCode = get("haCode"); const tupCode = get("tupCode"); const haNorm = parseNumber(get("haNorm")); const tupNorm = parseNumber(get("tupNorm")); const haCapacity = parseNumber(get("haCapacity")); const tupCapacity = parseNumber(get("tupCapacity")); const hasHa = haCode.length > 0; const hasTup = tupCode.length > 0; let error = "";
     // A row may legitimately leave one side blank (HA-only or TUP-only product) - only a side that IS filled in must be fully valid.
-    if (!name) error = "Chybí product_profile."; else if (!hasHa && !hasTup) error = "Chybí HA i TUP Product ID (musí být vyplněné alespoň jedno)."; else if (hasHa && !/^H_/i.test(haCode)) error = "HA Product ID musí začínat H_."; else if (hasHa && (!Number.isFinite(haNorm) || haNorm <= 0)) error = "HA norma musí být kladné číslo."; else if (hasHa && (!Number.isInteger(haCapacity) || haCapacity < 1)) error = "HA kapacita musí být celé číslo alespoň 1."; else if (hasTup && (!Number.isFinite(tupNorm) || tupNorm <= 0)) error = "TUP norma musí být kladné číslo."; else if (hasTup && (!Number.isInteger(tupCapacity) || tupCapacity < 1)) error = "TUP kapacita musí být celé číslo alespoň 1.";
+    // BUG-003: no H_/T_ prefix requirement here either - see save()'s hasHa branch.
+    if (!name) error = "Chybí product_profile."; else if (!hasHa && !hasTup) error = "Chybí HA i TUP Product ID (musí být vyplněné alespoň jedno)."; else if (hasHa && (!Number.isFinite(haNorm) || haNorm <= 0)) error = "HA norma musí být kladné číslo."; else if (hasHa && (!Number.isInteger(haCapacity) || haCapacity < 1)) error = "HA kapacita musí být celé číslo alespoň 1."; else if (hasTup && (!Number.isFinite(tupNorm) || tupNorm <= 0)) error = "TUP norma musí být kladné číslo."; else if (hasTup && (!Number.isInteger(tupCapacity) || tupCapacity < 1)) error = "TUP kapacita musí být celé číslo alespoň 1.";
     return { line: index + 2, name, haCode, haNorm, haCapacity, tupCode, tupNorm, tupCapacity, error: error || undefined };
   });
 }
@@ -51,9 +53,29 @@ export function ProductProfileManagerV2() {
   const [draft, setDraft] = useState<Draft>(emptyDraft); const [editing, setEditing] = useState<ProductProfile | null>(null); const [expanded, setExpanded] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [dialogOpen, setDialogOpen] = useState(false); const [importOpen, setImportOpen] = useState(false); const [importRows, setImportRows] = useState<ImportRow[]>([]); const [importFileName, setImportFileName] = useState("");
   const productsByCode = useMemo(() => { const map = new Map<string, Product>(); for (const product of products) map.set(normalizeCode(product.code), product); return map; }, [products]);
   const grouped = useMemo(() => { const current = new Map<string, ProductProfile>(); const history = new Map<string, ProductProfile[]>(); for (const profile of profiles) { const key = keyOfProfile(profile); const rows = history.get(key) ?? []; rows.push(profile); history.set(key, rows); const existing = current.get(key); if (!existing || (profile.valid_from ?? "") > (existing.valid_from ?? "")) current.set(key, profile); } for (const rows of history.values()) rows.sort((a, b) => (b.valid_from ?? "").localeCompare(a.valid_from ?? "")); return { current: Array.from(current.values()), history }; }, [profiles]);
+  // A background tab discarded and reloaded by the browser would otherwise
+  // silently lose an in-progress new-profile form. Scoped to NEW profiles
+  // only (editing is null); editing an existing profile already loads its
+  // real current values, so restoring a stale draft over that would be
+  // more confusing than helpful.
+  const NEW_PROFILE_DRAFT_KEY = "product-profile-new";
+  useEffect(() => {
+    const restored = loadDraft<Draft>(NEW_PROFILE_DRAFT_KEY);
+    if (!restored) return;
+    if (!(restored.name || restored.haCode || restored.tupCode)) return;
+    setDraft(restored); setDialogOpen(true);
+    toast.info("Obnoven rozepsaný Product Profile, který se neuložil.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (editing || !dialogOpen) return;
+    const hasContent = Boolean(draft.name || draft.haCode || draft.tupCode || draft.haNorm || draft.tupNorm || draft.haCapacity || draft.tupCapacity);
+    if (hasContent) saveDraft(NEW_PROFILE_DRAFT_KEY, draft);
+    else clearDraft(NEW_PROFILE_DRAFT_KEY);
+  }, [draft, editing, dialogOpen]);
   const openNew = () => { setEditing(null); setDraft(emptyDraft); setDialogOpen(true); };
   const startEdit = (profile: ProductProfile) => { setEditing(profile); setDraft({ name: profile.profile_name ?? "", haCode: profile.ha_subassy ?? "", tupCode: profile.tup_subassy ?? "", haNorm: profile.h_norm_per_hour == null ? "" : String(profile.h_norm_per_hour), tupNorm: profile.t_norm_per_hour == null ? "" : String(profile.t_norm_per_hour), haCapacity: profile.h_capacity == null ? "" : String(profile.h_capacity), tupCapacity: profile.t_capacity == null ? "" : String(profile.t_capacity) }); setExpanded(`profile:${keyOfProfile(profile)}`); setDialogOpen(true); };
-  const closeDialog = () => { if (busy) return; setDialogOpen(false); setEditing(null); setDraft(emptyDraft); };
+  const closeDialog = () => { if (busy) return; setDialogOpen(false); setEditing(null); setDraft(emptyDraft); clearDraft(NEW_PROFILE_DRAFT_KEY); };
   const syncProduct = async (code: string, name: string, capacity: number, variant: "H" | "T", date: string) => { const existingProduct = productsByCode.get(normalizeCode(code)); if (existingProduct) { const { error: updateError } = await supabase.from("products").update({ name, employees_per_product: capacity, variant_type: variant }).eq("id", existingProduct.id); if (updateError) throw updateError; return; } const { error: insertError } = await supabase.from("products").insert({ code, name, employees_per_product: capacity, first_seen_date: date, variant_type: variant, ...approval() }); if (insertError) throw insertError; };
   const save = async () => {
     const name = draft.name.trim(); const haCode = draft.haCode.trim(); const tupCode = draft.tupCode.trim();
@@ -65,7 +87,10 @@ export function ProductProfileManagerV2() {
     // be fully valid.
     let haNorm: number | null = null, haCapacity: number | null = null;
     if (hasHa) {
-      if (!/^H_/i.test(haCode)) throw new Error("HA Product ID musí začínat H_.");
+      // BUG-003: ha_subassy/tup_subassy are a free-text subassembly code,
+      // not always H_/T_-prefixed in practice - only norm/capacity are
+      // actually required (matches the DB constraint
+      // product_profiles_active_complete_check, which has no prefix check).
       haNorm = Number(draft.haNorm); haCapacity = Number(draft.haCapacity);
       if (!Number.isFinite(haNorm) || haNorm <= 0) throw new Error("Zadejte platnou HA normu.");
       if (!Number.isInteger(haCapacity) || haCapacity < 1) throw new Error("HA kapacita je povinná a musí být celé číslo alespoň 1.");

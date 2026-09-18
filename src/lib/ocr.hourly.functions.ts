@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 export type ProductProfileContext = { id?: string; ha_subassy: string | null; h_capacity: number | null; h_norm_per_hour: number | null; tup_subassy: string | null; t_capacity: number | null; t_norm_per_hour: number | null };
 export type HourlyStageContext = { profiles?: ProductProfileContext[]; products?: Array<{ product_code: string; norm_per_hour: number | null; capacity: number | null }>; operator_count: number; role?: "HA" | "TUP" | null };
@@ -48,7 +49,7 @@ async function callAi(provider: AiProvider, imageDataUrl: string, context: Hourl
   const system = mode === "full"
     ? `Jsi přesný OCR nástroj výrobní tabulky. Vrať pouze JSON {"screenshot_time":"HH:MM nebo null","hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","actual_output":číslo nebo null,"norm_per_hour":číslo nebo null,"performance_pct":číslo nebo null,"availability_pct":číslo nebo null,"downtime_minutes":číslo nebo null,"downtime_reason":"důvod nebo null","downtime_before_production":true|false|null}]}. Hodnoty procent vracej jako čísla bez %. Nikdy nezaměňuj sloupce. Norma je OCR norma přímo ze screenshotu, nikoli Product Profile.`
     : `Jsi kontrolní OCR nástroj. Vrať pouze JSON {"hourly_metrics":[{"hour":číslo nebo null,"product_code":"kód nebo null","availability_pct":číslo nebo null,"downtime_minutes":číslo nebo null,"downtime_reason":"důvod nebo null","downtime_before_production":true|false|null}]}. Čti pouze Dostupnost a Odstávku/Odstávky.`;
-  const res = await fetch(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) });
+  const res = await fetchWithTimeout(provider.url, { method: "POST", headers: provider.headers, body: JSON.stringify({ model: provider.model, temperature: 0, max_tokens: 5000, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }] }) }, 45_000);
   const body = await res.text(); if (!res.ok) throw new Error(`${provider.name}: HTTP ${res.status}: ${providerError(body)}`); const json = JSON.parse(body) as any; const content = json?.choices?.[0]?.message?.content ?? ""; if (!content.trim()) throw new Error(`${provider.name}: prázdná odpověď`); return JSON.parse(content.replace(/^```(?:json)?|```$/g, "").trim()) as Record<string, unknown>;
 }
 

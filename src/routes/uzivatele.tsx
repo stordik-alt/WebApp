@@ -152,7 +152,7 @@ function UsersPage() {
               <DialogTrigger asChild>
                 <Button>Vytvořit Tester účet</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[92vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Nový Tester účet</DialogTitle>
                 </DialogHeader>
@@ -190,7 +190,7 @@ function UsersPage() {
           </div>
         </Card>
 
-        <Card className="overflow-x-auto p-0">
+        <Card className="hidden overflow-x-auto p-0 md:block">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="border-b border-border text-left text-muted-foreground">
               <tr>
@@ -240,6 +240,38 @@ function UsersPage() {
             </tbody>
           </table>
         </Card>
+        <div className="space-y-2 md:hidden">
+          {isLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Načítám…</p>
+          ) : users.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádné účty.</p>
+          ) : (
+            users.map((u) => (
+              <Card key={u.id} className="p-3">
+                <div className="min-w-0"><div className="truncate font-medium text-foreground">{`${u.first_name} ${u.last_name}`.trim() || "(bez jména)"}</div><p className="truncate text-xs text-muted-foreground">{u.email ?? "–"}</p>{!u.role ? <Badge variant="outline" className="mt-1">{roleLabel(null)}</Badge> : null}</div>
+                <div className="mt-3 grid gap-2 border-t border-border/50 pt-2.5">
+                  <Select value={u.role ?? "none"} onValueChange={(role) => setRole.mutate({ id: u.id, role })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Bez role</SelectItem>
+                      <SelectItem value="operator">Operátor</SelectItem>
+                      <SelectItem value="team_leader">Team Leader</SelectItem>
+                      <SelectItem value="admin">Správce</SelectItem>
+                      <SelectItem value="tester">Tester</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={u.employee_id ?? "none"} onValueChange={(v) => setEmployee.mutate({ id: u.id, employeeId: v === "none" ? null : v })}>
+                    <SelectTrigger><SelectValue placeholder="Nepropojeno" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nepropojeno</SelectItem>
+                      {employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
     </AppShell>
   );
