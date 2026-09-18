@@ -314,7 +314,34 @@ export function ImportApprovalQueue() {
   // assuming HA, or a TUP-only screenshot prefills the wrong field and the
   // reviewer has to notice and move it (and often doesn't, so the HA-only
   // validation below used to reject the whole form).
-  const startProfile = () => { if (!selected) return; const main = (selected.ocr_data?.products ?? []).find((p: any) => normalize(p.product_code) === normalize(selected.product_code)) ?? selected.ocr_data?.products?.[0]; const code = main?.product_code ?? selected.product_code ?? ""; const norm = main?.norm_per_hour != null ? String(main.norm_per_hour) : ""; const isTup = /^T_/i.test(code); setProfile({ profileName: selected.product_name ?? selected.product_code ?? "", haCode: isTup ? "" : code, haNorm: isTup ? "" : norm, haCapacity: "", tupCode: isTup ? code : "", tupNorm: isTup ? norm : "", tupCapacity: "", validFrom: selected.work_date ?? new Date().toISOString().slice(0, 10) }); setProfileOpen(true); };
+  // Route the OCR-recognized code into the matching HA/TUP field. A H_/T_
+  // prefix is the clearest signal when present; without one (a legitimate,
+  // non-prefixed subassy code per BUG-003), fall back in order of
+  // confidence: (1) this exact code already registered as one side of an
+  // existing profile - the strongest evidence, since it's the same code;
+  // (2) the import's own recorded employee position - HA/TUP is
+  // fundamentally a workplace-position distinction, not a naming
+  // convention, so an operator logged as TUP for this shift is good
+  // evidence the product they ran is the TUP side; (3) default to HA,
+  // unprovable either way, same as before this fix.
+  const startProfile = () => {
+    if (!selected) return;
+    const main = (selected.ocr_data?.products ?? []).find((p: any) => normalize(p.product_code) === normalize(selected.product_code)) ?? selected.ocr_data?.products?.[0];
+    const code = main?.product_code ?? selected.product_code ?? "";
+    const norm = main?.norm_per_hour != null ? String(main.norm_per_hour) : "";
+    const normalizedCode = normalize(code);
+    const existingSideMatch = (existingProfilesQuery.data ?? []).find((p: any) => normalize(p.ha_subassy) === normalizedCode || normalize(p.tup_subassy) === normalizedCode);
+    const positionHint = selectedRows.find((r) => r.position === "HA" || r.position === "TUP")?.position ?? null;
+    const isTup = /^T_/i.test(code)
+      ? true
+      : /^H_/i.test(code)
+        ? false
+        : existingSideMatch
+          ? normalize(existingSideMatch.tup_subassy) === normalizedCode
+          : positionHint === "TUP";
+    setProfile({ profileName: selected.product_name ?? selected.product_code ?? "", haCode: isTup ? "" : code, haNorm: isTup ? "" : norm, haCapacity: "", tupCode: isTup ? code : "", tupNorm: isTup ? norm : "", tupCapacity: "", validFrom: selected.work_date ?? new Date().toISOString().slice(0, 10) });
+    setProfileOpen(true);
+  };
   const openEmployee = (row: PendingRow) => { setEmployeeRow(row); setNewEmployee({ fullName: row.ocr_employee_name ?? "", firstName: "", lastName: "" }); setEmployeeOpen(true); };
   const openRowEdit = (row: PendingRow) => setRowEditing(p => ({ ...p, [row.id]: { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", helpScore: row.help_score != null ? String(row.help_score) : "" } }));
   const updateDraft = (row: PendingRow, key: keyof RowDraft, value: string) => setRowEditing(p => ({ ...p, [row.id]: { ...(p[row.id] ?? { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", helpScore: row.help_score != null ? String(row.help_score) : "" }), [key]: value } }));
