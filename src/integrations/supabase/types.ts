@@ -566,6 +566,7 @@ export type Database = {
           product_match_status: string;
           product_name: string | null;
           product_profile_status: string;
+          reimport_of_id: string | null;
           rejected_at: string | null;
           rejected_by: string | null;
           rejection_reason: string | null;
@@ -595,6 +596,7 @@ export type Database = {
           product_match_status?: string;
           product_name?: string | null;
           product_profile_status?: string;
+          reimport_of_id?: string | null;
           rejected_at?: string | null;
           rejected_by?: string | null;
           rejection_reason?: string | null;
@@ -624,6 +626,7 @@ export type Database = {
           product_match_status?: string;
           product_name?: string | null;
           product_profile_status?: string;
+          reimport_of_id?: string | null;
           rejected_at?: string | null;
           rejected_by?: string | null;
           rejection_reason?: string | null;
@@ -647,6 +650,13 @@ export type Database = {
             columns: ["product_id"];
             isOneToOne: false;
             referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "import_items_reimport_of_id_fkey";
+            columns: ["reimport_of_id"];
+            isOneToOne: false;
+            referencedRelation: "import_items";
             referencedColumns: ["id"];
           },
         ];
