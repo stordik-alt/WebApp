@@ -281,16 +281,13 @@ html:not(.dark) .text-cyan-300 { color: hsl(190 70% 25%) !important; }
 html:not(.dark) .text-sky-300 { color: hsl(195 78% 30%) !important; }
 html:not(.dark) .text-fuchsia-300 { color: hsl(290 55% 30%) !important; }
 html:not(.dark) .text-emerald-300 { color: hsl(158 49% 28%) !important; }
-html:not(.dark) .text-lime-300 { color: hsl(92 60% 30%) !important; }
 html:not(.dark) .text-amber-300 { color: hsl(32 78% 32%) !important; }
 html:not(.dark) .text-rose-300 { color: hsl(345 68% 38%) !important; }
-html:not(.dark) .text-purple-300 { color: hsl(270 52% 35%) !important; }
 
 html:not(.dark) .bg-cyan-400\/10 { background-color: hsl(190 60% 94%) !important; }
 html:not(.dark) .bg-sky-400\/10 { background-color: hsl(195 60% 94%) !important; }
 html:not(.dark) .bg-fuchsia-400\/10 { background-color: hsl(290 48% 95%) !important; }
 html:not(.dark) .bg-emerald-400\/10 { background-color: hsl(158 34% 93%) !important; }
-html:not(.dark) .bg-lime-400\/10 { background-color: hsl(92 42% 94%) !important; }
 html:not(.dark) .bg-rose-400\/10 { background-color: hsl(345 60% 95%) !important; }
 html:not(.dark) .bg-amber-400\/10 { background-color: hsl(32 70% 94%) !important; }
 
@@ -299,7 +296,6 @@ html:not(.dark) .border-fuchsia-400\/35 { border-color: hsl(290 45% 48% / 0.55) 
 html:not(.dark) .border-cyan-400\/30 { border-color: hsl(190 55% 42% / 0.55) !important; }
 html:not(.dark) .border-fuchsia-400\/30 { border-color: hsl(290 45% 48% / 0.5) !important; }
 html:not(.dark) .border-rose-400\/30 { border-color: hsl(345 68% 38% / 0.35) !important; }
-html:not(.dark) .border-rose-400\/35 { border-color: hsl(345 68% 38% / 0.45) !important; }
 html:not(.dark) .border-emerald-400\/30 { border-color: hsl(158 49% 28% / 0.35) !important; }
 
 html:not(.dark) .shadow-\[0_0_30px_hsl\(190_90\%_55\%\/0\.05\)\],
@@ -307,12 +303,6 @@ html:not(.dark) .shadow-\[0_0_30px_hsl\(320_90\%_60\%\/0\.05\)\],
 html:not(.dark) .shadow-\[0_0_30px_hsl\(155_80\%_55\%\/0\.05\)\],
 html:not(.dark) .shadow-\[0_0_30px_hsl\(200_90\%_60\%\/0\.05\)\] {
   box-shadow: var(--shadow-card) !important;
-}
-
-html:not(.dark) [aria-busy="true"],
-html:not(.dark) .loading-state {
-  color: hsl(var(--muted-foreground)) !important;
-  background: hsl(var(--muted) / 0.35) !important;
 }
 
 html:not(.dark) input:focus,
@@ -344,7 +334,6 @@ html:not(.dark) [data-app-title="Dashboard"] .bg-blue-400\/10 { background-color
 html:not(.dark) .bg-background\/80 { background-color: hsl(var(--background) / 0.92) !important; }
 
 /* Dark-mode refinement: keep the neon identity, but make it controlled rather than glowing everywhere. */
-html.dark .text-lime-300 { color: hsl(92 60% 55%) !important; text-shadow: none !important; }
 html.dark .text-emerald-300 { color: hsl(152 55% 52%) !important; text-shadow: none !important; }
 html.dark .text-cyan-200 { color: hsl(188 72% 64%) !important; }
 html.dark .text-cyan-300 { color: hsl(188 68% 58%) !important; }
@@ -353,7 +342,6 @@ html.dark .text-fuchsia-300 { color: hsl(290 55% 65%) !important; }
 html.dark .text-rose-300 { color: hsl(345 66% 66%) !important; }
 html.dark .text-amber-200 { color: hsl(38 82% 64%) !important; }
 html.dark .text-amber-300 { color: hsl(38 78% 60%) !important; }
-html.dark .text-purple-300 { color: hsl(270 50% 66%) !important; }
 
 html.dark .bg-cyan-400\/10 { background-color: hsl(188 45% 15% / 0.78) !important; }
 html.dark .bg-fuchsia-400\/10 { background-color: hsl(290 38% 16% / 0.78) !important; }
@@ -364,14 +352,12 @@ html.dark .bg-amber-400\/10 { background-color: hsl(38 44% 16% / 0.8) !important
 
 html.dark .border-cyan-400\/30,
 html.dark .border-cyan-400\/35,
-html.dark .border-cyan-400\/40,
-html.dark .border-cyan-400\/50 { border-color: hsl(188 66% 52% / 0.28) !important; }
+html.dark .border-cyan-400\/40 { border-color: hsl(188 66% 52% / 0.28) !important; }
 html.dark .border-fuchsia-400\/25,
 html.dark .border-fuchsia-400\/30,
 html.dark .border-fuchsia-400\/35,
 html.dark .border-fuchsia-400\/40 { border-color: hsl(290 58% 62% / 0.24) !important; }
 html.dark .border-rose-400\/30,
-html.dark .border-rose-400\/35,
 html.dark .border-rose-400\/40 { border-color: hsl(345 66% 62% / 0.26) !important; }
 html.dark .border-emerald-400\/30 { border-color: hsl(152 55% 54% / 0.24) !important; }
 
@@ -390,9 +376,6 @@ html.dark .bg-card\/90 { background-color: hsl(var(--card) / 0.94) !important; }
 html.dark table thead { background: hsl(var(--muted) / 0.85) !important; }
 html.dark table tbody tr { border-bottom-color: hsl(223 24% 24%) !important; }
 html.dark table tbody tr:hover { background: hsl(183 28% 14% / 0.5) !important; }
-
-html.dark [aria-busy="true"],
-html.dark .loading-state { color: hsl(218 20% 74%) !important; background: hsl(223 26% 16% / 0.65) !important; }
 
 /* Dark mode primary action: controlled mint instead of hot pink/red utility buttons. */
 html.dark .bg-rose-500 { background-color: hsl(169 72% 45%) !important; color: hsl(223 45% 9%) !important; box-shadow: 0 8px 18px hsl(169 72% 45% / 0.16) !important; }
