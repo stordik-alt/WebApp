@@ -16,18 +16,32 @@ table thead th {
   border-color: hsl(var(--border) / 0.8) !important;
 }
 
-/* Legacy slate surfaces: map them to the active theme surfaces. */
+/* Legacy slate surfaces: map them to the active theme surfaces.
+   IMPORTANT: this list must cover every bg-slate-950/NN and bg-slate-900/NN
+   opacity value actually used anywhere in components, not just a sample -
+   any value left out renders as literal near-black slate at that opacity,
+   which reads as a jarring solid gray block over a light background
+   (confirmed live: bg-slate-950/35 was missing here and was exactly the
+   gray card bug reported in denni-data.tsx's mobile shift-evaluation
+   list). Re-check this list against `grep -rhoE 'bg-slate-(950|900)/[0-9]+'
+   src/components src/routes` whenever a new one is introduced. */
+.bg-slate-950\/10 { background-color: hsl(var(--card) / 0.5) !important; }
+.bg-slate-950\/15 { background-color: hsl(var(--card) / 0.65) !important; }
 .bg-slate-950\/20 { background-color: hsl(var(--background) / 0.78) !important; }
+.bg-slate-950\/35 { background-color: hsl(var(--card) / 0.88) !important; }
 .bg-slate-950\/40 { background-color: hsl(var(--card) / 0.92) !important; }
 .bg-slate-950\/45 { background-color: hsl(var(--card) / 0.94) !important; }
 .bg-slate-950\/60 { background-color: hsl(var(--card)) !important; }
+.bg-slate-950\/95 { background-color: hsl(var(--card)) !important; }
 .bg-slate-900\/35 { background-color: hsl(var(--muted) / 0.48) !important; }
 .bg-slate-900\/45 { background-color: hsl(var(--muted) / 0.58) !important; }
+.bg-slate-900\/50 { background-color: hsl(var(--muted) / 0.63) !important; }
 .bg-slate-900\/55 { background-color: hsl(var(--muted) / 0.68) !important; }
 .bg-slate-900\/70 { background-color: hsl(var(--muted) / 0.78) !important; }
 .bg-slate-900\/80 { background-color: hsl(var(--muted) / 0.88) !important; }
 
 /* Legacy slate borders: use the active scheme's border token. */
+.border-slate-400\/40,
 .border-slate-500\/80,
 .border-slate-500\/70,
 .border-slate-500\/60,
