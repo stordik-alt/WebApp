@@ -7,6 +7,9 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  PolarAngleAxis,
+  RadialBar,
+  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -265,7 +268,7 @@ function Dashboard() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Průměrné OEE (30 dní)" value={fmt(avgOee)} unit="%" hint={`${last30.length} směn v období`} icon={<Gauge className="h-4 w-4" />} />
+        <OeeGaugeCard value={avgOee} hint={`${last30.length} směn v období`} />
         <KpiCard label="Průměrné Quality Score" value={fmt(avgQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
         <KpiCard label="Průměrná výpomoc" value={fmt(avgHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
         <KpiCard label="Aktivní zaměstnanci" value={activeEmployees.length} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
@@ -470,6 +473,35 @@ function InsightRow({ icon, title, value, tone = "default" }: { icon: React.Reac
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
       <span className="shrink-0 text-xs font-semibold text-muted-foreground">{value}</span>
     </div>
+  );
+}
+
+function OeeGaugeCard({ value, hint }: { value: number | null; hint: string }) {
+  const pct = value == null ? 0 : Math.max(0, Math.min(100, value));
+  const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
+  const data = [{ value: pct, fill: color }];
+  return (
+    <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
+        <Gauge className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="relative mt-1 h-[84px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart innerRadius="70%" outerRadius="100%" barSize={8} data={data} startAngle={90} endAngle={-270}>
+            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} isAnimationActive />
+          </RadialBarChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <span className="text-2xl font-semibold tabular-nums" style={{ color }}>
+            {value == null ? "–" : fmt(value)}
+            <span className="ml-0.5 text-sm font-normal text-muted-foreground">%</span>
+          </span>
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+    </Card>
   );
 }
 
