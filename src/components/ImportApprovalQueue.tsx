@@ -1,9 +1,10 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, UserPlus, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/form-draft";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -167,7 +168,25 @@ export function ImportApprovalQueue() {
   const items = query.data?.items ?? []; const rows = query.data?.rows ?? []; const selectedRows = useMemo(() => selected ? rows.filter(r => r.import_item_id === selected.id) : [], [rows, selected]); const blockerList = selected?.pending_reasons ?? [];
   const recognizedProductCodes = useMemo(() => { const data = selected?.ocr_data ?? {}; const listed = Array.isArray(data.products) ? data.products : []; const codes = new Set<string>(); for (const p of listed) { const code = String(p?.product_code ?? "").trim(); if (code) codes.add(code); } if (selected?.product_code) codes.add(selected.product_code); return Array.from(codes); }, [selected]);
   const refreshSelected = async (itemId: string) => { const refreshed = await query.refetch(); const next = refreshed.data?.items.find((x) => x.id === itemId) ?? null; setSelected(next); };
-  const openPreview = async (item: PendingImport) => { setSelected(item); setEditing({}); setRowEditing({}); if (!item.screenshot_path) return setPreviewUrl(null); const { data, error } = await supabase.storage.from("screenshots").createSignedUrl(item.screenshot_path, 600); if (error) { toast.error(`Screenshot nelze zobrazit: ${error.message}`); return; } setPreviewUrl(data.signedUrl); };
+  // A background tab discarded and reloaded by the browser would otherwise
+  // silently lose in-progress OCR corrections - restore/save per import
+  // item (not globally), since each item has its own independent edits.
+  const approvalDraftKey = (itemId: string) => `import-approval:${itemId}`;
+  useEffect(() => {
+    if (!selected) return;
+    if (Object.keys(editing).length || Object.keys(rowEditing).length) saveDraft(approvalDraftKey(selected.id), { editing, rowEditing });
+    else clearDraft(approvalDraftKey(selected.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, editing, rowEditing]);
+  const openPreview = async (item: PendingImport) => {
+    setSelected(item);
+    const draft = loadDraft<{ editing: Record<string, string>; rowEditing: Record<string, RowDraft> }>(approvalDraftKey(item.id));
+    setEditing(draft?.editing ?? {});
+    setRowEditing(draft?.rowEditing ?? {});
+    if (draft && (Object.keys(draft.editing).length || Object.keys(draft.rowEditing).length)) toast.info("Obnoveny neuložené opravy z předchozí relace.");
+    if (!item.screenshot_path) return setPreviewUrl(null);
+    const { data, error } = await supabase.storage.from("screenshots").createSignedUrl(item.screenshot_path, 600); if (error) { toast.error(`Screenshot nelze zobrazit: ${error.message}`); return; } setPreviewUrl(data.signedUrl);
+  };
   const saveHeader = useMutation({ mutationFn: async () => {
     if (!selected) throw new Error("Není vybrán import.");
     const patch = { work_date: editing["work_date"] ?? selected.work_date, shift: editing["shift"] ?? selected.shift, line: editing["line"] ?? selected.line, product_code: editing["product_code"] ?? selected.product_code, product_name: editing["product_name"] ?? selected.product_name, norm_per_hour: editing["norm_per_hour"] === undefined ? selected.norm_per_hour : numOrNull(editing["norm_per_hour"]) } as Record<string, unknown>;
@@ -261,8 +280,8 @@ export function ImportApprovalQueue() {
     }
     return selected.id;
   }, onSuccess: async (itemId) => { await refreshSelected(itemId); toast.success("Hodinová data byla znovu načtena z OCR."); }, onError: (e: Error) => toast.error(e.message) });
-  const approve = useMutation({ mutationFn: async (item: PendingImport) => { const { data, error } = await db.rpc("approve_import_item", { p_import_item_id: item.id, p_actor_id: session?.user?.id ?? null }); if (error) throw error; if (data?.success === false) throw new Error(data?.message ?? "Schválení importu selhalo."); if (item.batch_id) await db.rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: item.batch_id }).catch(() => {}); return data; }, onSuccess: (data: any) => { setSelected(null); setPreviewUrl(null); qc.invalidateQueries(); toast.success(`Import byl schválen. Vytvořeno záznamů: ${data?.created_count ?? data?.created_daily_records ?? 0}.`); }, onError: (e: Error) => toast.error(`Import nebyl schválen: ${e.message}`) });
-  const reject = useMutation({ mutationFn: async ({ item, reason }: { item: PendingImport; reason: string }) => { if (!reason.trim()) throw new Error("U zamítnutí je nutný důvod."); const now = new Date().toISOString(); const { error } = await db.from("import_items").update({ status: "REJECTED", rejected_by: session?.user?.id ?? null, rejected_at: now, rejection_reason: reason.trim(), completed_at: now }).eq("id", item.id).eq("status", "PENDING_APPROVAL"); if (error) throw error; const { error: eventError } = await db.from("import_item_events").insert({ import_item_id: item.id, actor_id: session?.user?.id ?? null, event_type: "ADMIN_REJECTED", from_status: "PENDING_APPROVAL", to_status: "REJECTED", payload: { reason: reason.trim() } }); if (eventError) throw eventError; }, onSuccess: () => { setRejectOpen(false); setRejectReason(""); setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Import byl zamítnut."); }, onError: (e: Error) => toast.error(e.message) });
+  const approve = useMutation({ mutationFn: async (item: PendingImport) => { const { data, error } = await db.rpc("approve_import_item", { p_import_item_id: item.id, p_actor_id: session?.user?.id ?? null }); if (error) throw error; if (data?.success === false) throw new Error(data?.message ?? "Schválení importu selhalo."); if (item.batch_id) await db.rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: item.batch_id }).catch(() => {}); return data; }, onSuccess: (data: any, item) => { clearDraft(approvalDraftKey(item.id)); setSelected(null); setPreviewUrl(null); qc.invalidateQueries(); toast.success(`Import byl schválen. Vytvořeno záznamů: ${data?.created_count ?? data?.created_daily_records ?? 0}.`); }, onError: (e: Error) => toast.error(`Import nebyl schválen: ${e.message}`) });
+  const reject = useMutation({ mutationFn: async ({ item, reason }: { item: PendingImport; reason: string }) => { if (!reason.trim()) throw new Error("U zamítnutí je nutný důvod."); const now = new Date().toISOString(); const { error } = await db.from("import_items").update({ status: "REJECTED", rejected_by: session?.user?.id ?? null, rejected_at: now, rejection_reason: reason.trim(), completed_at: now }).eq("id", item.id).eq("status", "PENDING_APPROVAL"); if (error) throw error; const { error: eventError } = await db.from("import_item_events").insert({ import_item_id: item.id, actor_id: session?.user?.id ?? null, event_type: "ADMIN_REJECTED", from_status: "PENDING_APPROVAL", to_status: "REJECTED", payload: { reason: reason.trim() } }); if (eventError) throw eventError; }, onSuccess: (_d, { item }) => { clearDraft(approvalDraftKey(item.id)); setRejectOpen(false); setRejectReason(""); setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] }); toast.success("Import byl zamítnut."); }, onError: (e: Error) => toast.error(e.message) });
   const startProfile = () => { if (!selected) return; const main = (selected.ocr_data?.products ?? []).find((p: any) => normalize(p.product_code) === normalize(selected.product_code)) ?? selected.ocr_data?.products?.[0]; setProfile({ profileName: selected.product_name ?? selected.product_code ?? "", haCode: main?.product_code ?? selected.product_code ?? "", haNorm: main?.norm_per_hour != null ? String(main.norm_per_hour) : "", haCapacity: "", tupCode: "", tupNorm: "", tupCapacity: "", validFrom: selected.work_date ?? new Date().toISOString().slice(0, 10) }); setProfileOpen(true); };
   const openEmployee = (row: PendingRow) => { setEmployeeRow(row); setNewEmployee({ fullName: row.ocr_employee_name ?? "", firstName: "", lastName: "" }); setEmployeeOpen(true); };
   const openRowEdit = (row: PendingRow) => setRowEditing(p => ({ ...p, [row.id]: { employeeName: row.ocr_employee_name ?? "", position: row.position ?? "", helpScore: row.help_score != null ? String(row.help_score) : "" } }));

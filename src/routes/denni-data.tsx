@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEmployees, useShiftAggregates } from "@/lib/data";
 import { isDuplicateLine, type ShiftAggregate } from "@/lib/shifts";
 import { type DailyRecord, SHIFTS, fmt } from "@/lib/metrics";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/form-draft";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +99,31 @@ function DailyPage() {
   const [detailImageUrl, setDetailImageUrl] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+
+  // A background tab discarded and reloaded by the browser (common on
+  // mobile, also happens on desktop under memory pressure) would otherwise
+  // silently lose an in-progress manual entry - restore it on mount, and
+  // keep it saved while the dialog is open. Scoped to NEW entries only
+  // (editingRecord is null); editing an existing record already loads its
+  // real current values from the database, and restoring a stale draft
+  // over that would be more confusing than helpful.
+  const MANUAL_DRAFT_KEY = "denni-data-manual-new";
+  type ManualDraft = { workDate: string; shift: string; line: string; product: string; employeeId: string; position: "HA" | "TUP"; oee: string; help: string; note: string; coworkers: string[] };
+  useEffect(() => {
+    const draft = loadDraft<ManualDraft>(MANUAL_DRAFT_KEY);
+    if (!draft) return;
+    if (!(draft.line || draft.product || draft.employeeId || draft.note || draft.oee)) return;
+    setWorkDate(draft.workDate); setShift(draft.shift); setLine(draft.line); setProduct(draft.product); setEmployeeId(draft.employeeId); setPosition(draft.position); setOee(draft.oee); setHelp(draft.help); setNote(draft.note); setCoworkers(draft.coworkers);
+    setManualOpen(true);
+    toast.info("Obnoven rozepsaný záznam, který se neuložil (např. po obnovení stránky na pozadí).");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (editingRecord || !manualOpen) return;
+    const hasContent = Boolean(line || product || employeeId || note || (oee && oee !== ""));
+    if (hasContent) saveDraft<ManualDraft>(MANUAL_DRAFT_KEY, { workDate, shift, line, product, employeeId, position, oee, help, note, coworkers });
+    else clearDraft(MANUAL_DRAFT_KEY);
+  }, [workDate, shift, line, product, employeeId, position, oee, help, note, coworkers, editingRecord, manualOpen]);
   const [dailyFilterText, setDailyFilterText] = useState("");
   const [dailyFilterShift, setDailyFilterShift] = useState("all");
   const [dailyFilterDate, setDailyFilterDate] = useState("");
@@ -208,6 +234,7 @@ function DailyPage() {
     onSuccess: (_d, mode) => {
       qc.invalidateQueries({ queryKey: ["daily"] }); qc.invalidateQueries({ queryKey: ["coworkers"] }); qc.invalidateQueries({ queryKey: ["shift_evaluations"] });
       setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setEmployeeId(""); if (mode === "single") setProduct(""); setManualOpen(false);
+      clearDraft(MANUAL_DRAFT_KEY);
       toast.success(mode === "another" ? "Uloženo – zadejte další" : "Záznam uložen");
     },
     onError: (e: Error) => toast.error(e.message.includes("duplicate") ? "Tento pracovník už má záznam na této lince v dané směně." : e.message),
@@ -268,7 +295,7 @@ function DailyPage() {
     setEditingRecord(record); setWorkDate(record.work_date); setShift(record.shift); setLine(record.line); setProduct(record.product ?? ""); setEmployeeId(record.employee_id); setPosition(record.position); setOee(record.oee?.toString() ?? ""); setHelp((currentEval?.help_score ?? 0).toString()); setNote(record.note ?? ""); setManualOpen(true);
   };
   const openNewManual = () => { setEditingRecord(null); setWorkDate(today()); setShift(SHIFTS[0]); setLine(""); setProduct(""); setEmployeeId(""); setPosition("HA"); setOee(""); setHelp("0"); setNote(""); setCoworkers([]); setManualOpen(true); };
-  const cancelEdit = () => { setEditingRecord(null); setManualOpen(false); };
+  const cancelEdit = () => { setEditingRecord(null); setManualOpen(false); clearDraft(MANUAL_DRAFT_KEY); };
 
   const exportCsv = () => {
     const header = ["Datum", "Směna", "Zaměstnanec", "Linky", "OEE", "Výkon", "Dostupnost", "Výpomoc"].join(";");
