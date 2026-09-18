@@ -565,6 +565,10 @@ export type Database = {
           product_id: string | null;
           product_match_status: string;
           product_name: string | null;
+          conflict_daily_record_ids: string[] | null;
+          conflict_resolution: string | null;
+          conflict_resolved_at: string | null;
+          conflict_resolved_by: string | null;
           product_profile_status: string;
           reimport_of_id: string | null;
           rejected_at: string | null;
@@ -595,6 +599,10 @@ export type Database = {
           product_id?: string | null;
           product_match_status?: string;
           product_name?: string | null;
+          conflict_daily_record_ids?: string[] | null;
+          conflict_resolution?: string | null;
+          conflict_resolved_at?: string | null;
+          conflict_resolved_by?: string | null;
           product_profile_status?: string;
           reimport_of_id?: string | null;
           rejected_at?: string | null;
@@ -625,6 +633,10 @@ export type Database = {
           product_id?: string | null;
           product_match_status?: string;
           product_name?: string | null;
+          conflict_daily_record_ids?: string[] | null;
+          conflict_resolution?: string | null;
+          conflict_resolved_at?: string | null;
+          conflict_resolved_by?: string | null;
           product_profile_status?: string;
           reimport_of_id?: string | null;
           rejected_at?: string | null;
