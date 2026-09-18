@@ -7,9 +7,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -486,28 +483,29 @@ function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; an
   const displayValue = animatedValue ?? value;
   const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
   const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
-  const data = [{ value: pct, fill: color }];
   return (
     <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
         <Gauge className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div className="relative mt-1 h-[84px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart innerRadius="70%" outerRadius="100%" barSize={8} data={data} startAngle={90} endAngle={-270}>
-            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} isAnimationActive={false} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <span className="text-2xl font-semibold tabular-nums" style={{ color }}>
-            {displayValue == null ? "–" : fmt(displayValue)}
-            <span className="ml-0.5 text-sm font-normal text-muted-foreground">%</span>
-          </span>
+      {/* Plain CSS conic-gradient ring instead of a recharts RadialBarChart:
+          the SVG chart's auto-computed box model made the ring and the
+          centered percentage text overlap in a way that couldn't be
+          reliably tuned without visual feedback - a punched-out circle
+          (outer ring + smaller solid-card circle on top) guarantees
+          correct centering by construction. */}
+      <div className="mt-3 flex items-center justify-center">
+        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${color} ${pct * 3.6}deg, hsl(var(--muted)) 0deg)` }}>
+          <div className="grid h-[60px] w-[60px] place-items-center rounded-full bg-card">
+            <span className="text-lg font-semibold tabular-nums" style={{ color }}>
+              {displayValue == null ? "–" : fmt(displayValue)}
+              <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">%</span>
+            </span>
+          </div>
         </div>
       </div>
-      <div className="mt-1 text-xs text-muted-foreground">{hint}</div>
+      <div className="mt-3 text-center text-xs text-muted-foreground">{hint}</div>
     </Card>
   );
 }
