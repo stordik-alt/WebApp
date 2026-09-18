@@ -32,7 +32,8 @@ import { KpiCard } from "@/components/Kpi";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
+import { useEmployees, useShiftAggregates, useSystemHealth, useWeeklyRecords } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
 import { useCountUp } from "@/lib/use-count-up";
 import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
 
@@ -49,9 +50,11 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const { isAdmin } = useAuth();
   const { data: employees = [] } = useEmployees();
   const { shifts: allShifts } = useShiftAggregates();
   const { data: weekly = [] } = useWeeklyRecords();
+  const { data: health } = useSystemHealth(isAdmin);
 
   const today = new Date();
   const defaultTo = today.toISOString().slice(0, 10);
@@ -244,6 +247,35 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      {isAdmin && health && (health.stuckImports > 0 || health.pendingApproval > 0) ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {health.stuckImports > 0 ? (
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm transition-colors hover:bg-destructive/10">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold">{health.stuckImports} zaseklý{health.stuckImports === 1 ? "" : "ch"} import{health.stuckImports === 1 ? "" : "ů"}</div>
+                  <div className="text-xs text-muted-foreground">Zpracovává se déle než 10 minut - zkontrolujte.</div>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-destructive" />
+            </Link>
+          ) : null}
+          {health.pendingApproval > 0 ? (
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-warning/45 bg-warning/5 p-4 shadow-sm transition-colors hover:bg-warning/10">
+              <div className="flex items-center gap-2 text-warning">
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold">{health.pendingApproval} položek čeká na schválení</div>
+                  <div className="text-xs text-muted-foreground">Vyžadují kontrolu v Ke schválení.</div>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-warning" />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       {openAlerts.length > 0 ? (
         <div className="rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm">
