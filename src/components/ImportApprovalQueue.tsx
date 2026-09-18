@@ -17,6 +17,7 @@ import { upsertImportedProductProfile } from "@/lib/productProfiles";
 import { extractHourlyWithContext } from "@/lib/ocr.hourly.functions";
 import { preprocessOcrImage } from "@/lib/ocr-image";
 import { withTimeout } from "@/lib/with-timeout";
+import { resolvedProfileStatus } from "@/lib/product-profile-status";
 
 const db = supabase as any;
 type PendingImport = { id: string; batch_id: string; created_at: string; screenshot_path: string | null; work_date: string | null; shift: string | null; line: string | null; product_code: string | null; product_name: string | null; norm_per_hour: number | null; ocr_confidence: number | null; ocr_data: any; admin_corrections: any; pending_reasons: string[] | null; product_id: string | null; product_match_status: string | null; product_profile_status: string | null };
@@ -206,7 +207,7 @@ export function ImportApprovalQueue() {
     const { data: resolvedRows, error: resolveError } = await db.rpc("resolve_product_profile", { p_code: code, p_work_date: String(patch["work_date"]) });
     if (resolveError) throw resolveError;
     const resolved = resolvedRows?.[0];
-    const profileStatus: "VALID" | "MISSING" | "INCOMPLETE" = !resolved?.profile_id ? "MISSING" : resolved.profile_complete ? "VALID" : "INCOMPLETE";
+    const profileStatus = resolvedProfileStatus(resolved);
     const { data: currentRows, error: rowsError } = await db.from("import_item_rows").select("employee_id,position,oee,performance,available_time").eq("import_item_id", selected.id);
     if (rowsError) throw rowsError;
     const reasons: string[] = [];
@@ -291,6 +292,13 @@ export function ImportApprovalQueue() {
     const resolved = resolvedRows?.[0];
     if (!resolved?.profile_id) throw new Error("Pro tento Product ID nebyl nalezen žádný Product Profile.");
     if (!resolved.profile_complete) throw new Error("Product Profile existuje, ale není kompletní (chybí norma nebo kapacita).");
+    // Master Prompt "V4014" bug: resolve_product_profile() can find a
+    // complete Product Profile whose code has NO matching row in `products`
+    // at all (match_source PROFILE_NO_PRODUCT) - re-running OCR extraction
+    // can't fix that (there's nothing wrong with the screenshot), so fail
+    // clearly here instead of writing product_profile_status: "VALID" below
+    // for an item that still can't actually be computed or approved.
+    if (!resolved.product_id) throw new Error("Product Profile existuje a je kompletní, ale pro tento Product ID neexistuje odpovídající produkt v databázi (products). Opravte Product ID nebo založte chybějící produkt.");
     const profileForContext = { id: resolved.profile_id, ha_subassy: resolved.profile_ha_subassy, tup_subassy: resolved.profile_tup_subassy, h_norm_per_hour: resolved.h_norm_per_hour, h_capacity: resolved.h_capacity, t_norm_per_hour: resolved.t_norm_per_hour, t_capacity: resolved.t_capacity };
     const { data: currentRows, error: rowsError } = await db.from("import_item_rows").select("id,employee_id,position").eq("import_item_id", selected.id).order("row_index");
     if (rowsError) throw rowsError;
