@@ -13,29 +13,30 @@
   --radius-lg: 1rem;
 
   /* Light mode: layered tinted surfaces, high contrast, deep mint accent.
-     Card/popover stay lighter than the app background (preserving the
-     visual hierarchy) but keep the SAME hue family instead of dropping to
-     0% saturation pure white - a stark colorless card next to a tinted
-     background is what reads as "harsh"/disharmonious, not the lightness
-     gap itself. */
-  --background: 220 42% 97%;
+     Card stays lighter than the app background (preserving the visual
+     hierarchy) but both keep a VISIBLY perceptible tint and gap from each
+     other and from pure white - values were originally chosen too subtly
+     (card at RGB 252/252/253, a 3-unit difference from #fff that's
+     genuinely imperceptible on any screen) and still read as plain white
+     in practice, which is exactly the complaint this was meant to fix. */
+  --background: 220 46% 93%;
   --foreground: 222 35% 15%;
-  --card: 220 22% 99%;
+  --card: 220 36% 97%;
   --card-foreground: 222 35% 15%;
-  --popover: 220 22% 99%;
+  --popover: 220 36% 97%;
   --popover-foreground: 222 35% 15%;
   --primary: 2 55% 52%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 218 32% 91%;
+  --secondary: 220 42% 90%;
   --secondary-foreground: 222 34% 22%;
-  --muted: 219 28% 93%;
+  --muted: 220 44% 89%;
   --muted-foreground: 218 18% 38%;
   --accent: 158 30% 94%;
   --accent-foreground: 158 48% 24%;
   --destructive: 0 64% 48%;
   --destructive-foreground: 0 0% 100%;
-  --border: 218 25% 84%;
-  --input: 218 27% 80%;
+  --border: 218 30% 78%;
+  --input: 218 30% 74%;
   --ring: 158 49% 28%;
   --success: 158 49% 28%;
   --warning: 32 80% 47%;
@@ -235,13 +236,13 @@ html:not(.dark) {
   --primary-foreground: 0 0% 100%;
   --ring: 158 49% 28%;
   --success: 158 49% 28%;
-  --sidebar: 220 28% 98%;
+  --sidebar: 220 34% 94%;
   --sidebar-foreground: 222 35% 18%;
   --sidebar-primary: 158 49% 28%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 158 34% 94%;
   --sidebar-accent-foreground: 158 48% 24%;
-  --sidebar-border: 220 18% 86%;
+  --sidebar-border: 220 24% 80%;
   --sidebar-ring: 158 49% 28%;
 }
 
