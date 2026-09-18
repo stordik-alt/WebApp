@@ -578,6 +578,7 @@ export type Database = {
           shift: string | null;
           source_hash: string;
           status: string;
+          trace_id: string | null;
           updated_at: string;
           work_date: string | null;
         };
@@ -612,6 +613,7 @@ export type Database = {
           shift?: string | null;
           source_hash: string;
           status?: string;
+          trace_id?: string | null;
           updated_at?: string;
           work_date?: string | null;
         };
@@ -646,6 +648,7 @@ export type Database = {
           shift?: string | null;
           source_hash?: string;
           status?: string;
+          trace_id?: string | null;
           updated_at?: string;
           work_date?: string | null;
         };
