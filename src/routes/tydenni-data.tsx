@@ -281,75 +281,101 @@ function WeeklyPage() {
             <Button size="sm" variant="ghost" onClick={() => { setWeeklyFilterText(""); setWeeklyFilterStatus("all"); }}>Zrušit filtry</Button>
             <span className="ml-auto text-xs text-muted-foreground">{filteredWeekly.length} záznamů</span>
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Zaměstnanec</TableHead>
-                <TableHead>Týden</TableHead>
-                <TableHead className="text-right">Yield</TableHead>
-                <TableHead className="text-right">Auto skóre</TableHead>
-                <TableHead className="text-right">Finální skóre</TableHead>
-                <TableHead>Stav</TableHead>
-                <TableHead>Příčina</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {weekly.length === 0 ? (
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">
-                    Zatím žádné týdenní záznamy.
-                  </TableCell>
+                  <TableHead>Zaměstnanec</TableHead>
+                  <TableHead>Týden</TableHead>
+                  <TableHead className="text-right">Yield</TableHead>
+                  <TableHead className="text-right">Auto skóre</TableHead>
+                  <TableHead className="text-right">Finální skóre</TableHead>
+                  <TableHead>Stav</TableHead>
+                  <TableHead>Příčina</TableHead>
+                  <TableHead />
                 </TableRow>
-              ) : (
-                filteredWeekly.map((w) => (
-                  <TableRow key={w.id} className={w.is_alert && !w.alert_resolved ? "bg-destructive/5" : ""}>
-                    <TableCell className="font-medium">{empName(w.employee_id)}</TableCell>
-                    <TableCell>
-                      {w.iso_year}/T{w.iso_week}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmt(w.auto_quality_score)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmt(w.final_quality_score)}
-                    </TableCell>
-                    <TableCell>
-                      {w.is_alert ? (
-                        w.alert_resolved ? (
-                          <Badge variant="outline">Alert vyřešen</Badge>
-                        ) : (
-                          <Badge variant="destructive">QUALITY ALERT</Badge>
-                        )
-                      ) : (
-                        <Badge className="bg-success text-success-foreground">OK</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                      {w.alert_cause ?? "–"}
-                      {w.operator_error === true ? " (chyba operátora)" : ""}
-                    </TableCell>
-                    <TableCell className="space-x-1 text-right">
-                      {w.is_alert ? (
-                        <Button size="sm" variant="outline" onClick={() => openAlert(w)}>
-                          Vyšetřit
-                        </Button>
-                      ) : null}
-                      <Button size="sm" variant="ghost" onClick={() => remove.mutate(w.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {weekly.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-muted-foreground">
+                      Zatím žádné týdenní záznamy.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredWeekly.map((w) => (
+                    <TableRow key={w.id} className={w.is_alert && !w.alert_resolved ? "bg-destructive/5" : ""}>
+                      <TableCell className="font-medium">{empName(w.employee_id)}</TableCell>
+                      <TableCell>
+                        {w.iso_year}/T{w.iso_week}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(w.yield_pct)} %</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt(w.auto_quality_score)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {fmt(w.final_quality_score)}
+                      </TableCell>
+                      <TableCell>
+                        {w.is_alert ? (
+                          w.alert_resolved ? (
+                            <Badge variant="outline">Alert vyřešen</Badge>
+                          ) : (
+                            <Badge variant="destructive">QUALITY ALERT</Badge>
+                          )
+                        ) : (
+                          <Badge className="bg-success text-success-foreground">OK</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
+                        {w.alert_cause ?? "–"}
+                        {w.operator_error === true ? " (chyba operátora)" : ""}
+                      </TableCell>
+                      <TableCell className="space-x-1 text-right">
+                        {w.is_alert ? (
+                          <Button size="sm" variant="outline" onClick={() => openAlert(w)}>
+                            Vyšetřit
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="ghost" onClick={() => remove.mutate(w.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="space-y-2 p-3 md:hidden">
+            {weekly.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Zatím žádné týdenní záznamy.</p>
+            ) : (
+              filteredWeekly.map((w) => (
+                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-slate-950/35"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week}</p></div>
+                    {w.is_alert ? (w.alert_resolved ? <Badge variant="outline" className="shrink-0">Alert vyřešen</Badge> : <Badge variant="destructive" className="shrink-0">QUALITY ALERT</Badge>) : <Badge className="shrink-0 bg-success text-success-foreground">OK</Badge>}
+                  </div>
+                  {w.alert_cause ? <p className="mt-2 truncate text-xs text-muted-foreground">{w.alert_cause}{w.operator_error === true ? " (chyba operátora)" : ""}</p> : null}
+                  <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Yield</p><p className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} %</p></div>
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Auto skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.auto_quality_score)}</p></div>
+                    <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Finální skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
+                  </div>
+                  <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
+                    {w.is_alert ? <Button size="sm" variant="outline" onClick={() => openAlert(w)}>Vyšetřit</Button> : null}
+                    <Button size="sm" variant="ghost" onClick={() => remove.mutate(w.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
       <Dialog open={!!alertRow} onOpenChange={(o) => !o && setAlertRow(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" /> Vyšetření Quality Alertu

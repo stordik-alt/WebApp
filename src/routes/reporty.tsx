@@ -232,86 +232,125 @@ function ReportsPage() {
         <div className="border-b border-border px-4 py-3 text-sm font-semibold">
           Souhrn podle zaměstnance
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Zaměstnanec</TableHead>
-              <TableHead className="text-right">Směny</TableHead>
-              <TableHead className="text-right">HA / TUP</TableHead>
-              <TableHead className="text-right">Linek</TableHead>
-              <TableHead className="text-right">Ø OEE (směnové)</TableHead>
-              <TableHead className="text-right">Ø Quality</TableHead>
-              <TableHead className="text-right">Ø Výpomoc</TableHead>
-              <TableHead className="text-right">Alerty</TableHead>
-              <TableHead>Spolupracoval s</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {perEmployee.length === 0 ? (
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={9} className="text-muted-foreground">
-                  Pro zvolené filtry nejsou žádná data.
-                </TableCell>
+                <TableHead>Zaměstnanec</TableHead>
+                <TableHead className="text-right">Směny</TableHead>
+                <TableHead className="text-right">HA / TUP</TableHead>
+                <TableHead className="text-right">Linek</TableHead>
+                <TableHead className="text-right">Ø OEE (směnové)</TableHead>
+                <TableHead className="text-right">Ø Quality</TableHead>
+                <TableHead className="text-right">Ø Výpomoc</TableHead>
+                <TableHead className="text-right">Alerty</TableHead>
+                <TableHead>Spolupracoval s</TableHead>
               </TableRow>
-            ) : (
-              perEmployee.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.shifts}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {r.ha} / {r.tup}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{r.lineRecords}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.oee)} %</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.quality)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.help, 0)}</TableCell>
-                  <TableCell className="text-right">
-                    {r.alerts > 0 ? (
-                      <Badge variant="destructive">{r.alerts}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">0</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                    {r.team.join(", ") || "–"}
+            </TableHeader>
+            <TableBody>
+              {perEmployee.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-muted-foreground">
+                    Pro zvolené filtry nejsou žádná data.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                perEmployee.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.shifts}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {r.ha} / {r.tup}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{r.lineRecords}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.oee)} %</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.quality)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.help, 0)}</TableCell>
+                    <TableCell className="text-right">
+                      {r.alerts > 0 ? (
+                        <Badge variant="destructive">{r.alerts}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                      {r.team.join(", ") || "–"}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {perEmployee.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Pro zvolené filtry nejsou žádná data.</p>
+          ) : (
+            perEmployee.map((r) => (
+              <div key={r.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{r.name}</span>
+                  {r.alerts > 0 ? <Badge variant="destructive" className="shrink-0">{r.alerts} alertů</Badge> : null}
+                </div>
+                <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{r.shifts}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">HA / TUP</p><p className="text-sm font-semibold tabular-nums">{r.ha} / {r.tup}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Linek</p><p className="text-sm font-semibold tabular-nums">{r.lineRecords}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(r.oee)} %</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(r.quality)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Výpomoc</p><p className="text-sm font-semibold tabular-nums">{fmt(r.help, 0)}</p></div>
+                </div>
+                {r.team.length ? <p className="mt-2.5 truncate text-xs text-muted-foreground">Spolupracoval s: {r.team.join(", ")}</p> : null}
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
         <div className="border-b border-border px-4 py-3 text-sm font-semibold">
           Detail linkových záznamů ({filteredDaily.length}) – auditní zdroj
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Datum</TableHead>
-              <TableHead>Směna</TableHead>
-              <TableHead>Linka</TableHead>
-              <TableHead>Výrobek</TableHead>
-              <TableHead>Zaměstnanec</TableHead>
-              <TableHead>Pozice</TableHead>
-              <TableHead className="text-right">OEE</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredDaily.slice(0, 200).map((d) => (
-              <TableRow key={d.id}>
-                <TableCell>{d.work_date}</TableCell>
-                <TableCell>{d.shift}</TableCell>
-                <TableCell>{d.line}</TableCell>
-                <TableCell>{d.product ?? "–"}</TableCell>
-                <TableCell>{empName(d.employee_id)}</TableCell>
-                <TableCell>{d.position}</TableCell>
-                <TableCell className="text-right tabular-nums">{fmt(d.oee)} %</TableCell>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Datum</TableHead>
+                <TableHead>Směna</TableHead>
+                <TableHead>Linka</TableHead>
+                <TableHead>Výrobek</TableHead>
+                <TableHead>Zaměstnanec</TableHead>
+                <TableHead>Pozice</TableHead>
+                <TableHead className="text-right">OEE</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredDaily.slice(0, 200).map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell>{d.work_date}</TableCell>
+                  <TableCell>{d.shift}</TableCell>
+                  <TableCell>{d.line}</TableCell>
+                  <TableCell>{d.product ?? "–"}</TableCell>
+                  <TableCell>{empName(d.employee_id)}</TableCell>
+                  <TableCell>{d.position}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(d.oee)} %</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {filteredDaily.slice(0, 200).map((d) => (
+            <div key={d.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{d.work_date} · {d.shift}</span>
+                <span className="text-sm font-semibold tabular-nums">{fmt(d.oee)} % OEE</span>
+              </div>
+              <p className="mt-1 truncate text-xs text-muted-foreground">↳ {d.line} · {d.product ?? "Výrobek neuveden"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{empName(d.employee_id)} · {d.position}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </AppShell>
   );

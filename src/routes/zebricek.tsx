@@ -138,55 +138,83 @@ function RankingPage() {
       </Card>
 
       <div className="rounded-lg border border-border bg-card shadow-[var(--shadow-card)]">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">Pořadí</TableHead>
-              <TableHead>Zaměstnanec</TableHead>
-              <TableHead className="text-right">Směny</TableHead>
-              <TableHead className="text-right">Ø OEE</TableHead>
-              <TableHead className="text-right">Ø Quality</TableHead>
-              <TableHead className="text-right">Ø Výpomoc</TableHead>
-              <TableHead className="text-right">Celkový výsledek</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground">
-                  Pro zvolené filtry nejsou žádná data.
-                </TableCell>
+                <TableHead className="w-16">Pořadí</TableHead>
+                <TableHead>Zaměstnanec</TableHead>
+                <TableHead className="text-right">Směny</TableHead>
+                <TableHead className="text-right">Ø OEE</TableHead>
+                <TableHead className="text-right">Ø Quality</TableHead>
+                <TableHead className="text-right">Ø Výpomoc</TableHead>
+                <TableHead className="text-right">Celkový výsledek</TableHead>
               </TableRow>
-            ) : (
-              rows.map(({ employee, perf }, i) => (
-                <TableRow key={employee.id}>
-                  <TableCell className="text-lg">{medal(i)}</TableCell>
-                  <TableCell className="font-medium">
-                    <Link
-                      to="/zamestnanec/$id"
-                      params={{ id: employee.id }}
-                      className="hover:underline"
-                    >
-                      {employee.full_name}
-                    </Link>
-                    {!perf.enoughData ? (
-                      <Badge variant="outline" className="ml-2 border-warning text-warning">
-                        málo dat
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{perf.shifts}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(perf.avgOee)} %</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(perf.avgQuality)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(perf.avgHelp, 0)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">
-                    {fmt(perf.ipi)}
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-muted-foreground">
+                    Pro zvolené filtry nejsou žádná data.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                rows.map(({ employee, perf }, i) => (
+                  <TableRow key={employee.id}>
+                    <TableCell className="text-lg">{medal(i)}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link
+                        to="/zamestnanec/$id"
+                        params={{ id: employee.id }}
+                        className="hover:underline"
+                      >
+                        {employee.full_name}
+                      </Link>
+                      {!perf.enoughData ? (
+                        <Badge variant="outline" className="ml-2 border-warning text-warning">
+                          málo dat
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{perf.shifts}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(perf.avgOee)} %</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(perf.avgQuality)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(perf.avgHelp, 0)}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
+                      {fmt(perf.ipi)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-2 p-3 md:hidden">
+          {rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Pro zvolené filtry nejsou žádná data.</p>
+          ) : (
+            rows.map(({ employee, perf }, i) => (
+              <div key={employee.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="text-lg leading-none">{medal(i)}</span>
+                    <div className="min-w-0">
+                      <Link to="/zamestnanec/$id" params={{ id: employee.id }} className="truncate font-medium hover:underline">{employee.full_name}</Link>
+                      {!perf.enoughData ? <Badge variant="outline" className="ml-2 border-warning text-warning">málo dat</Badge> : null}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-lg font-semibold tabular-nums">{fmt(perf.ipi)}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border/50 pt-2.5 text-center">
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>
+                  <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Výpomoc</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgHelp, 0)}</p></div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </AppShell>
   );
