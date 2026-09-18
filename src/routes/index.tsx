@@ -36,6 +36,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEmployees, useShiftAggregates, useWeeklyRecords } from "@/lib/data";
+import { useCountUp } from "@/lib/use-count-up";
 import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
 
 export const Route = createFileRoute("/")({
@@ -88,6 +89,11 @@ function Dashboard() {
   const avgQuality = avg(qualityValues);
   const openAlerts = weeklyInRange.filter((w) => w.is_alert && !w.alert_resolved);
   const activeEmployees = employees.filter((e) => e.active);
+
+  const animatedOee = useCountUp(avgOee);
+  const animatedQuality = useCountUp(avgQuality);
+  const animatedHelp = useCountUp(avgHelp);
+  const animatedActiveCount = useCountUp(activeEmployees.length);
 
   const oeeTrend = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -268,10 +274,10 @@ function Dashboard() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <OeeGaugeCard value={avgOee} hint={`${last30.length} směn v období`} />
-        <KpiCard label="Průměrné Quality Score" value={fmt(avgQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
-        <KpiCard label="Průměrná výpomoc" value={fmt(avgHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
-        <KpiCard label="Aktivní zaměstnanci" value={activeEmployees.length} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
+        <OeeGaugeCard value={avgOee} animatedValue={animatedOee} hint={`${last30.length} směn v období`} />
+        <KpiCard label="Průměrné Quality Score" value={fmt(animatedQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
+        <KpiCard label="Průměrná výpomoc" value={fmt(animatedHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
+        <KpiCard label="Aktivní zaměstnanci" value={animatedActiveCount == null ? activeEmployees.length : Math.round(animatedActiveCount)} hint={`${employees.length} celkem v evidenci`} icon={<Users className="h-4 w-4" />} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
@@ -476,8 +482,9 @@ function InsightRow({ icon, title, value, tone = "default" }: { icon: React.Reac
   );
 }
 
-function OeeGaugeCard({ value, hint }: { value: number | null; hint: string }) {
-  const pct = value == null ? 0 : Math.max(0, Math.min(100, value));
+function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; animatedValue: number | null; hint: string }) {
+  const displayValue = animatedValue ?? value;
+  const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
   const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
   const data = [{ value: pct, fill: color }];
   return (
@@ -490,12 +497,12 @@ function OeeGaugeCard({ value, hint }: { value: number | null; hint: string }) {
         <ResponsiveContainer width="100%" height="100%">
           <RadialBarChart innerRadius="70%" outerRadius="100%" barSize={8} data={data} startAngle={90} endAngle={-270}>
             <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} isAnimationActive />
+            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} isAnimationActive={false} />
           </RadialBarChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <span className="text-2xl font-semibold tabular-nums" style={{ color }}>
-            {value == null ? "–" : fmt(value)}
+            {displayValue == null ? "–" : fmt(displayValue)}
             <span className="ml-0.5 text-sm font-normal text-muted-foreground">%</span>
           </span>
         </div>

@@ -41,7 +41,7 @@ export function AppearanceSettings() {
             {SCHEMES.map((item) => {
               const active = scheme === item.id;
               return (
-                <button key={item.id} type="button" onClick={() => setScheme(item.id)} className={`group relative overflow-hidden rounded-2xl border p-3 text-left transition-all ${active ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-background/60 hover:border-primary/50 hover:bg-accent/60"}`} aria-pressed={active}>
+                <button key={item.id} type="button" onClick={() => setScheme(item.id)} className={`group relative overflow-hidden rounded-2xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 ${active ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-background/60 hover:border-primary/50 hover:bg-accent/60"}`} aria-pressed={active}>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div><div className="font-semibold">{item.name}</div><div className="text-xs text-muted-foreground">{item.subtitle}</div></div>
                     {active ? <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground"><Check className="h-4 w-4" /></span> : null}
