@@ -67,7 +67,7 @@ async function runHourlyExtractionForItem(params: {
   const { data: blob, error: downloadError } = await supabase.storage.from("screenshots").download(screenshotPath);
   if (downloadError) throw downloadError;
   const image = await preprocessOcrImage(await dataUrlFromBlob(blob), { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
-  const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } }), 90_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste to znovu.");
+  const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } }), 180_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste to znovu.");
   const hourly = hourlyResult.hourly_metrics ?? [];
   const performance = average(hourly.map((m: any) => m.performance_pct));
   const availability = average(hourly.map((m: any) => m.availability_pct));
