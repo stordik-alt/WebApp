@@ -3,10 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, Save } from "lucide-react";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { groupWorkstations, listWorkstations, updateWorkstation, type IwWorkstation } from "@/lib/floorMap";
 
 export const Route = createFileRoute("/interaktivni/pracoviste-mapa")({
@@ -56,50 +53,42 @@ function FloorMapAdminPage() {
     <AppShell title="Mapa haly" subtitle="Best-effort rekonstrukce reálného rozložení – oprav skupinu, název nebo poznámku podle skutečnosti.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
         {isLoading ? (
-          <Card className="p-5 text-sm text-muted-foreground">Načítám mapu haly…</Card>
+          <Panel className="p-5 text-sm text-white/60">Načítám mapu haly…</Panel>
         ) : isError ? (
-          <Card className="p-5 text-sm text-rose-300">Nepodařilo se načíst mapu haly.</Card>
+          <Panel className="p-5 text-sm text-[hsl(350_78%_65%)]">Nepodařilo se načíst mapu haly.</Panel>
         ) : (
           [...groups.entries()].map(([groupName, items]) => (
-            <Card key={groupName} className="overflow-hidden p-0">
-              <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <LayoutGrid className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-lg font-semibold">{groupName}</h2>
-                  <p className="text-xs text-muted-foreground">{items.length} pracovišť</p>
-                </div>
-              </div>
-              <div className="divide-y divide-border">
+            <Panel key={groupName}>
+              <PanelHeader icon={<LayoutGrid className="h-4 w-4" />} title={groupName} subtitle={`${items.length} pracovišť`} />
+              <div className="divide-y divide-white/10">
                 {items.map((workstation) => (
                   <div key={workstation.id} className="px-4 py-4 sm:px-5">
                     {editingId === workstation.id ? (
                       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_2fr_auto]">
-                        <Input value={draft.group_name} onChange={(e) => setDraft((d) => ({ ...d, group_name: e.target.value }))} placeholder="Skupina" aria-label="Skupina" />
-                        <Input value={draft.display_name} onChange={(e) => setDraft((d) => ({ ...d, display_name: e.target.value }))} placeholder="Zobrazovaný název" aria-label="Zobrazovaný název" />
-                        <Input value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} placeholder="Poznámka (volitelné)" aria-label="Poznámka" />
+                        <input value={draft.group_name} onChange={(e) => setDraft((d) => ({ ...d, group_name: e.target.value }))} placeholder="Skupina" aria-label="Skupina" />
+                        <input value={draft.display_name} onChange={(e) => setDraft((d) => ({ ...d, display_name: e.target.value }))} placeholder="Zobrazovaný název" aria-label="Zobrazovaný název" />
+                        <input value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} placeholder="Poznámka (volitelné)" aria-label="Poznámka" />
                         <div className="flex gap-2">
-                          <Button size="sm" disabled={saving} onClick={() => void saveEdit(workstation)}>
-                            <Save className="mr-1 h-4 w-4" /> Uložit
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                          <button type="button" className="iw-btn iw-btn-active" disabled={saving} onClick={() => void saveEdit(workstation)}>
+                            <Save className="h-4 w-4" /> Uložit
+                          </button>
+                          <button type="button" className="iw-btn" onClick={() => setEditingId(null)}>
                             Zrušit
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     ) : (
                       <button type="button" className="flex w-full flex-wrap items-center gap-3 text-left" onClick={() => beginEdit(workstation)}>
-                        <span className="font-mono text-xs font-semibold">{workstation.code}</span>
-                        <Badge variant={workstation.is_secondary ? "outline" : "secondary"}>{workstation.area}</Badge>
-                        <span className="min-w-0 flex-1 truncate font-medium">{workstation.display_name}</span>
-                        {workstation.note ? <span className="text-xs text-amber-300">⚠ {workstation.note}</span> : null}
+                        <span className="iw-mono text-xs font-semibold text-white/70">{workstation.code}</span>
+                        <span className="iw-chip">{workstation.area}</span>
+                        <span className="iw-mono min-w-0 flex-1 truncate text-sm text-white/85">{workstation.display_name}</span>
+                        {workstation.note ? <span className="text-xs text-[hsl(38_92%_65%)]">⚠ {workstation.note}</span> : null}
                       </button>
                     )}
                   </div>
                 ))}
               </div>
-            </Card>
+            </Panel>
           ))
         )}
       </div>

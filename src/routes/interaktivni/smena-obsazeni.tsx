@@ -3,9 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, UserPlus, Users2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useAuth } from "@/lib/auth";
 import { useEmployees } from "@/lib/data";
 import { listWorkstations } from "@/lib/floorMap";
@@ -160,7 +158,7 @@ function ShiftAssignmentPage() {
   if (!canManage) {
     return (
       <AppShell title="Obsazení směny" subtitle="Návrh rozdělení operátorů.">
-        <Card className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Card>
+        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -168,50 +166,41 @@ function ShiftAssignmentPage() {
   return (
     <AppShell title="Obsazení směny" subtitle="Kvalifikace určuje KDO, priorita KAM při nedostatku, rotace KTERÝ konkrétní člověk.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Card className="p-4 sm:p-5">
+        <Panel className="p-4 sm:p-5">
           <div className="flex flex-wrap items-end gap-3">
-            <input type="date" className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-            <select className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
+            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
               {SHIFTS.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
             </select>
-            <Button className="ml-auto" onClick={() => void recompute()}>
-              <RefreshCw className="mr-1 h-4 w-4" /> Přepočítat
-            </Button>
+            <button type="button" className="iw-btn ml-auto" onClick={() => void recompute()}>
+              <RefreshCw className="h-4 w-4" /> Přepočítat
+            </button>
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-              <Users2 className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">Navržené obsazení</h2>
-              <p className="text-xs text-muted-foreground">{assignments.length} přiřazení · ruční úpravy "Přepočítat" nezahodí</p>
-            </div>
-          </div>
-          <div className="divide-y divide-border">
+        <Panel>
+          <PanelHeader icon={<Users2 className="h-4 w-4" />} title="Navržené obsazení" subtitle={`${assignments.length} přiřazení · ruční úpravy "Přepočítat" nezahodí`} />
+          <div className="divide-y divide-white/10">
             {[...grouped.entries()].map(([workstationId, group]) => {
               const workstation = workstationId ? workstationsById.get(workstationId) : null;
               return (
                 <div key={workstationId ?? "none"} className="px-4 py-3 sm:px-5">
-                  <div className="mb-1 flex items-center gap-2">
-                    <Badge variant={workstation?.is_secondary ? "outline" : "secondary"}>{workstation?.area ?? "?"}</Badge>
-                    <span className="font-medium">{workstation?.display_name ?? "Bez pracoviště"}</span>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="iw-chip">{workstation?.area ?? "?"}</span>
+                    <span className="iw-mono text-sm text-white/85">{workstation?.display_name ?? "Bez pracoviště"}</span>
                   </div>
                   <div className="grid gap-1.5">
                     {group.map((a) => (
                       <div key={a.id} className="flex flex-wrap items-center gap-2">
-                        <Badge variant={a.assignment_type === "temp" ? "destructive" : "default"}>
+                        <span className={`iw-chip ${a.assignment_type === "temp" ? "iw-chip-temp" : ""}`}>
                           {employeesById.get(a.employee_id)?.full_name ?? a.employee_id}
                           {a.is_manual_override ? " ✎" : ""}
-                        </Badge>
+                        </span>
                         <select
-                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                           value={a.workstation_id ?? ""}
                           onChange={(e) => void reassign(a.employee_id, e.target.value)}
                           aria-label={`Přesunout ${employeesById.get(a.employee_id)?.full_name ?? a.employee_id}`}
@@ -231,31 +220,31 @@ function ShiftAssignmentPage() {
                 </div>
               );
             })}
-            {assignments.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Zatím žádný návrh - klikni na "Přepočítat".</div> : null}
+            {assignments.length === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Zatím žádný návrh - klikni na "Přepočítat".</div> : null}
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="p-4 sm:p-5">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Přidat dočasného operátora</p>
+        <Panel className="p-4 sm:p-5">
+          <p className="iw-label mb-2">Přidat dočasného operátora</p>
           <div className="flex flex-wrap gap-2">
             {(employeesQuery.data ?? [])
               .filter((e) => e.is_temporary && e.active)
               .map((e) => (
-                <Button
+                <button
                   key={e.id}
-                  size="sm"
-                  variant="outline"
+                  type="button"
+                  className="iw-btn"
                   onClick={() =>
                     void addTempOperator({ shiftId: shiftQuery.data!.id, employeeId: e.id, addedBy: leaderUserId }).then(() =>
                       queryClient.invalidateQueries({ queryKey: ["iw_shift_temp_operators", shiftQuery.data?.id] }),
                     )
                   }
                 >
-                  <UserPlus className="mr-1 h-4 w-4" /> {e.full_name}
-                </Button>
+                  <UserPlus className="h-4 w-4" /> {e.full_name}
+                </button>
               ))}
           </div>
-        </Card>
+        </Panel>
       </div>
     </AppShell>
   );

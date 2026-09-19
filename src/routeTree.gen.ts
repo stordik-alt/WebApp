@@ -32,6 +32,7 @@ import { Route as ZamestnanciRouteImport } from './routes/zamestnanci'
 import { Route as ZebricekRouteImport } from './routes/zebricek'
 import { Route as InteraktivniMapaRouteImport } from './routes/interaktivni/mapa'
 import { Route as InteraktivniPracovisteMapaRouteImport } from './routes/interaktivni/pracoviste-mapa'
+import { Route as InteraktivniSmenaHistorieRouteImport } from './routes/interaktivni/smena-historie'
 import { Route as InteraktivniSmenaObsazeniRouteImport } from './routes/interaktivni/smena-obsazeni'
 import { Route as InteraktivniSmenaVyrobaRouteImport } from './routes/interaktivni/smena-vyroba'
 import { Route as InteraktivniTymyRouteImport } from './routes/interaktivni/tymy'
@@ -153,6 +154,12 @@ const InteraktivniPracovisteMapaRoute =
     path: '/pracoviste-mapa',
     getParentRoute: () => InteraktivniRouteRoute,
   } as any)
+const InteraktivniSmenaHistorieRoute =
+  InteraktivniSmenaHistorieRouteImport.update({
+    id: '/smena-historie',
+    path: '/smena-historie',
+    getParentRoute: () => InteraktivniRouteRoute,
+  } as any)
 const InteraktivniSmenaObsazeniRoute =
   InteraktivniSmenaObsazeniRouteImport.update({
     id: '/smena-obsazeni',
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/zebricek': typeof ZebricekRoute
   '/interaktivni/mapa': typeof InteraktivniMapaRoute
   '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/smena-historie': typeof InteraktivniSmenaHistorieRoute
   '/interaktivni/smena-obsazeni': typeof InteraktivniSmenaObsazeniRoute
   '/interaktivni/smena-vyroba': typeof InteraktivniSmenaVyrobaRoute
   '/interaktivni/tymy': typeof InteraktivniTymyRoute
@@ -228,6 +236,7 @@ export interface FileRoutesByTo {
   '/zebricek': typeof ZebricekRoute
   '/interaktivni/mapa': typeof InteraktivniMapaRoute
   '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/smena-historie': typeof InteraktivniSmenaHistorieRoute
   '/interaktivni/smena-obsazeni': typeof InteraktivniSmenaObsazeniRoute
   '/interaktivni/smena-vyroba': typeof InteraktivniSmenaVyrobaRoute
   '/interaktivni/tymy': typeof InteraktivniTymyRoute
@@ -258,6 +267,7 @@ export interface FileRoutesById {
   '/zebricek': typeof ZebricekRoute
   '/interaktivni/mapa': typeof InteraktivniMapaRoute
   '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/smena-historie': typeof InteraktivniSmenaHistorieRoute
   '/interaktivni/smena-obsazeni': typeof InteraktivniSmenaObsazeniRoute
   '/interaktivni/smena-vyroba': typeof InteraktivniSmenaVyrobaRoute
   '/interaktivni/tymy': typeof InteraktivniTymyRoute
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/zebricek'
     | '/interaktivni/mapa'
     | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/smena-historie'
     | '/interaktivni/smena-obsazeni'
     | '/interaktivni/smena-vyroba'
     | '/interaktivni/tymy'
@@ -318,6 +329,7 @@ export interface FileRouteTypes {
     | '/zebricek'
     | '/interaktivni/mapa'
     | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/smena-historie'
     | '/interaktivni/smena-obsazeni'
     | '/interaktivni/smena-vyroba'
     | '/interaktivni/tymy'
@@ -347,6 +359,7 @@ export interface FileRouteTypes {
     | '/zebricek'
     | '/interaktivni/mapa'
     | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/smena-historie'
     | '/interaktivni/smena-obsazeni'
     | '/interaktivni/smena-vyroba'
     | '/interaktivni/tymy'
@@ -541,6 +554,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InteraktivniPracovisteMapaRouteImport
       parentRoute: typeof InteraktivniRouteRoute
     }
+    '/interaktivni/smena-historie': {
+      id: '/interaktivni/smena-historie'
+      path: '/smena-historie'
+      fullPath: '/interaktivni/smena-historie'
+      preLoaderRoute: typeof InteraktivniSmenaHistorieRouteImport
+      parentRoute: typeof InteraktivniRouteRoute
+    }
     '/interaktivni/smena-obsazeni': {
       id: '/interaktivni/smena-obsazeni'
       path: '/smena-obsazeni'
@@ -575,6 +595,7 @@ declare module '@tanstack/react-router' {
 interface InteraktivniRouteRouteChildren {
   InteraktivniMapaRoute: typeof InteraktivniMapaRoute
   InteraktivniPracovisteMapaRoute: typeof InteraktivniPracovisteMapaRoute
+  InteraktivniSmenaHistorieRoute: typeof InteraktivniSmenaHistorieRoute
   InteraktivniSmenaObsazeniRoute: typeof InteraktivniSmenaObsazeniRoute
   InteraktivniSmenaVyrobaRoute: typeof InteraktivniSmenaVyrobaRoute
   InteraktivniTymyRoute: typeof InteraktivniTymyRoute
@@ -583,6 +604,7 @@ interface InteraktivniRouteRouteChildren {
 const InteraktivniRouteRouteChildren: InteraktivniRouteRouteChildren = {
   InteraktivniMapaRoute: InteraktivniMapaRoute,
   InteraktivniPracovisteMapaRoute: InteraktivniPracovisteMapaRoute,
+  InteraktivniSmenaHistorieRoute: InteraktivniSmenaHistorieRoute,
   InteraktivniSmenaObsazeniRoute: InteraktivniSmenaObsazeniRoute,
   InteraktivniSmenaVyrobaRoute: InteraktivniSmenaVyrobaRoute,
   InteraktivniTymyRoute: InteraktivniTymyRoute,

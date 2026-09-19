@@ -3,10 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, UserMinus, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useAuth } from "@/lib/auth";
 import { useEmployees } from "@/lib/data";
 import { listWorkstations } from "@/lib/floorMap";
@@ -98,7 +95,7 @@ function TeamsPage() {
   if (!canManage) {
     return (
       <AppShell title="Týmy" subtitle="Týdenní základní tým Team Leadera.">
-        <Card className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Card>
+        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -106,96 +103,79 @@ function TeamsPage() {
   return (
     <AppShell title="Týmy" subtitle="Základní tým se mění administrativně; výjimky platí jen pro vybranou směnu.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-              <Users className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">Základní týdenní tým</h2>
-              <p className="text-xs text-muted-foreground">{members.length} členů</p>
-            </div>
-          </div>
-          <div className="divide-y divide-border">
+        <Panel>
+          <PanelHeader icon={<Users className="h-4 w-4" />} title="Základní týdenní tým" subtitle={`${members.length} členů`} />
+          <div className="divide-y divide-white/10">
             {members.map((member) => {
               const employee = employeesById.get(member.employee_id);
               return (
                 <div key={member.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                  <span className="truncate font-medium">{employee?.full_name ?? member.employee_id}</span>
-                  <Button size="sm" variant="ghost" onClick={() => void removeTeamMember(member.team_id, member.employee_id).then(invalidateAll)}>
-                    <UserMinus className="mr-1 h-4 w-4" /> Odebrat
-                  </Button>
+                  <span className="iw-mono truncate text-sm text-white/85">{employee?.full_name ?? member.employee_id}</span>
+                  <button type="button" className="iw-btn iw-btn-danger" onClick={() => void removeTeamMember(member.team_id, member.employee_id).then(invalidateAll)}>
+                    <UserMinus className="h-4 w-4" /> Odebrat
+                  </button>
                 </div>
               );
             })}
-            {members.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Tým zatím nemá žádné členy.</div> : null}
+            {members.length === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Tým zatím nemá žádné členy.</div> : null}
           </div>
           {nonMembers.length > 0 ? (
-            <div className="border-t border-border px-4 py-3 sm:px-5">
-              <Label className="text-xs">Přidat do základního týmu</Label>
-              <div className="mt-2 flex flex-wrap gap-2">
+            <div className="border-t border-white/10 px-4 py-3 sm:px-5">
+              <p className="iw-label mb-2">Přidat do základního týmu</p>
+              <div className="flex flex-wrap gap-2">
                 {nonMembers.map((employee) => (
-                  <Button
-                    key={employee.id}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void addTeamMember(teamQuery.data!.id, employee.id).then(invalidateAll)}
-                  >
-                    <UserPlus className="mr-1 h-4 w-4" /> {employee.full_name}
-                  </Button>
+                  <button key={employee.id} type="button" className="iw-btn" onClick={() => void addTeamMember(teamQuery.data!.id, employee.id).then(invalidateAll)}>
+                    <UserPlus className="h-4 w-4" /> {employee.full_name}
+                  </button>
                 ))}
               </div>
             </div>
           ) : null}
-        </Card>
+        </Panel>
 
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-border px-4 py-4 sm:px-5">
-            <h2 className="text-lg font-semibold">Výjimky pro konkrétní směnu</h2>
-            <p className="text-xs text-muted-foreground">Základní tým se výjimkou nemění – platí jen pro tento work_date + směnu.</p>
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <div>
-                <Label className="text-xs">Datum</Label>
-                <input type="date" className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">Směna</Label>
-                <select className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
-                  {SHIFTS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        <Panel>
+          <div className="iw-panel-header flex-col items-start gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Výjimky pro konkrétní směnu</h2>
+              <p className="iw-label mt-0.5">Základní tým se výjimkou nemění – platí jen pro tento work_date + směnu</p>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+              <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
+                {SHIFTS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="px-4 py-4 sm:px-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Efektivní obsazení pro tuto směnu ({effectiveRosterIds.size})</p>
+            <p className="iw-label mb-2">Efektivní obsazení pro tuto směnu ({effectiveRosterIds.size})</p>
             <div className="flex flex-wrap gap-2">
               {[...effectiveRosterIds].map((employeeId) => {
                 const employee = employeesById.get(employeeId);
                 const isException = exceptions.some((e) => e.employee_id === employeeId && e.exception_type === "add");
                 return (
-                  <Badge key={employeeId} variant={isException ? "secondary" : "default"}>
+                  <span key={employeeId} className={`iw-chip ${isException ? "iw-chip-temp" : ""}`}>
                     {employee?.full_name ?? employeeId}
-                  </Badge>
+                  </span>
                 );
               })}
             </div>
           </div>
-          <div className="border-t border-border px-4 py-4 sm:px-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Přidat výjimku</p>
+          <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+            <p className="iw-label mb-2">Přidat výjimku</p>
             <div className="flex flex-wrap gap-2">
               {(employeesQuery.data ?? [])
                 .filter((e) => e.active)
                 .map((employee) => {
                   const inRoster = effectiveRosterIds.has(employee.id);
                   return (
-                    <Button
+                    <button
                       key={employee.id}
-                      size="sm"
-                      variant="outline"
+                      type="button"
+                      className="iw-btn"
                       onClick={() =>
                         void addShiftException({
                           teamId: teamQuery.data!.id,
@@ -207,72 +187,68 @@ function TeamsPage() {
                         }).then(invalidateAll)
                       }
                     >
-                      {inRoster ? <UserMinus className="mr-1 h-4 w-4" /> : <UserPlus className="mr-1 h-4 w-4" />}
+                      {inRoster ? <UserMinus className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                       {employee.full_name}
-                    </Button>
+                    </button>
                   );
                 })}
             </div>
           </div>
           {exceptions.length > 0 ? (
-            <div className="border-t border-border px-4 py-4 sm:px-5">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aktivní výjimky</p>
+            <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+              <p className="iw-label mb-2">Aktivní výjimky</p>
               <div className="space-y-2">
                 {exceptions.map((exception) => (
-                  <div key={exception.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span>
+                  <div key={exception.id} className="flex items-center justify-between gap-3 text-sm text-white/75">
+                    <span className="iw-mono">
                       {exception.exception_type === "add" ? "+ přidán" : "− odebrán"} {employeesById.get(exception.employee_id)?.full_name ?? exception.employee_id}
                     </span>
-                    <Button size="sm" variant="ghost" onClick={() => void removeShiftException(exception.id).then(invalidateAll)}>
+                    <button type="button" className="iw-btn" onClick={() => void removeShiftException(exception.id).then(invalidateAll)}>
                       Zrušit výjimku
-                    </Button>
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           ) : null}
-        </Card>
+        </Panel>
 
         {secondaryWorkstations.length > 0 ? (
-          <Card className="overflow-hidden p-0">
-            <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                <Ban className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-lg font-semibold">Omezení pracovišť</h2>
-                <p className="text-xs text-muted-foreground">Zaměstnanec s omezením nesmí být na dané sekundární pracoviště (TESTY/PREP) přiřazen - důvod se neeviduje.</p>
-              </div>
-            </div>
-            <div className="divide-y divide-border">
+          <Panel>
+            <PanelHeader
+              icon={<Ban className="h-4 w-4" />}
+              title="Omezení pracovišť"
+              subtitle="Zaměstnanec s omezením nesmí být na dané sekundární pracoviště přiřazen"
+            />
+            <div className="divide-y divide-white/10">
               {[...effectiveRosterIds].map((employeeId) => {
                 const employee = employeesById.get(employeeId);
                 const excluded = exclusionMap.get(employeeId) ?? new Set<string>();
                 return (
                   <div key={employeeId} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-                    <span className="min-w-[10rem] truncate text-sm font-medium">{employee?.full_name ?? employeeId}</span>
+                    <span className="iw-mono min-w-[10rem] truncate text-sm text-white/85">{employee?.full_name ?? employeeId}</span>
                     <div className="flex flex-wrap gap-2">
                       {secondaryWorkstations.map((workstation) => {
                         const restricted = excluded.has(workstation.id);
                         return (
-                          <Button
+                          <button
                             key={workstation.id}
-                            size="sm"
-                            variant={restricted ? "destructive" : "outline"}
+                            type="button"
+                            className={`iw-btn ${restricted ? "iw-btn-danger" : ""}`}
                             onClick={() => void toggleRestriction(employeeId, workstation.id, restricted)}
                           >
                             {restricted ? "Zakázáno: " : "Povoleno: "}
                             {workstation.display_name}
-                          </Button>
+                          </button>
                         );
                       })}
                     </div>
                   </div>
                 );
               })}
-              {effectiveRosterIds.size === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Nejprve přidej členy do základního týmu.</div> : null}
+              {effectiveRosterIds.size === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Nejprve přidej členy do základního týmu.</div> : null}
             </div>
-          </Card>
+          </Panel>
         ) : null}
       </div>
     </AppShell>

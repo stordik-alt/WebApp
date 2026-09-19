@@ -4,9 +4,8 @@ import { PlayCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { FloorMap, type FloorMapWorkstationView } from "@/components/interaktivni/FloorMap";
+import { Panel } from "@/components/interaktivni/Panel";
 import { useAuth } from "@/lib/auth";
 import { listWorkstations } from "@/lib/floorMap";
 import { computeExpectedCompletion } from "@/lib/shift-eta";
@@ -135,7 +134,7 @@ function FloorMapPage() {
   if (!canManage) {
     return (
       <AppShell title="Mapa haly" subtitle="Aktuální stav výrobní haly.">
-        <Card className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Card>
+        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -145,22 +144,22 @@ function FloorMapPage() {
   return (
     <AppShell title="Mapa haly" subtitle="Nedostatek operátorů nikdy neblokuje zahájení výroby.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Card className="p-4 sm:p-5">
+        <Panel className="p-4 sm:p-5">
           <div className="flex flex-wrap items-end gap-3">
-            <input type="date" className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-            <select className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
+            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
               {SHIFTS.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
-            <Button className="ml-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
-              <PlayCircle className="mr-1 h-4 w-4" /> ZAHÁJIT VÝROBU
-            </Button>
+            <span className="iw-label">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
+            <button type="button" className="iw-cta ml-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
+              <PlayCircle className="h-4 w-4" /> ZAHÁJIT VÝROBU
+            </button>
           </div>
-        </Card>
+        </Panel>
 
         <FloorMap groups={groups} />
       </div>

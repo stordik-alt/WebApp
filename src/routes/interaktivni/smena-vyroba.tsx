@@ -3,11 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Factory } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useAuth } from "@/lib/auth";
 import { listWorkstations, type IwWorkstation } from "@/lib/floorMap";
 import { computeExpectedCompletion } from "@/lib/shift-eta";
@@ -124,7 +120,7 @@ function ShiftProductionPage() {
   if (!canManage) {
     return (
       <AppShell title="Výroba směny" subtitle="Aktuální výroby, kapacita a předpokládané dokončení.">
-        <Card className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Card>
+        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -132,39 +128,25 @@ function ShiftProductionPage() {
   return (
     <AppShell title="Výroba směny" subtitle="Kapacita výroby je součet kapacit produktu přes všechny aktivní výroby této směny.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Card className="p-4 sm:p-5">
+        <Panel className="p-4 sm:p-5">
           <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label className="text-xs">Datum</Label>
-              <input type="date" className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Směna</Label>
-              <select className="block h-9 rounded-md border border-input bg-background px-2 text-sm" value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
-                {SHIFTS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="ml-auto text-sm">
-              <span className="text-muted-foreground">Kapacita výroby:</span> <span className="font-semibold">{totalCapacity} operátorů</span>
+            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
+              {SHIFTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <div className="iw-mono ml-auto text-sm text-white/80">
+              <span className="text-white/45">Kapacita výroby:</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
             </div>
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-              <Factory className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">Hlavní pracoviště</h2>
-              <p className="text-xs text-muted-foreground">Zadej vyráběný produkt a zbývající kusy; kapacita/dokončení se počítají živě z product_profiles.</p>
-            </div>
-          </div>
-          <div className="divide-y divide-border">
+        <Panel>
+          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Hlavní pracoviště" subtitle="Kapacita/dokončení se počítají živě z product_profiles" />
+          <div className="divide-y divide-white/10">
             {mainWorkstations.map((workstation) => {
               const production = productionByWorkstation.get(workstation.id);
               const draft = drafts[workstation.id] ?? {
@@ -191,23 +173,23 @@ function ShiftProductionPage() {
               return (
                 <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_90px_auto_1fr] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{workstation.area}</Badge>
-                    <span className="truncate text-sm font-medium">{workstation.display_name}</span>
+                    <span className="iw-chip">{workstation.area}</span>
+                    <span className="iw-mono truncate text-sm text-white/85">{workstation.display_name}</span>
                   </div>
-                  <Input
+                  <input
                     value={draft.code}
                     onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, code: e.target.value } }))}
                     placeholder="Kód produktu"
                     aria-label="Kód produktu"
                   />
-                  <Input
+                  <input
                     value={draft.pieces}
                     onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
                     placeholder="Ks"
                     inputMode="numeric"
                     aria-label="Zbývající kusy"
                   />
-                  <Input
+                  <input
                     value={draft.priority}
                     onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, priority: e.target.value } }))}
                     placeholder="Priorita"
@@ -215,19 +197,19 @@ function ShiftProductionPage() {
                     aria-label="Priorita (1 = nejvyšší, jen při nedostatku)"
                     title="Priorita 1 = nejvyšší; vyplňuje se jen při nedostatku operátorů"
                   />
-                  <Button size="sm" onClick={() => void setProduction(workstation)}>
+                  <button type="button" className="iw-btn" onClick={() => void setProduction(workstation)}>
                     {production ? "Aktualizovat" : "Nastavit"}
-                  </Button>
-                  <div className="text-xs text-muted-foreground">
+                  </button>
+                  <div className="iw-mono text-[11px] text-white/45">
                     {capacity ? <span>Kapacita produktu: {capacity}</span> : null}
-                    {eta?.status === "WILL_FINISH" ? <span className="ml-2 text-emerald-400">Dokončení: {new Date(eta.expectedCompletionAt).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}</span> : null}
-                    {eta?.status === "WONT_FINISH" ? <span className="ml-2 text-amber-400">Výrobek se během této směny nevyrobí.</span> : null}
+                    {eta?.status === "WILL_FINISH" ? <span className="ml-2 text-[hsl(152_65%_58%)]">Dokončení: {new Date(eta.expectedCompletionAt).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}</span> : null}
+                    {eta?.status === "WONT_FINISH" ? <span className="ml-2 text-[hsl(38_92%_62%)]">Výrobek se během této směny nevyrobí.</span> : null}
                   </div>
                 </div>
               );
             })}
           </div>
-        </Card>
+        </Panel>
       </div>
     </AppShell>
   );
