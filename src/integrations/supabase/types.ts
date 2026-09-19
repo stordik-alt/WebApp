@@ -676,6 +676,78 @@ export type Database = {
           },
         ];
       };
+      iw_shift_assignments: {
+        Row: {
+          assigned_at: string;
+          assignment_type: string;
+          employee_id: string;
+          id: string;
+          is_manual_override: boolean;
+          production_id: string | null;
+          shift_id: string;
+          suggested_workstation_id: string | null;
+          workstation_id: string | null;
+        };
+        Insert: {
+          assigned_at?: string;
+          assignment_type?: string;
+          employee_id: string;
+          id?: string;
+          is_manual_override?: boolean;
+          production_id?: string | null;
+          shift_id: string;
+          suggested_workstation_id?: string | null;
+          workstation_id?: string | null;
+        };
+        Update: {
+          assigned_at?: string;
+          assignment_type?: string;
+          employee_id?: string;
+          id?: string;
+          is_manual_override?: boolean;
+          production_id?: string | null;
+          shift_id?: string;
+          suggested_workstation_id?: string | null;
+          workstation_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_assignments_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_assignments_production_id_fkey";
+            columns: ["production_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shift_productions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_assignments_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shifts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_assignments_suggested_workstation_id_fkey";
+            columns: ["suggested_workstation_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_assignments_workstation_id_fkey";
+            columns: ["workstation_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       iw_shift_exceptions: {
         Row: {
           created_at: string;
@@ -783,6 +855,48 @@ export type Database = {
             columns: ["workstation_id"];
             isOneToOne: false;
             referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_shift_temp_operators: {
+        Row: {
+          added_at: string;
+          added_by: string | null;
+          added_reason: string | null;
+          employee_id: string;
+          id: string;
+          shift_id: string;
+        };
+        Insert: {
+          added_at?: string;
+          added_by?: string | null;
+          added_reason?: string | null;
+          employee_id: string;
+          id?: string;
+          shift_id: string;
+        };
+        Update: {
+          added_at?: string;
+          added_by?: string | null;
+          added_reason?: string | null;
+          employee_id?: string;
+          id?: string;
+          shift_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_temp_operators_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_temp_operators_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shifts";
             referencedColumns: ["id"];
           },
         ];
