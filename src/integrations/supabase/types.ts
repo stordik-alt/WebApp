@@ -727,6 +727,113 @@ export type Database = {
           },
         ];
       };
+      iw_shift_productions: {
+        Row: {
+          area: string;
+          created_at: string;
+          ended_at: string | null;
+          id: string;
+          priority: number | null;
+          product_code: string;
+          remaining_pieces: number;
+          sequence_no: number;
+          shift_id: string;
+          started_at: string;
+          updated_at: string;
+          workstation_id: string;
+        };
+        Insert: {
+          area: string;
+          created_at?: string;
+          ended_at?: string | null;
+          id?: string;
+          priority?: number | null;
+          product_code: string;
+          remaining_pieces: number;
+          sequence_no?: number;
+          shift_id: string;
+          started_at?: string;
+          updated_at?: string;
+          workstation_id: string;
+        };
+        Update: {
+          area?: string;
+          created_at?: string;
+          ended_at?: string | null;
+          id?: string;
+          priority?: number | null;
+          product_code?: string;
+          remaining_pieces?: number;
+          sequence_no?: number;
+          shift_id?: string;
+          started_at?: string;
+          updated_at?: string;
+          workstation_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_productions_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shifts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_productions_workstation_id_fkey";
+            columns: ["workstation_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_shifts: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          shift: string;
+          started_at: string | null;
+          started_by: string | null;
+          status: string;
+          team_id: string;
+          updated_at: string;
+          work_date: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          shift: string;
+          started_at?: string | null;
+          started_by?: string | null;
+          status?: string;
+          team_id: string;
+          updated_at?: string;
+          work_date: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          shift?: string;
+          started_at?: string | null;
+          started_by?: string | null;
+          status?: string;
+          team_id?: string;
+          updated_at?: string;
+          work_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shifts_team_id_fkey";
+            columns: ["team_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_teams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       iw_team_members: {
         Row: {
           added_at: string;
