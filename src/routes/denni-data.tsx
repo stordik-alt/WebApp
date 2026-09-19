@@ -16,9 +16,9 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Eye, FilePlus2, Pencil, Save, Search, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FilePlus2, Pencil, Save, Search, ShieldAlert, Trash2, UploadCloud, X } from "lucide-react";
 import { ScreenshotImport } from "@/components/ScreenshotImport";
-import { useApprovalFields } from "@/lib/auth";
+import { useApprovalFields, useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/denni-data")({
   head: () => ({
@@ -45,6 +45,7 @@ function metricTone(value: number | null | undefined) {
 }
 
 type HourlyDetail = {
+  id: string;
   hour: number;
   product_code: string | null;
   actual_output: number | null;
@@ -61,7 +62,21 @@ type HourlyDetail = {
   availability_measured: number | null;
   availability_applied_to_oee: number | null;
   ha_tup_linkage: { ha_product_code?: string | null; ha_cumulative_available?: number | null; allocation_fraction?: number | null; capped?: boolean | null } | null;
+  stat_status: string;
 };
+
+// Master Prompt body 4-5 (anomální hodiny / statistická izolace): a hodinový
+// záznam se ze statistik vylučuje pouze na úrovni té konkrétní hodiny, nikdy
+// automaticky celý den/zaměstnanec/produkt - viz set_hourly_stat_status().
+const STAT_STATUS_LABEL: Record<string, string> = {
+  INCLUDED: "Zahrnuto",
+  ANOMALY_PENDING_REVIEW: "Anomálie – čeká na kontrolu",
+  MANUALLY_INCLUDED: "Ručně zahrnuto",
+  MANUALLY_EXCLUDED: "Ručně vyřazeno",
+};
+function statStatusIsExcluded(status: string): boolean {
+  return status === "ANOMALY_PENDING_REVIEW" || status === "MANUALLY_EXCLUDED";
+}
 
 // Master Prompt Problem 11's required hourly-audit field "stav hodiny vůči
 // výrobě" (this hour's status relative to production) - read straight from
@@ -79,6 +94,7 @@ function hourProductionStatusLabel(mode: string | null): string {
 function DailyPage() {
   const qc = useQueryClient();
   const approval = useApprovalFields();
+  const { isAdmin } = useAuth();
   const { data: employees = [] } = useEmployees();
   const { records, links, evaluations, shifts: shiftAggregates } = useShiftAggregates();
 
@@ -163,7 +179,7 @@ function DailyPage() {
       if (typed.screenshot_path) {
         const { data: item } = await supabase.from("import_items").select("id").eq("screenshot_path", typed.screenshot_path).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (item?.id) {
-          const { data: hourly } = await supabase.from("import_item_hourly").select("hour,product_code,actual_output,performance_pct,availability_pct,norm_per_hour,capacity,operator_count,actual_oee_pct,raw_data").eq("import_item_id", item.id).order("hour", { ascending: true });
+          const { data: hourly } = await supabase.from("import_item_hourly").select("id,hour,product_code,actual_output,performance_pct,availability_pct,norm_per_hour,capacity,operator_count,actual_oee_pct,raw_data,stat_status").eq("import_item_id", item.id).order("hour", { ascending: true });
           const mapped = (hourly ?? []).map((row: any) => {
             const raw = row.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
             const calculation = raw.calculation && typeof raw.calculation === "object" ? raw.calculation : {};
@@ -174,6 +190,7 @@ function DailyPage() {
             const productiveMinutes = Number(calculation.reconstructed_productive_minutes ?? calculation.productive_minutes);
             const expectedOutput = Number(calculation.expected_output_at_current_staffing);
             return {
+              id: String(row.id), stat_status: String(row.stat_status ?? "INCLUDED"),
               hour: Number(row.hour), product_code: row.product_code ?? raw.product_code ?? null,
               actual_output: row.actual_output ?? raw.actual_output ?? null,
               performance_pct: row.performance_pct ?? raw.performance_pct ?? null,
@@ -204,7 +221,11 @@ function DailyPage() {
     }
   };
 
-  const detailWeights = useMemo(() => detailHourly.map((row) => row.productive_minutes ?? 0), [detailHourly]);
+  // Bod 5 (statistická izolace): hodina se stavem ANOMALY_PENDING_REVIEW nebo
+  // MANUALLY_EXCLUDED nesmí ovlivnit žádný agregát, včetně tohoto zde
+  // zobrazovaného průměru - aby se nerozcházel s tím, co skutečně obsahuje
+  // daily_records.oee po refresh_daily_records_for_import_item().
+  const detailWeights = useMemo(() => detailHourly.map((row) => statStatusIsExcluded(row.stat_status) ? 0 : row.productive_minutes ?? 0), [detailHourly]);
 
   const detailCalc = useMemo(() => {
     if (!detailHourly.length) return { oee: null, performance: null, availability: null, usedWeight: 0 };
@@ -262,6 +283,29 @@ function DailyPage() {
   const remove = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("daily_records").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["daily"] }); toast.success("Záznam smazán"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Bod 3.5/3.6: ruční zahrnutí/vyřazení hodiny ze statistik - nikdy nemaže
+  // ani nemění výrobní data, jen mění stat_status a ukládá auditní stopu
+  // (set_hourly_stat_status je jediné místo, které tuhle změnu smí provést -
+  // viz Master Prompt bod 3.5). Po úspěchu se přenačte detail i denní/týdenní
+  // agregace, protože daily_records.oee se mohlo změnit.
+  const [statDialog, setStatDialog] = useState<{ row: HourlyDetail; newStatus: "MANUALLY_INCLUDED" | "MANUALLY_EXCLUDED" } | null>(null);
+  const [statReason, setStatReason] = useState("");
+  const [statNote, setStatNote] = useState("");
+  const setHourlyStat = useMutation({
+    mutationFn: async ({ hourlyId, newStatus, reason, note }: { hourlyId: string; newStatus: "MANUALLY_INCLUDED" | "MANUALLY_EXCLUDED"; reason: string; note: string }) => {
+      const { data, error } = await (supabase as any).rpc("set_hourly_stat_status", { p_hourly_id: hourlyId, p_new_status: newStatus, p_reason: reason.trim() || null, p_note: note.trim() || null });
+      if (error) throw error;
+      return data as { status: string };
+    },
+    onSuccess: (_d, { hourlyId, newStatus }) => {
+      setDetailHourly((prev) => prev.map((row) => row.id === hourlyId ? { ...row, stat_status: newStatus } : row));
+      qc.invalidateQueries({ queryKey: ["daily"] });
+      setStatDialog(null); setStatReason(""); setStatNote("");
+      toast.success(newStatus === "MANUALLY_EXCLUDED" ? "Hodina byla vyřazena ze statistik." : "Hodina byla zahrnuta do statistik.");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -327,9 +371,10 @@ function DailyPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Zaměstnanec</p><p className="mt-1 font-semibold">{empName(detailRecord.employee_id)}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Datum / směna</p><p className="mt-1 font-semibold">{formatDate(detailRecord.work_date)} · {detailRecord.shift}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Linka / produkt</p><p className="mt-1 font-semibold">{detailRecord.line} · {detailRecord.product ?? "–"}</p></Card><Card className="bg-slate-900/50 p-3"><p className="text-xs text-muted-foreground">Pozice</p><p className="mt-1 font-semibold">{detailRecord.position}</p></Card></div>
             <div className="grid gap-3 sm:grid-cols-3"><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.oee)}`}><p className="text-xs text-muted-foreground">Skutečné OEE</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.oee)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený výpočet z produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.performance)}`}><p className="text-xs text-muted-foreground">Výkon</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.performance)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card><Card className={`bg-slate-900/50 p-4 ${metricTone(detailCalc.availability)}`}><p className="text-xs text-muted-foreground">Dostupnost</p><p className="mt-1 text-2xl font-bold tabular-nums">{fmt(detailCalc.availability)} %</p><p className="mt-1 text-xs text-muted-foreground">vážený průměr produktivních minut</p></Card></div>
             {detailImageUrl ? <div className="overflow-hidden rounded-xl border border-border/70 bg-black/30"><img src={detailImageUrl} alt={`Screenshot ${detailRecord.product ?? "výroby"}`} className="max-h-[420px] w-full object-contain" /></div> : <div className="rounded-xl border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">Screenshot k tomuto záznamu není k dispozici.</div>}
-            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2">Stav vůči výrobě</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Očekáváno/h</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Produktivní min.</th></tr></thead><tbody>{detailHourly.map((row) => <Fragment key={row.hour}>
-              <tr className="border-b border-border/40"><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2"><Badge variant="outline" className="text-[10px]">{hourProductionStatusLabel(row.calculation_mode)}</Badge></td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.expected_output == null ? "–" : fmt(row.expected_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{row.productive_minutes == null ? "–" : fmt(row.productive_minutes, 0)}</td></tr>
-              {(row.reconstruction_status || row.ha_tup_linkage || (row.availability_measured != null && row.availability_applied_to_oee != null && row.availability_measured !== row.availability_applied_to_oee)) ? <tr className="border-b border-border/40 bg-amber-500/5"><td colSpan={10} className="px-2 py-1 text-[11px] text-amber-200/80">
+            {detailHourly.some((row) => statStatusIsExcluded(row.stat_status)) ? <div className="flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-sm text-amber-200"><ShieldAlert className="h-4 w-4 shrink-0" /><span>⚠ {detailHourly.filter((row) => statStatusIsExcluded(row.stat_status)).length} {detailHourly.filter((row) => statStatusIsExcluded(row.stat_status)).length === 1 ? "hodinová anomálie vyřazena" : "hodinových anomálií vyřazeno"} ze statistik – vidíte je v tabulce níže označené a nezapočítávají se do čísel nahoře.</span></div> : null}
+            <div className="rounded-xl border border-border/70 bg-slate-900/35 p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold">Podrobný výpočet skutečného OEE</h3><p className="text-xs text-muted-foreground">OEE = Výkon × Dostupnost × (kapacita Product Profile / skutečný počet operátorů)</p></div><Badge variant="outline">{detailHourly.length} hodin</Badge></div>{detailLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Načítám hodinová data…</p> : detailHourly.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1280px] text-xs"><thead><tr className="border-b border-border/70 text-left text-muted-foreground"><th className="px-2 py-2">Hodina</th><th className="px-2 py-2">Stav vůči výrobě</th><th className="px-2 py-2 text-right">Skutečný výstup</th><th className="px-2 py-2 text-right">Očekáváno/h</th><th className="px-2 py-2 text-right">Norma/h</th><th className="px-2 py-2 text-right">Kapacita PP</th><th className="px-2 py-2 text-right">Operátoři</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">Dostupnost</th><th className="px-2 py-2 text-right">Skutečné OEE</th><th className="px-2 py-2 text-right">Produktivní min.</th><th className="px-2 py-2">Stat. stav</th><th className="px-2 py-2">Akce</th></tr></thead><tbody>{detailHourly.map((row) => <Fragment key={row.hour}>
+              <tr className={`border-b border-border/40 ${statStatusIsExcluded(row.stat_status) ? "opacity-60" : ""}`}><td className="px-2 py-2 font-medium">{row.hour}:00</td><td className="px-2 py-2"><Badge variant="outline" className="text-[10px]">{hourProductionStatusLabel(row.calculation_mode)}</Badge></td><td className="px-2 py-2 text-right">{row.actual_output == null ? "–" : fmt(row.actual_output, 2)}</td><td className="px-2 py-2 text-right">{row.expected_output == null ? "–" : fmt(row.expected_output, 2)}</td><td className="px-2 py-2 text-right">{row.norm_per_hour == null ? "–" : fmt(row.norm_per_hour, 2)}</td><td className="px-2 py-2 text-right">{row.capacity == null ? "–" : fmt(row.capacity, 2)}</td><td className="px-2 py-2 text-right">{row.operator_count == null ? "–" : fmt(row.operator_count, 0)}</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.performance_pct)}`}>{fmt(row.performance_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.availability_pct)}`}>{fmt(row.availability_pct)} %</td><td className={`px-2 py-2 text-right font-semibold ${metricTone(row.actual_oee_pct)}`}>{fmt(row.actual_oee_pct)} %</td><td className="px-2 py-2 text-right">{row.productive_minutes == null ? "–" : fmt(row.productive_minutes, 0)}</td><td className="px-2 py-2"><Badge variant="outline" className={`text-[10px] ${row.stat_status === "ANOMALY_PENDING_REVIEW" ? "border-amber-400/50 bg-amber-400/10 text-amber-300" : row.stat_status === "MANUALLY_EXCLUDED" ? "border-rose-400/50 bg-rose-400/10 text-rose-300" : row.stat_status === "MANUALLY_INCLUDED" ? "border-cyan-400/50 bg-cyan-400/10 text-cyan-300" : ""}`}>{STAT_STATUS_LABEL[row.stat_status] ?? row.stat_status}</Badge></td><td className="px-2 py-2">{isAdmin ? <div className="flex gap-1">{row.stat_status !== "MANUALLY_EXCLUDED" ? <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => { setStatDialog({ row, newStatus: "MANUALLY_EXCLUDED" }); setStatReason(row.stat_status === "ANOMALY_PENDING_REVIEW" ? "Nelze spolehlivě určit efektivní čas výroby." : ""); setStatNote(""); }}>Vyřadit</Button> : null}{row.stat_status !== "INCLUDED" && row.stat_status !== "MANUALLY_INCLUDED" ? <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => { setStatDialog({ row, newStatus: "MANUALLY_INCLUDED" }); setStatReason(""); setStatNote(""); }}>Zahrnout</Button> : null}</div> : null}</td></tr>
+              {(row.reconstruction_status || row.ha_tup_linkage || (row.availability_measured != null && row.availability_applied_to_oee != null && row.availability_measured !== row.availability_applied_to_oee)) ? <tr className="border-b border-border/40 bg-amber-500/5"><td colSpan={13} className="px-2 py-1 text-[11px] text-amber-200/80">
                 {row.reconstruction_status ? <span className="mr-3">Mezivýpočet: {row.reconstruction_status}</span> : null}
                 {row.availability_measured != null && row.availability_applied_to_oee != null && row.availability_measured !== row.availability_applied_to_oee ? <span className="mr-3">Dostupnost {fmt(row.availability_measured)} % naměřená, do OEE se nezapočítává znovu (už je zohledněna ve zkráceném produktivním čase)</span> : null}
                 {row.ha_tup_linkage ? <span>HA→TUP vazba: {row.ha_tup_linkage.ha_product_code ?? "?"} · dostupné HA {row.ha_tup_linkage.ha_cumulative_available ?? "–"} ks{row.ha_tup_linkage.allocation_fraction != null && row.ha_tup_linkage.allocation_fraction !== 1 ? ` · alokace ${Math.round(Number(row.ha_tup_linkage.allocation_fraction) * 100)} %` : ""}{row.ha_tup_linkage.capped ? " · limitováno" : ""}</span> : null}
@@ -338,6 +383,21 @@ function DailyPage() {
             {detailHourly.length ? <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm"><p className="font-semibold">Výpočet směny</p><p className="mt-1 text-muted-foreground">Skutečné KPI = vážený průměr hodin podle skutečně produktivních minut. Směna má 438 produktivních minut; započítává se 7 min příprava, 5 min úklid a skutečná 30min přestávka. U screenshotu se poslední hodina ořízne podle času screenshotu.</p><p className="mt-2 text-muted-foreground">Celkový použitý součet produktivních minut: <strong>{fmt(detailCalc.usedWeight, 0)}</strong> min.</p></div> : null}
           </div> : null}
           <DialogFooter><Button variant="outline" onClick={() => setDetailOpen(false)}>Zavřít</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!statDialog} onOpenChange={(open) => { if (!open) { setStatDialog(null); setStatReason(""); setStatNote(""); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{statDialog?.newStatus === "MANUALLY_EXCLUDED" ? "Vyřadit hodinu ze statistik" : "Zahrnout hodinu do statistik"}</DialogTitle></DialogHeader>
+          {statDialog ? <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">Hodina {statDialog.row.hour}:00 · {statDialog.row.product_code ?? "bez produktu"}. Vyřazení nemaže ani nemění výrobní data, mění pouze statistický stav - záznam zůstává viditelný v detailu a auditu.</p>
+            <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Důvod</span><Input value={statReason} onChange={(e) => setStatReason(e.target.value)} placeholder="Nelze spolehlivě určit efektivní čas výroby." /></label>
+            <label className="block text-sm"><span className="mb-1 block text-xs text-muted-foreground">Poznámka (nepovinné)</span><Input value={statNote} onChange={(e) => setStatNote(e.target.value)} /></label>
+          </div> : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatDialog(null)}>Zrušit</Button>
+            <Button disabled={!statDialog || !statReason.trim() || setHourlyStat.isPending} onClick={() => statDialog && setHourlyStat.mutate({ hourlyId: statDialog.row.id, newStatus: statDialog.newStatus, reason: statReason, note: statNote })}>{statDialog?.newStatus === "MANUALLY_EXCLUDED" ? "Vyřadit" : "Zahrnout"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
