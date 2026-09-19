@@ -36,7 +36,6 @@ const normalize = (v: string | null | undefined) => (v ?? "").trim().toLowerCase
 // profile's registered subassy code, so an exact-only comparison here would
 // wrongly show "Profile MISSING" for a code that actually did resolve.
 const codesMatch = (a: string, b: string) => { if (!a || !b) return false; if (a === b) return true; const stripSuffix = (s: string) => s.replace(/[a-z]{1,3}$/, ""); if (a.length > b.length && stripSuffix(a) === b) return true; if (b.length > a.length && stripSuffix(b) === a) return true; return false; };
-const average = (values: Array<number | null | undefined>) => { const valid = values.filter((v): v is number => v != null && Number.isFinite(Number(v))).map(Number); return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null; };
 // Master Prompt Problem 11's required hourly-audit field "stav hodiny vůči
 // výrobě" - read straight from reconstruct_import_item_hourly()'s own
 // calculation_mode, never re-derived.
@@ -72,20 +71,25 @@ async function runHourlyExtractionForItem(params: {
   const image = await preprocessOcrImage(await dataUrlFromBlob(blob), { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
   const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } }), 180_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste to znovu.");
   const hourly = hourlyResult.hourly_metrics ?? [];
-  const performance = average(hourly.map((m: any) => m.performance_pct));
-  const availability = average(hourly.map((m: any) => m.availability_pct));
-  const actualOee = hourlyResult.actual_shift_oee_pct;
   if (!hourly.length) throw new Error("3. sekvence OCR nevrátila žádná hodinová data.");
-  if (performance == null || availability == null || actualOee == null || !Number.isFinite(actualOee)) throw new Error("3. sekvence OCR nevrátila platný Výkon, Dostupnost nebo OEE.");
-  const hourlyRows = hourly.filter((m: any) => m.hour != null).map((m: any) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code ?? null, role: m.role ?? null, actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: m.norm_per_hour, capacity: m.capacity, operator_count: m.operator_count, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));
+  const hourlyRows = hourly.filter((m: any) => m.hour != null).map((m: any) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code ?? null, role: m.role ?? null, actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: m.norm_per_hour, capacity: m.capacity, operator_count: m.operator_count, actual_oee_pct: null, raw_data: m }));
   if (!hourlyRows.length) throw new Error("3. sekvence OCR neobsahuje žádné použitelné hodiny.");
   const { error: deleteHourlyError } = await db.from("import_item_hourly").delete().eq("import_item_id", itemId);
   if (deleteHourlyError) throw deleteHourlyError;
   const { error: insertHourlyError } = await db.from("import_item_hourly").insert(hourlyRows);
   if (insertHourlyError) throw insertHourlyError;
-  const { error: rowKpiError } = await db.from("import_item_rows").update({ oee: actualOee, performance, available_time: availability }).eq("import_item_id", itemId).is("daily_record_id", null);
-  if (rowKpiError) throw rowKpiError;
-  const updatedOcr = { ...(ocrData ?? {}), hourly_metrics: hourly, actual_shift_oee_pct: actualOee };
+  // Výkon/Dostupnost/OEE se dopočítají výhradně kanonickou SQL funkcí
+  // (jediné místo v aplikaci, které tento výpočet provádí - Master Prompt
+  // bod 1.12), ne znovu tady v TS. Přepíše import_item_hourly i
+  // import_item_rows.oee/performance/available_time a import_items.ocr_data.
+  const { error: kpiRpcError } = await db.rpc("recalculate_import_item_kpis", { p_import_item_id: itemId });
+  if (kpiRpcError) throw kpiRpcError;
+  const { data: refreshedItem, error: refreshedItemError } = await db.from("import_items").select("ocr_data").eq("id", itemId).maybeSingle();
+  if (refreshedItemError) throw refreshedItemError;
+  const canonicalOcr = refreshedItem?.ocr_data ?? {};
+  const canonicalOee = canonicalOcr.actual_shift_oee_pct;
+  if (canonicalOee == null || !Number.isFinite(Number(canonicalOee))) throw new Error("3. sekvence OCR nevrátila platný Výkon, Dostupnost nebo OEE.");
+  const updatedOcr = { ...canonicalOcr, hourly_metrics: hourly };
   const baseReasons: string[] = [];
   if (!workDate) baseReasons.push("MISSING_DATE");
   if (!shift) baseReasons.push("MISSING_SHIFT");

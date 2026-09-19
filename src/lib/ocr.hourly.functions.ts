@@ -19,6 +19,7 @@ function normalize(v: string | null): string { return (v ?? "").trim().toLowerCa
 function normalizeRole(v: unknown): "HA" | "TUP" | null { const s = text(v).toLowerCase(); if (s === "ha" || s.includes("ha")) return "HA"; if (s === "tup" || s.includes("tup")) return "TUP"; return null; }
 function parseTime(v: unknown): string | null { const m = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(text(v)); return m ? m[0] : null; }
 function shiftFromScreenshotTime(time: string | null): string | null { if (!time) return null; const hour = Number(time.slice(0, 2)); if (hour >= 6 && hour < 14) return "Ranní"; if (hour >= 14 && hour < 22) return "Odpolední"; return "Noční"; }
+
 // A per-hour product_code is read literally off the screenshot and may carry
 // a trailing 1-3 letter revision marker (B/U/UCS) that isn't part of the
 // profile's registered subassy code - e.g. public.resolve_product_profile()
@@ -32,11 +33,6 @@ function shiftFromScreenshotTime(time: string | null): string | null { if (!time
 function codesMatch(a: string, b: string): boolean { if (!a || !b) return false; if (a === b) return true; const stripSuffix = (s: string) => s.replace(/[a-z]{1,3}$/, ""); if (a.length > b.length && stripSuffix(a) === b) return true; if (b.length > a.length && stripSuffix(b) === a) return true; return false; }
 function profileVariant(p: ProductProfileContext, code: string | null, role: "HA" | "TUP" | null) { const c = normalize(code); const h = codesMatch(normalize(p.ha_subassy), c); const t = codesMatch(normalize(p.tup_subassy), c); if (role === "HA" && h) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (role === "TUP" && t) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; if (h && !t) return { norm: p.h_norm_per_hour, capacity: p.h_capacity }; if (t && !h) return { norm: p.t_norm_per_hour, capacity: p.t_capacity }; return null; }
 function findVariant(context: HourlyStageContext, code: string | null, role: "HA" | "TUP" | null) { for (const p of context.profiles ?? []) { const v = profileVariant(p, code, role); if (v) return v; } return null; }
-function shiftForHour(hour: number): { start: number; pauseStartRel: number; pauseEndRel: number } { if (hour >= 6 && hour < 14) return { start: 360, pauseStartRel: 280, pauseEndRel: 310 }; if (hour >= 14 && hour < 22) return { start: 840, pauseStartRel: 240, pauseEndRel: 270 }; return { start: 1320, pauseStartRel: 240, pauseEndRel: 270 }; }
-function relativeMinuteOfShift(hour: number, shiftStart: number): number { return ((hour * 60 - shiftStart) + 1440) % 1440; }
-function screenshotRelativeMinute(time: string | null, shiftStart: number): number | null { if (!time) return null; const parts = time.split(":"); const h = Number(parts[0] ?? 0); const m = Number(parts[1] ?? 0); return ((h * 60 + m - shiftStart) + 1440) % 1440; }
-function baseProductiveMinutesForHour(hour: number | null, screenshotTime: string | null): number { if (hour == null || !Number.isFinite(hour)) return 0; const h = ((Math.trunc(hour) % 24) + 24) % 24; const shift = shiftForHour(h); const start = relativeMinuteOfShift(h, shift.start); let end = start + 60; const cutoff = screenshotRelativeMinute(screenshotTime, shift.start); if (cutoff != null) { if (cutoff <= start) return 0; if (cutoff < end) end = cutoff; } let minutes = Math.max(0, end - start); minutes -= Math.max(0, Math.min(end, shift.pauseEndRel) - Math.max(start, shift.pauseStartRel)); minutes -= Math.max(0, Math.min(end, 7) - Math.max(start, 0)); minutes -= Math.max(0, Math.min(end, 475) - Math.max(start, 475)); return Math.max(0, Math.min(60, minutes)); }
-function averageWeighted(metrics: HourlyStageMetric[], field: "performance_pct" | "availability_pct"): number | null { let total = 0; let weight = 0; for (const m of metrics) { const value = m[field]; const w = m.actual_minutes ?? 0; if (value == null || !Number.isFinite(Number(value)) || w <= 0) continue; total += Number(value) * w; weight += w; } return weight > 0 ? total / weight : null; }
 async function loadExistingProfiles(context: HourlyStageContext): Promise<ProductProfileContext[]> { const contextProfiles = context.profiles ?? []; const { supabaseAdmin } = await import("@/integrations/supabase/client.server"); const { data, error } = await supabaseAdmin.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour"); if (error) throw new Error(`Nepodařilo se načíst Product Profile: ${error.message}`); const dbProfiles = (data ?? []) as ProductProfileContext[]; if (!dbProfiles.length) return contextProfiles; const merged = [...contextProfiles]; for (const db of dbProfiles) { if (!merged.some((p) => [p.ha_subassy, p.tup_subassy].map(normalize).some((c) => c && [db.ha_subassy, db.tup_subassy].map(normalize).includes(c)))) merged.push(db); } return merged; }
 function providerError(body: string): string { try { const parsed = JSON.parse(body) as any; return String(parsed?.error?.message ?? parsed?.message ?? body).replace(/\s+/g, " ").slice(0, 500); } catch { return body.replace(/\s+/g, " ").slice(0, 500); } }
 
@@ -112,42 +108,23 @@ export const extractHourlyWithContext = createServerFn({ method: "POST" }).middl
     } catch { /* keep values from the primary OCR pass */ }
   }
 
-  const realMetrics = hourly_metrics.filter((m) => (m.actual_output ?? 0) > 0 && m.product_code && m.norm_per_hour != null && m.norm_per_hour > 0).sort((a, b) => Number(a.hour ?? 0) - Number(b.hour ?? 0));
-  const firstProductionMetric = realMetrics[0] ?? null;
-  let actualOutputTotal = 0; let idealOutputTotal = 0;
-  let previousProduct: string | null = null; let previousRole: "HA" | "TUP" | null = null;
+  // Výkon/Dostupnost/OEE se NEPOČÍTAJÍ tady. Tahle funkce jen čte syrová OCR
+  // data (actual_output, availability_pct jako přímé čtení ze screenshotu,
+  // downtime, norm/kapacita z Product Profile). Jediné místo v aplikaci,
+  // které z nich odvozuje Výkon/Dostupnost/OEE, je kanonická SQL funkce
+  // public.reconstruct_import_item_hourly() (volaná přes
+  // public.recalculate_import_item_kpis() po zápisu do import_item_hourly).
+  // Dřívější duplicitní výpočet zde používal stejnou availability i pro
+  // zkrácení produktivních minut (measuredMinutes) i znovu jako násobitel
+  // OEE - dvojí započtení stejné časové ztráty, které SQL vrstva už řeší
+  // (Master Prompt bod 1.9/1.12). Dvě samostatné implementace stejného
+  // výpočtu se navíc nevyhnutelně rozcházejí (staffing byl tady navíc
+  // násoben přímo do OEE, zatímco SQL ho aplikuje jen jednou do Očekávaného
+  // výstupu) - proto zůstává přesně jedna autoritativní implementace.
   for (const m of hourly_metrics) {
     const isReal = (m.actual_output ?? 0) > 0 && !!m.product_code && m.norm_per_hour != null && m.norm_per_hour > 0;
-    if (!isReal) { m.actual_minutes = 0; m.performance_pct = null; m.effective_norm = null; m.actual_oee_pct = null; continue; }
-    const availability = m.availability_pct != null && Number.isFinite(Number(m.availability_pct)) ? Math.max(0, Math.min(100, Number(m.availability_pct))) : null;
-    const availabilityMinutes = availability != null ? 60 * availability / 100 : null;
-    const downtime = m.downtime_minutes != null && Number.isFinite(Number(m.downtime_minutes)) && m.downtime_minutes > 0 ? Math.min(60, Number(m.downtime_minutes)) : null;
-    const normalizedProduct = normalize(m.product_code); const sameRole = previousRole === m.role;
-    const productChanged = previousProduct != null && sameRole && normalizedProduct !== previousProduct;
-    const isFirstProductionHour = firstProductionMetric === m;
-    const downtimeReason = normalize(m.downtime_reason ?? null);
-    const isChangeoverReason = downtimeReason.includes("zmenaproduktu") || downtimeReason.includes("změnaproduktu");
-    const downtimeRelevant = downtime != null && (m.downtime_before_production === true || productChanged || isChangeoverReason);
-    const measuredMinutes = downtimeRelevant ? Math.min(availabilityMinutes ?? 60, Math.max(0, 60 - downtime)) : availabilityMinutes;
-    const canUseTeff = isFirstProductionHour && (downtime == null || downtime <= 0) && m.ocr_norm_per_hour != null && m.ocr_norm_per_hour > 0 && m.norm_per_hour != null && m.norm_per_hour > 0;
-    if (canUseTeff) {
-      const availabilityFactor = availability != null && availability > 0 ? availability / 100 : 1;
-      const normAt100Availability = m.ocr_norm_per_hour! / availabilityFactor;
-      const teff = Math.max(0, Math.min(60, normAt100Availability / m.norm_per_hour! * 60));
-      m.actual_minutes = teff; m.effective_norm = m.norm_per_hour! * teff / 60;
-    } else {
-      m.actual_minutes = Math.max(0, Math.min(60, measuredMinutes ?? baseProductiveMinutesForHour(m.hour, screenshot_time)));
-      m.effective_norm = m.norm_per_hour! * (m.actual_minutes ?? 0) / 60;
-    }
-    if (m.effective_norm > 0 && m.actual_output != null) m.performance_pct = m.actual_output / m.effective_norm * 100; else m.performance_pct = null;
-    if (m.performance_pct != null && availability != null && m.capacity != null && m.capacity > 0 && m.operator_count > 0) m.actual_oee_pct = m.performance_pct * availability * (m.operator_count / m.capacity) / 100;
-    if (m.actual_output != null) actualOutputTotal += m.actual_output; if (m.effective_norm != null) idealOutputTotal += m.effective_norm;
-    previousProduct = normalizedProduct; previousRole = m.role;
+    if (!isReal) m.performance_pct = null;
+    m.actual_oee_pct = null;
   }
-  const actual_shift_performance_pct = averageWeighted(hourly_metrics, "performance_pct");
-  const actual_shift_availability_pct = averageWeighted(hourly_metrics, "availability_pct");
-  const weightedOee = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct ?? 0) * (m.actual_minutes ?? 0), 0);
-  const oeeWeight = hourly_metrics.reduce((sum, m) => sum + (m.actual_oee_pct != null ? (m.actual_minutes ?? 0) : 0), 0);
-  const actual_shift_oee_pct = oeeWeight > 0 ? weightedOee / oeeWeight : null;
-  return { hourly_metrics, predicted_shift_output: idealOutputTotal > 0 ? idealOutputTotal : null, actual_shift_oee_pct, actual_shift_performance_pct, actual_shift_availability_pct, operator_count: data.context.operator_count, screenshot_time, shift: shiftFromScreenshotTime(screenshot_time), raw: JSON.stringify({ screenshot_time, actual_minutes_total: hourly_metrics.reduce((s, m) => s + (m.actual_minutes ?? 0), 0), actual_output_total: actualOutputTotal, availability_recovery: missingAvailability, downtime_rule: "Concrete downtime affects production time only before production starts or during a product change on the same workplace; product change is evaluated per same-role sequence and recovery data is attributed by hour + product when available.", hourly_metrics: hourly_metrics.map((m) => ({ hour: m.hour, product_code: m.product_code, actual_output: m.actual_output, ocr_norm_per_hour: m.ocr_norm_per_hour, downtime_minutes: m.downtime_minutes, downtime_reason: m.downtime_reason, downtime_before_production: m.downtime_before_production, availability_pct: m.availability_pct, actual_minutes: m.actual_minutes, effective_norm: m.effective_norm })) }) };
+  return { hourly_metrics, predicted_shift_output: null, actual_shift_oee_pct: null, actual_shift_performance_pct: null, actual_shift_availability_pct: null, operator_count: data.context.operator_count, screenshot_time, shift: shiftFromScreenshotTime(screenshot_time), raw: JSON.stringify({ screenshot_time, availability_recovery: missingAvailability, hourly_metrics: hourly_metrics.map((m) => ({ hour: m.hour, product_code: m.product_code, actual_output: m.actual_output, ocr_norm_per_hour: m.ocr_norm_per_hour, downtime_minutes: m.downtime_minutes, downtime_reason: m.downtime_reason, downtime_before_production: m.downtime_before_production, availability_pct: m.availability_pct })) }) };
 });

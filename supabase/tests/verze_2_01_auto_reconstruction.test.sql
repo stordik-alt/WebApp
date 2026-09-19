@@ -70,17 +70,19 @@ begin
   end if;
 end $$;
 
--- 6) Canonical OEE formula including capacity/operator factor.
+-- 6) Canonical OEE formula. Staffing (capacity/operators) is applied
+-- exactly once, inside Expected Output (see test 3) - never again here.
+-- Master Prompt "OPRAVA VYPOCTU CLASSIC OEE" bod 1.11: OEE = Performance *
+-- Availability only; re-multiplying by capacity/operators would double-count
+-- staffing on top of what Performance's own denominator already reflects.
 do $$
 declare
   performance numeric := 90;
   availability numeric := 80;
-  capacity numeric := 4;
-  operators numeric := 3;
-  oee numeric := performance * availability * (capacity / operators) / 100;
+  oee numeric := performance * availability / 100;
 begin
-  if abs(oee - 96) > 0.000001 then
-    raise exception 'TEST 6 FAILED: expected OEE 96, got %', oee;
+  if abs(oee - 72) > 0.000001 then
+    raise exception 'TEST 6 FAILED: expected OEE 72 (staffing applied once, in Expected Output only), got %', oee;
   end if;
 end $$;
 
