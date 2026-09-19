@@ -799,6 +799,77 @@ export type Database = {
           },
         ];
       };
+      iw_shift_history_segments: {
+        Row: {
+          coworker_employee_ids: string[];
+          created_at: string;
+          employee_id: string;
+          id: string;
+          product_code: string | null;
+          production_id: string | null;
+          result_snapshot: Json | null;
+          segment_end_at: string | null;
+          segment_start_at: string;
+          shift_id: string;
+          workstation_id: string;
+        };
+        Insert: {
+          coworker_employee_ids?: string[];
+          created_at?: string;
+          employee_id: string;
+          id?: string;
+          product_code?: string | null;
+          production_id?: string | null;
+          result_snapshot?: Json | null;
+          segment_end_at?: string | null;
+          segment_start_at: string;
+          shift_id: string;
+          workstation_id: string;
+        };
+        Update: {
+          coworker_employee_ids?: string[];
+          created_at?: string;
+          employee_id?: string;
+          id?: string;
+          product_code?: string | null;
+          production_id?: string | null;
+          result_snapshot?: Json | null;
+          segment_end_at?: string | null;
+          segment_start_at?: string;
+          shift_id?: string;
+          workstation_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_history_segments_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_history_segments_production_id_fkey";
+            columns: ["production_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shift_productions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_history_segments_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shifts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_history_segments_workstation_id_fkey";
+            columns: ["workstation_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       iw_shift_productions: {
         Row: {
           area: string;
@@ -855,6 +926,41 @@ export type Database = {
             columns: ["workstation_id"];
             isOneToOne: false;
             referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_shift_snapshots: {
+        Row: {
+          confirmed_by: string;
+          created_at: string;
+          id: string;
+          payload: Json;
+          shift_id: string;
+          snapshot_at: string;
+        };
+        Insert: {
+          confirmed_by: string;
+          created_at?: string;
+          id?: string;
+          payload: Json;
+          shift_id: string;
+          snapshot_at?: string;
+        };
+        Update: {
+          confirmed_by?: string;
+          created_at?: string;
+          id?: string;
+          payload?: Json;
+          shift_id?: string;
+          snapshot_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_snapshots_shift_id_fkey";
+            columns: ["shift_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_shifts";
             referencedColumns: ["id"];
           },
         ];
@@ -1841,6 +1947,10 @@ export type Database = {
       };
       auto_shift_start_minute: { Args: { p_shift: string }; Returns: number };
       classify_downtime_reason: { Args: { p_reason: string }; Returns: string };
+      close_history_segment: {
+        Args: { p_ended_at?: string; p_segment_id: string };
+        Returns: undefined;
+      };
       codes_match: { Args: { a: string; b: string }; Returns: boolean };
       compute_import_item_product_kpis: {
         Args: { p_import_item_id: string; p_work_date?: string };
@@ -2009,6 +2119,7 @@ export type Database = {
           violation_count: number;
         }[];
       };
+      start_shift_production: { Args: { p_shift_id: string }; Returns: Json };
       sync_effective_last_hour_norm: {
         Args: { p_import_item_id: string };
         Returns: undefined;

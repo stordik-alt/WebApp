@@ -5,6 +5,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppearanceSettings } from "@/components/AppearanceSettings";
+import { EnvironmentSwitcher } from "@/components/EnvironmentSwitcher";
 import { OptiShiftLogo } from "@/components/OptiShiftLogo";
 import { useAuth, roleLabel, type AppRole } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,7 +44,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() { return <div className="shrink-0 border-b border-sidebar-border/70 px-5 pb-5 pt-5"><OptiShiftLogo size="sidebar" /></div>; }
 function SignOutButton() { return <Button variant="ghost" size="sm" className="h-10 w-full justify-start gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => void supabase.auth.signOut()}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sidebar-accent/45"><LogOut className="h-4 w-4" /></span><span>Odhlásit se</span></Button>; }
-function SidebarSettings() { return <div className="shrink-0 grid gap-1 border-t border-sidebar-border/70 p-3"><AppearanceSettings /><ThemeToggle /><SignOutButton /></div>; }
+function SidebarSettings() { return <div className="shrink-0 grid gap-1 border-t border-sidebar-border/70 p-3"><EnvironmentSwitcher /><AppearanceSettings /><ThemeToggle /><SignOutButton /></div>; }
 
 export function AppShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false); const { isTester } = useAuth();
@@ -56,7 +57,10 @@ export function AppShell({ title, subtitle, actions, children }: { title: string
   </div>;
 }
 
-function RouteGuard({ children }: { children: ReactNode }) { const { role }=useAuth(); const pathname=useRouterState({select:(st)=>st.location.pathname}); const allowed=navFor(role).some((i)=>i.to===pathname||(i.to!=="/"&&pathname.startsWith(i.to))); const employeeDetailOk=role!=="operator"&&pathname.startsWith("/zamestnanec/"); if(allowed||employeeDetailOk||(role==="operator"&&pathname.startsWith("/zamestnanec/")))return <>{children}</>; return <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-border/70 bg-card/80 p-8 text-sm text-muted-foreground shadow-xl shadow-black/5 backdrop-blur"><div className="mb-2 font-semibold text-foreground">Přístup není povolen</div>Pro tuto sekci nemáte oprávnění. Vaše úroveň přístupu: {roleLabel(role)}.</div>; }
+// Interaktivní prostředí (Verze 2.02) má vlastní vnořenou navigaci mimo hlavní NAV pole,
+// proto se povoluje zvlášť podle role (team_leader/admin), ne podle přítomnosti v NAV.
+const INTERAKTIVNI_ROLES: AppRole[] = ["admin", "team_leader"];
+function RouteGuard({ children }: { children: ReactNode }) { const { role }=useAuth(); const pathname=useRouterState({select:(st)=>st.location.pathname}); const allowed=navFor(role).some((i)=>i.to===pathname||(i.to!=="/"&&pathname.startsWith(i.to))); const employeeDetailOk=role!=="operator"&&pathname.startsWith("/zamestnanec/"); const interaktivniOk=pathname.startsWith("/interaktivni")&&role!=null&&INTERAKTIVNI_ROLES.includes(role); if(allowed||employeeDetailOk||interaktivniOk||(role==="operator"&&pathname.startsWith("/zamestnanec/")))return <>{children}</>; return <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-border/70 bg-card/80 p-8 text-sm text-muted-foreground shadow-xl shadow-black/5 backdrop-blur"><div className="mb-2 font-semibold text-foreground">Přístup není povolen</div>Pro tuto sekci nemáte oprávnění. Vaše úroveň přístupu: {roleLabel(role)}.</div>; }
 
 const BOTTOM_NAV=[{to:"/denni-data",label:"Denní",icon:ClipboardList,roles:STAFF},{to:"/tydenni-data",label:"Týdenní",icon:CalendarRange,roles:STAFF},{to:"/zamestnanci",label:"Lidé",icon:Users,roles:STAFF},{to:"/grafy",label:"Grafy",icon:LineChart,roles:STAFF},{to:"/",label:"Domů",icon:LayoutDashboard,roles:STAFF},{to:"/moje-vysledky",label:"Výsledky",icon:BarChart3,roles:["operator" as AppRole]},{to:"/o-aplikaci",label:"Více",icon:Info,roles:["operator" as AppRole]}] as const;
 function BottomNav(){const{role}=useAuth();const items=BOTTOM_NAV.filter((i)=>role?(i.roles as readonly AppRole[]).includes(role):false);if(!items.length)return null;return <nav aria-label="Rychlá navigace" className="fixed inset-x-3 bottom-3 z-50 flex overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-2xl shadow-black/20 backdrop-blur-xl md:hidden" style={{paddingBottom:"env(safe-area-inset-bottom)"}}><ul className="grid w-full" style={{gridTemplateColumns:`repeat(${items.length},minmax(0,1fr))`}}>{items.map(({to,label,icon:Icon})=><li key={to}><Link to={to} activeOptions={{exact:to==="/"}} className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium text-muted-foreground transition-all duration-200" activeProps={{className:"flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-primary/10 px-1 py-2 text-[10px] font-semibold text-primary"}}><span className="grid h-7 w-7 place-items-center rounded-lg"><Icon className="h-[18px] w-[18px]"/></span><span className="truncate">{label}</span></Link></li>)}</ul></nav>;}
