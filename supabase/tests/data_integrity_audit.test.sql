@@ -25,8 +25,11 @@ declare
   v_result record;
   v_found_false_valid boolean := false;
   v_found_stuck boolean := false;
+  v_found_implausible boolean := false;
   v_ha_code text := 'TEST_INTEGRITY_AUDIT_HA';
   v_tup_code text := 'TEST_INTEGRITY_AUDIT_TUP';
+  v_employee_id uuid;
+  v_implausible_record_id uuid;
 begin
   select user_id into v_admin_id from public.user_roles where role = 'admin' limit 1;
   if v_admin_id is null then
@@ -44,6 +47,15 @@ begin
   -- threshold.
   insert into public.import_items (id, batch_id, status, updated_at, screenshot_path, source_hash)
   values (gen_random_uuid(), v_batch_id, 'VALIDATING', now() - interval '2 hours', 'test/integrity-audit-stuck.png', 'test-integrity-audit-stuck-hash');
+
+  -- 2b) IMPLAUSIBLE_PERFORMANCE_PCT: a daily_records row above the 200%
+  -- sanity threshold - added after a real 2026-09-18 HA/TUP capping
+  -- recompute produced 365-600% values, to make a recurrence of that class
+  -- of anomaly surface automatically instead of relying on someone noticing.
+  select id into v_employee_id from public.employees limit 1;
+  insert into public.daily_records (employee_id, work_date, shift, line, product, position, oee, performance, available_time, help_score, approval_status)
+  values (v_employee_id, '2099-06-05', 'Ranní', 'TEST_INTEGRITY_AUDIT_LINE', 'TEST_INTEGRITY_AUDIT_PRODUCT', 'TUP', 550, 550, 95, 0, 'approved')
+  returning id into v_implausible_record_id;
 
   -- 3) OVERLAPPING_ACTIVE_PROFILE_KEY: this schema already refuses to create
   -- the state that check looks for - profile_key is a generated column, and
@@ -75,6 +87,9 @@ begin
     if v_result.check_name = 'STUCK_IMPORT' and v_result.violation_count > 0 then
       v_found_stuck := true;
     end if;
+    if v_result.check_name = 'IMPLAUSIBLE_PERFORMANCE_PCT' and v_result.violation_count > 0 and v_result.sample_ids @> array[v_implausible_record_id] then
+      v_found_implausible := true;
+    end if;
   end loop;
 
   if not v_found_false_valid then
@@ -82,6 +97,9 @@ begin
   end if;
   if not v_found_stuck then
     raise exception 'TEST FAILED: run_data_integrity_audit() did not flag the injected STUCK_IMPORT fixture';
+  end if;
+  if not v_found_implausible then
+    raise exception 'TEST FAILED: run_data_integrity_audit() did not flag the injected IMPLAUSIBLE_PERFORMANCE_PCT fixture';
   end if;
 
   -- Access control: a non-admin must be rejected, not silently see nothing.

@@ -26,6 +26,7 @@ const checkLabels: Record<string, string> = {
   DANGLING_CONFLICT_REFERENCE: "Odkaz na konfliktní záznam, který již neexistuje",
   REIMPORT_OF_NOT_REJECTED: "Reimport odkazuje na originál, který není zamítnutý",
   PENDING_APPROVAL_STALE: "Import čeká na schválení déle než 7 dní",
+  IMPLAUSIBLE_PERFORMANCE_PCT: "Nereálně vysoký Výkon/OEE (> 200 %)",
 };
 const severityLabel: Record<string, string> = { critical: "Kritické", warning: "Varování", info: "Info" };
 

@@ -126,5 +126,23 @@ begin
     coalesce(array_agg(id order by created_at) filter (where id is not null), '{}')
   from public.import_items
   where status = 'PENDING_APPROVAL' and created_at < now() - interval '7 days';
+
+  -- Master Prompt sections 1-2 follow-up: a real 2026-09-18 batch (6 TUP
+  -- products sharing one HA) showed performance/OEE of 365-600% once the
+  -- N-way HA->TUP split was applied - implausible enough that the recompute
+  -- was reverted for that batch pending a decision on whether an even 1/N
+  -- split is the right allocation model, or whether the affected profiles'
+  -- norm/capacity data needs review (deliberately shelved rather than
+  -- guessed at, per the user's own call). 200% is well above any plausible
+  -- real performance/OEE, so this check exists purely to make a recurrence
+  -- of that same anomaly show up here automatically instead of relying on
+  -- someone noticing it by chance again - it deliberately does not attempt
+  -- to distinguish "caused by HA/TUP capping" from any other cause.
+  return query
+  select 'IMPLAUSIBLE_PERFORMANCE_PCT'::text, 'warning'::text, count(*)::integer,
+    coalesce(array_agg(id order by work_date desc) filter (where id is not null), '{}')
+  from public.daily_records
+  where (performance is not null and performance > 200)
+     or (oee is not null and oee > 200);
 end;
 $function$;
