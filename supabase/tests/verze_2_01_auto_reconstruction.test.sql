@@ -72,17 +72,18 @@ end $$;
 
 -- 6) Canonical OEE formula. Staffing (capacity/operators) is applied
 -- exactly once, inside Expected Output (see test 3) - never again here.
--- Master Prompt "OPRAVA VYPOCTU CLASSIC OEE" bod 1.11: OEE = Performance *
--- Availability only; re-multiplying by capacity/operators would double-count
--- staffing on top of what Performance's own denominator already reflects.
+-- User decision (2026-09-19): OEE = Performance, always - Dostupnost is
+-- still measured/audited (availability_pct) but never multiplied into OEE,
+-- for Classic or TEFF hours alike. See
+-- supabase/migrations/20260919150000_oee_equals_performance.sql.
 do $$
 declare
   performance numeric := 90;
   availability numeric := 80;
-  oee numeric := performance * availability / 100;
+  oee numeric := performance;
 begin
-  if abs(oee - 72) > 0.000001 then
-    raise exception 'TEST 6 FAILED: expected OEE 72 (staffing applied once, in Expected Output only), got %', oee;
+  if abs(oee - 90) > 0.000001 then
+    raise exception 'TEST 6 FAILED: expected OEE = Performance = 90 regardless of Availability (%), got %', availability, oee;
   end if;
 end $$;
 
