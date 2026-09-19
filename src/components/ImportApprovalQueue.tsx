@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, RefreshCw, UserPlus, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,15 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useEmployees, useProducts } from "@/lib/data";
+import { useEmployees } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { upsertImportedProductProfile } from "@/lib/productProfiles";
-import { extractScreenshotStage } from "@/lib/ocr.functions";
 import { extractHourlyWithContext } from "@/lib/ocr.hourly.functions";
 import { preprocessOcrImage } from "@/lib/ocr-image";
 import { withTimeout } from "@/lib/with-timeout";
 import { resolvedProfileStatus } from "@/lib/product-profile-status";
-import { createImportBatch, createImportItem, finalizeImportItem, markImportItemError, persistOcrResult, sha256File } from "@/lib/import-v2-auto";
+import { createImportBatch, createImportItem, sha256File } from "@/lib/import-v2-auto";
 
 const db = supabase as any;
 type PendingImport = { id: string; batch_id: string; created_at: string; screenshot_path: string | null; work_date: string | null; shift: string | null; line: string | null; product_code: string | null; product_name: string | null; norm_per_hour: number | null; ocr_confidence: number | null; ocr_data: any; admin_corrections: any; pending_reasons: string[] | null; product_id: string | null; product_match_status: string | null; product_profile_status: string | null; conflict_daily_record_ids: string[] | null; trace_id: string | null };
@@ -158,7 +158,7 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
 }
 
 export function ImportApprovalQueue() {
-  const qc = useQueryClient(); const { data: employees = [] } = useEmployees(); const { data: allProducts = [] } = useProducts(); const { session } = useAuth(); const extractHourly = useServerFn(extractHourlyWithContext); const extractStage = useServerFn(extractScreenshotStage);
+  const qc = useQueryClient(); const { data: employees = [] } = useEmployees(); const { session } = useAuth(); const extractHourly = useServerFn(extractHourlyWithContext); const navigate = useNavigate();
   const [selected, setSelected] = useState<PendingImport | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [editing, setEditing] = useState<Record<string, string>>({}); const [rowEditing, setRowEditing] = useState<Record<string, RowDraft>>({}); const [employeeOpen, setEmployeeOpen] = useState(false); const [employeeRow, setEmployeeRow] = useState<PendingRow | null>(null); const [newEmployee, setNewEmployee] = useState({ fullName: "", firstName: "", lastName: "" }); const [profileOpen, setProfileOpen] = useState(false); const [profile, setProfile] = useState<ProfileDraft>({ profileName: "", haCode: "", haNorm: "", haCapacity: "", tupCode: "", tupNorm: "", tupCapacity: "", validFrom: new Date().toISOString().slice(0, 10) }); const [rejectOpen, setRejectOpen] = useState(false); const [rejectReason, setRejectReason] = useState("");
   const query = useQuery({ queryKey: ["import-approval-queue"], queryFn: async () => { const { data: items, error } = await db.from("import_items").select("*").eq("status", "PENDING_APPROVAL").order("created_at", { ascending: false }); if (error) throw error; const ids = (items ?? []).map((x: any) => x.id); if (!ids.length) return { items: [] as PendingImport[], rows: [] as PendingRow[] }; const { data: rows, error: rowError } = await db.from("import_item_rows").select("*").in("import_item_id", ids).order("row_index"); if (rowError) throw rowError; return { items: items as PendingImport[], rows: rows as PendingRow[] }; } });
   // Master Prompt Problem 9, option B: pick an ALREADY-EXISTING Product
@@ -343,9 +343,24 @@ export function ImportApprovalQueue() {
   // instead of creating two reimports) so the new import's duplicate-hash
   // check - which only blocks PROCESSING/VALIDATING/PENDING_APPROVAL/
   // AUTO_APPROVED/APPROVED - no longer sees the old row as a live duplicate.
+  // Master Prompt bod 3.8: Reimport nesmí mít vlastní odlišný způsob
+  // zobrazování průběhu importu - musí použít STEJNÝ existující importní
+  // modal jako klasický import. Proto tahle mutace neběží OCR pipeline sama
+  // (to byla dřívější, teď odstraněná verze) - jen zamítne originál a
+  // založí novou dávku/položku ve stavu PROCESSING, pak přesměruje na
+  // Denní data. ScreenshotImportV2 tam má vlastní "obnovení přerušeného
+  // importu" efekt, který při načtení stránky najde PROCESSING dávku s
+  // nedokončenou položkou a spustí ji přes STEJNÝ processOne pipeline a
+  // STEJNÝ modal jako běžný import - Reimport tak nikdy nepotřebuje vlastní
+  // paralelní OCR běh ani vlastní progress UI.
   const reimport = useMutation({ mutationFn: async (item: PendingImport) => {
     if (!item.screenshot_path) throw new Error("Import nemá připojený originální screenshot pro reimport.");
     const now = new Date().toISOString();
+    // Zamítnutí originálu MUSÍ proběhnout jako první krok (guardováno
+    // .eq("status","PENDING_APPROVAL") + kontrolou vráceného řádku), jinak
+    // by duplicate-hash kontrola nového importu (blokuje PROCESSING/
+    // VALIDATING/PENDING_APPROVAL/AUTO_APPROVED/APPROVED) viděla starý
+    // záznam jako živou duplicitu.
     const { data: rejectedRows, error: rejectError } = await db.from("import_items").update({ status: "REJECTED", rejected_by: session?.user?.id ?? null, rejected_at: now, rejection_reason: "Reimport", completed_at: now }).eq("id", item.id).eq("status", "PENDING_APPROVAL").select("id");
     if (rejectError) throw rejectError;
     if (!rejectedRows?.length) throw new Error("Import byl mezitím změněn (např. jiným uživatelem) - reimport nelze provést.");
@@ -357,46 +372,14 @@ export function ImportApprovalQueue() {
     const sourceHash = await sha256File(file);
     const batch = await createImportBatch(1);
     const created = await createImportItem(batch.id, item.screenshot_path, sourceHash);
-    await db.from("import_items").update({ reimport_of_id: item.id }).eq("id", created.id);
-
-    try {
-      const dataUrl = await dataUrlFromBlob(blob);
-      const image = await preprocessOcrImage(dataUrl, { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
-      const header = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "products" } }), 180_000, "OCR časový limit vypršel při rozpoznávání produktů. Zkuste reimport znovu.");
-      const employeeResult = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "employees" } }), 180_000, "OCR časový limit vypršel při rozpoznávání zaměstnanců. Zkuste reimport znovu.");
-      const result = { ...header, rows: employeeResult.rows ?? [] } as any;
-      const { data: loadedProfiles, error: profilesError } = await db.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null);
-      if (profilesError) throw profilesError;
-      const persisted = await persistOcrResult(created.id, result, allProducts, employees, loadedProfiles as any);
-      let finalResult = result; let hourly = result.hourly_metrics ?? []; let actualOee: number | null = null;
-      let finalRows = persisted.employeeRows; let finalMatchedProduct = persisted.matchedProduct; let blockers = [...persisted.blockers];
-      const profile = persisted.matchedProfile;
-      if (profile && finalRows.length && finalMatchedProduct) {
-        const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
-        const role = /^H_/i.test(finalMatchedProduct.code) ? "HA" : /^T_/i.test(finalMatchedProduct.code) ? "TUP" : null;
-        const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } }), 180_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste reimport znovu.");
-        hourly = hourlyResult.hourly_metrics ?? []; actualOee = hourlyResult.actual_shift_oee_pct ?? null;
-        finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) };
-        if (!hourly.length) blockers.push("HOURLY_DATA_MISSING");
-        await db.from("import_item_hourly").delete().eq("import_item_id", created.id);
-        await db.from("import_item_rows").delete().eq("import_item_id", created.id);
-        const refreshed = await persistOcrResult(created.id, finalResult, allProducts, employees, loadedProfiles as any);
-        finalRows = refreshed.employeeRows; finalMatchedProduct = refreshed.matchedProduct; blockers = [...new Set([...blockers, ...refreshed.blockers])];
-      } else if (finalRows.length && (!finalMatchedProduct || !profile)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");
-      else if (!finalRows.length) blockers.push("EMPLOYEE_UNMATCHED");
-      blockers = [...new Set(blockers)];
-      const finalized = await finalizeImportItem(created.id, finalResult, finalRows, finalMatchedProduct, blockers, hourly, actualOee);
-      await db.rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
-      return { newItemId: created.id, status: finalized.status, createdRecords: finalized.createdRecords };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await markImportItemError(created.id, message);
-      throw error;
-    }
-  }, onSuccess: (data) => {
+    const { error: lineageError } = await db.from("import_items").update({ reimport_of_id: item.id }).eq("id", created.id);
+    if (lineageError) throw lineageError;
+    return { batchId: batch.id };
+  }, onSuccess: () => {
     setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] });
-    toast.success(data.status === "AUTO_APPROVED" ? `Reimport dokončen a automaticky schválen. Vytvořeno záznamů: ${data.createdRecords}.` : "Reimport dokončen. Nový záznam čeká na schválení.");
-  }, onError: (e: Error) => toast.error(`Reimport selhal: ${e.message}`) });
+    toast.success("Reimport spuštěn - otevírám průběh v Denní data.");
+    void navigate({ to: "/denni-data" });
+  }, onError: (e: Error) => toast.error(`Reimport se nepodařilo spustit: ${e.message}`) });
   // Master Prompt section 10: the admin decides only about THIS specific
   // conflict, never globally. "Potvrdit konflikt" rejects this import (the
   // existing daily_records row is untouched); "Potvrdit import" approves it
