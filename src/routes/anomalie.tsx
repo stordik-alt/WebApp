@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { PerformanceAnomalyReport } from "@/components/PerformanceAnomalyReport";
+import { HourlyAnomalyReview } from "@/components/HourlyAnomalyReview";
 
 export const Route = createFileRoute("/anomalie")({
   head: () => ({ meta: [
@@ -14,6 +15,7 @@ function AnomaliesPage() {
   return (
     <AppShell title="Datové anomálie" subtitle="Záznamy, které stojí za ruční kontrolu - možná chyba OCR, ne automatický blokátor.">
       <div className="grid min-w-0 gap-6">
+        <HourlyAnomalyReview />
         <PerformanceAnomalyReport />
       </div>
     </AppShell>

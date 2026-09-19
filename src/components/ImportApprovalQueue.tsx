@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { CheckCircle2, ExternalLink, RefreshCw, UserPlus, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,15 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useEmployees, useProducts } from "@/lib/data";
+import { useEmployees } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { upsertImportedProductProfile } from "@/lib/productProfiles";
-import { extractScreenshotStage } from "@/lib/ocr.functions";
 import { extractHourlyWithContext } from "@/lib/ocr.hourly.functions";
 import { preprocessOcrImage } from "@/lib/ocr-image";
 import { withTimeout } from "@/lib/with-timeout";
 import { resolvedProfileStatus } from "@/lib/product-profile-status";
-import { createImportBatch, createImportItem, finalizeImportItem, markImportItemError, persistOcrResult, sha256File } from "@/lib/import-v2-auto";
+import { createImportBatch, createImportItem, sha256File } from "@/lib/import-v2-auto";
 
 const db = supabase as any;
 type PendingImport = { id: string; batch_id: string; created_at: string; screenshot_path: string | null; work_date: string | null; shift: string | null; line: string | null; product_code: string | null; product_name: string | null; norm_per_hour: number | null; ocr_confidence: number | null; ocr_data: any; admin_corrections: any; pending_reasons: string[] | null; product_id: string | null; product_match_status: string | null; product_profile_status: string | null; conflict_daily_record_ids: string[] | null; trace_id: string | null };
@@ -36,7 +36,6 @@ const normalize = (v: string | null | undefined) => (v ?? "").trim().toLowerCase
 // profile's registered subassy code, so an exact-only comparison here would
 // wrongly show "Profile MISSING" for a code that actually did resolve.
 const codesMatch = (a: string, b: string) => { if (!a || !b) return false; if (a === b) return true; const stripSuffix = (s: string) => s.replace(/[a-z]{1,3}$/, ""); if (a.length > b.length && stripSuffix(a) === b) return true; if (b.length > a.length && stripSuffix(b) === a) return true; return false; };
-const average = (values: Array<number | null | undefined>) => { const valid = values.filter((v): v is number => v != null && Number.isFinite(Number(v))).map(Number); return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null; };
 // Master Prompt Problem 11's required hourly-audit field "stav hodiny vůči
 // výrobě" - read straight from reconstruct_import_item_hourly()'s own
 // calculation_mode, never re-derived.
@@ -72,20 +71,25 @@ async function runHourlyExtractionForItem(params: {
   const image = await preprocessOcrImage(await dataUrlFromBlob(blob), { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
   const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: image, context: { profiles: [profile], operator_count: operatorCount } } }), 180_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste to znovu.");
   const hourly = hourlyResult.hourly_metrics ?? [];
-  const performance = average(hourly.map((m: any) => m.performance_pct));
-  const availability = average(hourly.map((m: any) => m.availability_pct));
-  const actualOee = hourlyResult.actual_shift_oee_pct;
   if (!hourly.length) throw new Error("3. sekvence OCR nevrátila žádná hodinová data.");
-  if (performance == null || availability == null || actualOee == null || !Number.isFinite(actualOee)) throw new Error("3. sekvence OCR nevrátila platný Výkon, Dostupnost nebo OEE.");
-  const hourlyRows = hourly.filter((m: any) => m.hour != null).map((m: any) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code ?? null, role: m.role ?? null, actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: m.norm_per_hour, capacity: m.capacity, operator_count: m.operator_count, actual_oee_pct: m.actual_oee_pct ?? null, raw_data: m }));
+  const hourlyRows = hourly.filter((m: any) => m.hour != null).map((m: any) => ({ import_item_id: itemId, hour: Math.round(Number(m.hour)), product_code: m.product_code ?? null, role: m.role ?? null, actual_output: m.actual_output, performance_pct: m.performance_pct, availability_pct: m.availability_pct, norm_per_hour: m.norm_per_hour, capacity: m.capacity, operator_count: m.operator_count, actual_oee_pct: null, raw_data: m }));
   if (!hourlyRows.length) throw new Error("3. sekvence OCR neobsahuje žádné použitelné hodiny.");
   const { error: deleteHourlyError } = await db.from("import_item_hourly").delete().eq("import_item_id", itemId);
   if (deleteHourlyError) throw deleteHourlyError;
   const { error: insertHourlyError } = await db.from("import_item_hourly").insert(hourlyRows);
   if (insertHourlyError) throw insertHourlyError;
-  const { error: rowKpiError } = await db.from("import_item_rows").update({ oee: actualOee, performance, available_time: availability }).eq("import_item_id", itemId).is("daily_record_id", null);
-  if (rowKpiError) throw rowKpiError;
-  const updatedOcr = { ...(ocrData ?? {}), hourly_metrics: hourly, actual_shift_oee_pct: actualOee };
+  // Výkon/Dostupnost/OEE se dopočítají výhradně kanonickou SQL funkcí
+  // (jediné místo v aplikaci, které tento výpočet provádí - Master Prompt
+  // bod 1.12), ne znovu tady v TS. Přepíše import_item_hourly i
+  // import_item_rows.oee/performance/available_time a import_items.ocr_data.
+  const { error: kpiRpcError } = await db.rpc("recalculate_import_item_kpis", { p_import_item_id: itemId });
+  if (kpiRpcError) throw kpiRpcError;
+  const { data: refreshedItem, error: refreshedItemError } = await db.from("import_items").select("ocr_data").eq("id", itemId).maybeSingle();
+  if (refreshedItemError) throw refreshedItemError;
+  const canonicalOcr = refreshedItem?.ocr_data ?? {};
+  const canonicalOee = canonicalOcr.actual_shift_oee_pct;
+  if (canonicalOee == null || !Number.isFinite(Number(canonicalOee))) throw new Error("3. sekvence OCR nevrátila platný Výkon, Dostupnost nebo OEE.");
+  const updatedOcr = { ...canonicalOcr, hourly_metrics: hourly };
   const baseReasons: string[] = [];
   if (!workDate) baseReasons.push("MISSING_DATE");
   if (!shift) baseReasons.push("MISSING_SHIFT");
@@ -147,14 +151,14 @@ function MultiProductDetailSummary({ item }: { item: PendingImport | null }) {
   return <Card className="border-primary/30 bg-primary/5"><div className="flex items-center justify-between gap-3"><div><div className="font-semibold">Rozpoznané produkty</div><div className="text-xs text-muted-foreground">Kontrola všech Product ID nalezených v hodinové tabulce. Norma je vždy načtena z platného Product Profile, ne z OCR.</div></div><Badge variant="secondary">{products.length} {products.length === 1 ? "produkt" : products.length < 5 ? "produkty" : "produktů"}</Badge></div><div className="mt-3 grid gap-2">{products.map((product) => <div key={product.code} className="rounded-lg border bg-background p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold break-all">{product.code}</div><div className="text-sm font-medium">Norma: {product.norm != null ? `${product.norm} ks/h` : product.profileFound ? "—" : "Profile MISSING"}</div></div><div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-7"><div><div className="text-muted-foreground">Hodiny</div><div className="font-medium">{product.hours.length ? product.hours.join(", ") : "—"}</div></div><div><div className="text-muted-foreground">Vyrobeno</div><div className="font-medium">{product.output || "—"} ks</div></div><div><div className="text-muted-foreground">Očekáváno</div><div className="font-medium">{product.expected > 0 ? `${product.expected.toFixed(0)} ks` : "—"}</div></div><div><div className="text-muted-foreground">Výkon</div><div className="font-medium">{product.performance != null ? `${product.performance.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Dostupnost</div><div className="font-medium">{product.availability != null ? `${product.availability.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">OEE</div><div className="font-medium">{product.oee != null ? `${product.oee.toFixed(2)} %` : "—"}</div></div><div><div className="text-muted-foreground">Kapacita / operátoři</div><div className="font-medium">{product.capacity != null ? `${product.capacity} / ${product.operatorCount}` : "—"}</div></div></div>{product.reconstruction?.reconstruction_status ? <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs"><span className="font-medium">Rekonstruovaný čas:</span> {Number(product.reconstruction.reconstructed_productive_minutes).toFixed(2)} min · odvozeno z výstupu a master normy · jistota: odvozená</div> : null}{product.realRows.length ? <details className="mt-2"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Hodinový rozpis výpočtu ({product.realRows.length})</summary><div className="mt-2 overflow-x-auto"><table className="w-full min-w-[920px] text-[11px]"><thead><tr className="border-b text-left text-muted-foreground"><th className="px-1.5 py-1">Hodina</th><th className="px-1.5 py-1">Stav</th><th className="px-1.5 py-1 text-right">Výstup</th><th className="px-1.5 py-1 text-right">Očekáváno</th><th className="px-1.5 py-1 text-right">Výkon</th><th className="px-1.5 py-1 text-right">Dostupnost</th><th className="px-1.5 py-1 text-right">OEE</th><th className="px-1.5 py-1 text-right">Produktivní min.</th></tr></thead><tbody>{product.realRows.map((r: any) => { const calc = r?.raw_data?.calculation ?? {}; const linkage = calc.ha_tup_linkage; const availExcluded = calc.availability_measured != null && calc.availability_applied_to_oee != null && Number(calc.availability_measured) !== Number(calc.availability_applied_to_oee); return <Fragment key={r.id ?? r.hour}>
     <tr className="border-b border-border/40"><td className="px-1.5 py-1 font-medium">{r.hour}:00</td><td className="px-1.5 py-1"><Badge variant="outline" className="text-[9px]">{hourProductionStatusLabel(calc.calculation_mode)}</Badge></td><td className="px-1.5 py-1 text-right">{fmtNum(r.actual_output)}</td><td className="px-1.5 py-1 text-right">{fmtNum(calc.expected_output_at_current_staffing)}</td><td className="px-1.5 py-1 text-right">{fmtNum(r.performance_pct)} %</td><td className="px-1.5 py-1 text-right">{fmtNum(r.availability_pct)} %</td><td className="px-1.5 py-1 text-right">{fmtNum(r.actual_oee_pct)} %</td><td className="px-1.5 py-1 text-right">{fmtNum(calc.reconstructed_productive_minutes ?? r.actual_minutes, 0)}</td></tr>
     {linkage || availExcluded ? <tr><td colSpan={8} className="px-1.5 py-0.5 text-[10px] text-amber-300/80">
-      {availExcluded ? <span className="mr-2">Dostupnost {fmtNum(calc.availability_measured, 2)} % naměřená, do OEE se nezapočítává znovu (už je ve zkráceném produktivním čase)</span> : null}
+      {availExcluded ? <span className="mr-2">Dostupnost {fmtNum(calc.availability_measured, 2)} % naměřená a auditovaná, ale nepočítá se do OEE (OEE = Výkon)</span> : null}
       {linkage ? <span>HA→TUP: {linkage.ha_product_code ?? "?"} · dostupné {fmtNum(linkage.ha_cumulative_available, 0)} ks{linkage.allocation_fraction != null && linkage.allocation_fraction !== 1 ? ` · alokace ${Math.round(Number(linkage.allocation_fraction) * 100)} %` : ""}{linkage.capped ? " · limitováno" : ""}</span> : null}
     </td></tr> : null}
   </Fragment>; })}</tbody></table></div></details> : null}</div>)}</div></Card>;
 }
 
 export function ImportApprovalQueue() {
-  const qc = useQueryClient(); const { data: employees = [] } = useEmployees(); const { data: allProducts = [] } = useProducts(); const { session } = useAuth(); const extractHourly = useServerFn(extractHourlyWithContext); const extractStage = useServerFn(extractScreenshotStage);
+  const qc = useQueryClient(); const { data: employees = [] } = useEmployees(); const { session } = useAuth(); const extractHourly = useServerFn(extractHourlyWithContext); const navigate = useNavigate();
   const [selected, setSelected] = useState<PendingImport | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null); const [editing, setEditing] = useState<Record<string, string>>({}); const [rowEditing, setRowEditing] = useState<Record<string, RowDraft>>({}); const [employeeOpen, setEmployeeOpen] = useState(false); const [employeeRow, setEmployeeRow] = useState<PendingRow | null>(null); const [newEmployee, setNewEmployee] = useState({ fullName: "", firstName: "", lastName: "" }); const [profileOpen, setProfileOpen] = useState(false); const [profile, setProfile] = useState<ProfileDraft>({ profileName: "", haCode: "", haNorm: "", haCapacity: "", tupCode: "", tupNorm: "", tupCapacity: "", validFrom: new Date().toISOString().slice(0, 10) }); const [rejectOpen, setRejectOpen] = useState(false); const [rejectReason, setRejectReason] = useState("");
   const query = useQuery({ queryKey: ["import-approval-queue"], queryFn: async () => { const { data: items, error } = await db.from("import_items").select("*").eq("status", "PENDING_APPROVAL").order("created_at", { ascending: false }); if (error) throw error; const ids = (items ?? []).map((x: any) => x.id); if (!ids.length) return { items: [] as PendingImport[], rows: [] as PendingRow[] }; const { data: rows, error: rowError } = await db.from("import_item_rows").select("*").in("import_item_id", ids).order("row_index"); if (rowError) throw rowError; return { items: items as PendingImport[], rows: rows as PendingRow[] }; } });
   // Master Prompt Problem 9, option B: pick an ALREADY-EXISTING Product
@@ -339,9 +343,24 @@ export function ImportApprovalQueue() {
   // instead of creating two reimports) so the new import's duplicate-hash
   // check - which only blocks PROCESSING/VALIDATING/PENDING_APPROVAL/
   // AUTO_APPROVED/APPROVED - no longer sees the old row as a live duplicate.
+  // Master Prompt bod 3.8: Reimport nesmí mít vlastní odlišný způsob
+  // zobrazování průběhu importu - musí použít STEJNÝ existující importní
+  // modal jako klasický import. Proto tahle mutace neběží OCR pipeline sama
+  // (to byla dřívější, teď odstraněná verze) - jen zamítne originál a
+  // založí novou dávku/položku ve stavu PROCESSING, pak přesměruje na
+  // Denní data. ScreenshotImportV2 tam má vlastní "obnovení přerušeného
+  // importu" efekt, který při načtení stránky najde PROCESSING dávku s
+  // nedokončenou položkou a spustí ji přes STEJNÝ processOne pipeline a
+  // STEJNÝ modal jako běžný import - Reimport tak nikdy nepotřebuje vlastní
+  // paralelní OCR běh ani vlastní progress UI.
   const reimport = useMutation({ mutationFn: async (item: PendingImport) => {
     if (!item.screenshot_path) throw new Error("Import nemá připojený originální screenshot pro reimport.");
     const now = new Date().toISOString();
+    // Zamítnutí originálu MUSÍ proběhnout jako první krok (guardováno
+    // .eq("status","PENDING_APPROVAL") + kontrolou vráceného řádku), jinak
+    // by duplicate-hash kontrola nového importu (blokuje PROCESSING/
+    // VALIDATING/PENDING_APPROVAL/AUTO_APPROVED/APPROVED) viděla starý
+    // záznam jako živou duplicitu.
     const { data: rejectedRows, error: rejectError } = await db.from("import_items").update({ status: "REJECTED", rejected_by: session?.user?.id ?? null, rejected_at: now, rejection_reason: "Reimport", completed_at: now }).eq("id", item.id).eq("status", "PENDING_APPROVAL").select("id");
     if (rejectError) throw rejectError;
     if (!rejectedRows?.length) throw new Error("Import byl mezitím změněn (např. jiným uživatelem) - reimport nelze provést.");
@@ -353,46 +372,14 @@ export function ImportApprovalQueue() {
     const sourceHash = await sha256File(file);
     const batch = await createImportBatch(1);
     const created = await createImportItem(batch.id, item.screenshot_path, sourceHash);
-    await db.from("import_items").update({ reimport_of_id: item.id }).eq("id", created.id);
-
-    try {
-      const dataUrl = await dataUrlFromBlob(blob);
-      const image = await preprocessOcrImage(dataUrl, { scale: 1.5, quality: 0.86, maxWidth: 3072, maxHeight: 3072 });
-      const header = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "products" } }), 180_000, "OCR časový limit vypršel při rozpoznávání produktů. Zkuste reimport znovu.");
-      const employeeResult = await withTimeout(extractStage({ data: { imageDataUrl: image, stage: "employees" } }), 180_000, "OCR časový limit vypršel při rozpoznávání zaměstnanců. Zkuste reimport znovu.");
-      const result = { ...header, rows: employeeResult.rows ?? [] } as any;
-      const { data: loadedProfiles, error: profilesError } = await db.from("product_profiles").select("id,ha_subassy,h_capacity,h_norm_per_hour,tup_subassy,t_capacity,t_norm_per_hour,valid_from,valid_to,version_no").is("valid_to", null);
-      if (profilesError) throw profilesError;
-      const persisted = await persistOcrResult(created.id, result, allProducts, employees, loadedProfiles as any);
-      let finalResult = result; let hourly = result.hourly_metrics ?? []; let actualOee: number | null = null;
-      let finalRows = persisted.employeeRows; let finalMatchedProduct = persisted.matchedProduct; let blockers = [...persisted.blockers];
-      const profile = persisted.matchedProfile;
-      if (profile && finalRows.length && finalMatchedProduct) {
-        const hourlyImage = await preprocessOcrImage(dataUrl, { scale: 2, quality: 0.92, maxWidth: 4096, maxHeight: 4096 });
-        const role = /^H_/i.test(finalMatchedProduct.code) ? "HA" : /^T_/i.test(finalMatchedProduct.code) ? "TUP" : null;
-        const hourlyResult = await withTimeout(extractHourly({ data: { imageDataUrl: hourlyImage, context: { profiles: [profile], operator_count: finalRows.length, role } } }), 180_000, "OCR časový limit vypršel při rozpoznávání hodinových dat. Zkuste reimport znovu.");
-        hourly = hourlyResult.hourly_metrics ?? []; actualOee = hourlyResult.actual_shift_oee_pct ?? null;
-        finalResult = { ...result, hourly_metrics: hourly, shift: hourlyResult.shift ?? result.shift, ...(hourlyResult.screenshot_time ? { screenshot_time: hourlyResult.screenshot_time } : {}), ...(actualOee != null ? { actual_shift_oee_pct: actualOee } : {}) };
-        if (!hourly.length) blockers.push("HOURLY_DATA_MISSING");
-        await db.from("import_item_hourly").delete().eq("import_item_id", created.id);
-        await db.from("import_item_rows").delete().eq("import_item_id", created.id);
-        const refreshed = await persistOcrResult(created.id, finalResult, allProducts, employees, loadedProfiles as any);
-        finalRows = refreshed.employeeRows; finalMatchedProduct = refreshed.matchedProduct; blockers = [...new Set([...blockers, ...refreshed.blockers])];
-      } else if (finalRows.length && (!finalMatchedProduct || !profile)) blockers.push(finalMatchedProduct ? "PRODUCT_PROFILE_MISSING" : "PRODUCT_NOT_FOUND");
-      else if (!finalRows.length) blockers.push("EMPLOYEE_UNMATCHED");
-      blockers = [...new Set(blockers)];
-      const finalized = await finalizeImportItem(created.id, finalResult, finalRows, finalMatchedProduct, blockers, hourly, actualOee);
-      await db.rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
-      return { newItemId: created.id, status: finalized.status, createdRecords: finalized.createdRecords };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await markImportItemError(created.id, message);
-      throw error;
-    }
-  }, onSuccess: (data) => {
+    const { error: lineageError } = await db.from("import_items").update({ reimport_of_id: item.id }).eq("id", created.id);
+    if (lineageError) throw lineageError;
+    return { batchId: batch.id };
+  }, onSuccess: () => {
     setSelected(null); setPreviewUrl(null); qc.invalidateQueries({ queryKey: ["import-approval-queue"] });
-    toast.success(data.status === "AUTO_APPROVED" ? `Reimport dokončen a automaticky schválen. Vytvořeno záznamů: ${data.createdRecords}.` : "Reimport dokončen. Nový záznam čeká na schválení.");
-  }, onError: (e: Error) => toast.error(`Reimport selhal: ${e.message}`) });
+    toast.success("Reimport spuštěn - otevírám průběh v Denní data.");
+    void navigate({ to: "/denni-data" });
+  }, onError: (e: Error) => toast.error(`Reimport se nepodařilo spustit: ${e.message}`) });
   // Master Prompt section 10: the admin decides only about THIS specific
   // conflict, never globally. "Potvrdit konflikt" rejects this import (the
   // existing daily_records row is untouched); "Potvrdit import" approves it
