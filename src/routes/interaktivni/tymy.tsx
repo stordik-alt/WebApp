@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserMinus, UserPlus, Users } from "lucide-react";
+import { Ban, UserMinus, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useEmployees } from "@/lib/data";
+import { listWorkstations } from "@/lib/floorMap";
 import {
   addShiftException,
   addTeamMember,
@@ -20,6 +21,7 @@ import {
   resolveEffectiveRoster,
   type IwShiftName,
 } from "@/lib/teams";
+import { clearWorkstationRestriction, listRestrictionsForEmployees, setWorkstationRestriction, toExclusionMap } from "@/lib/workstationRestrictions";
 
 export const Route = createFileRoute("/interaktivni/tymy")({
   head: () => ({
@@ -65,11 +67,26 @@ function TeamsPage() {
   });
 
   const employeesQuery = useEmployees();
+  const workstationsQuery = useQuery({ queryKey: ["iw_workstations"], queryFn: listWorkstations });
+  const secondaryWorkstations = (workstationsQuery.data ?? []).filter((w) => w.is_secondary);
 
   const members = membersQuery.data ?? [];
   const exceptions = exceptionsQuery.data ?? [];
   const memberIds = useMemo(() => new Set(members.map((m) => m.employee_id)), [members]);
   const effectiveRosterIds = useMemo(() => new Set(resolveEffectiveRoster(members, exceptions)), [members, exceptions]);
+
+  const restrictionsQuery = useQuery({
+    queryKey: ["iw_workstation_restrictions", [...effectiveRosterIds].join(",")],
+    queryFn: () => listRestrictionsForEmployees([...effectiveRosterIds]),
+    enabled: effectiveRosterIds.size > 0,
+  });
+  const exclusionMap = useMemo(() => toExclusionMap(restrictionsQuery.data ?? []), [restrictionsQuery.data]);
+
+  async function toggleRestriction(employeeId: string, workstationId: string, currentlyRestricted: boolean) {
+    if (currentlyRestricted) await clearWorkstationRestriction(employeeId, workstationId);
+    else await setWorkstationRestriction({ employeeId, workstationId, createdBy: leaderUserId });
+    await queryClient.invalidateQueries({ queryKey: ["iw_workstation_restrictions", [...effectiveRosterIds].join(",")] });
+  }
   const employeesById = useMemo(() => new Map((employeesQuery.data ?? []).map((e) => [e.id, e])), [employeesQuery.data]);
   const nonMembers = (employeesQuery.data ?? []).filter((e) => e.active && !memberIds.has(e.id));
 
@@ -215,6 +232,48 @@ function TeamsPage() {
             </div>
           ) : null}
         </Card>
+
+        {secondaryWorkstations.length > 0 ? (
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Ban className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold">Omezení pracovišť</h2>
+                <p className="text-xs text-muted-foreground">Zaměstnanec s omezením nesmí být na dané sekundární pracoviště (TESTY/PREP) přiřazen - důvod se neeviduje.</p>
+              </div>
+            </div>
+            <div className="divide-y divide-border">
+              {[...effectiveRosterIds].map((employeeId) => {
+                const employee = employeesById.get(employeeId);
+                const excluded = exclusionMap.get(employeeId) ?? new Set<string>();
+                return (
+                  <div key={employeeId} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+                    <span className="min-w-[10rem] truncate text-sm font-medium">{employee?.full_name ?? employeeId}</span>
+                    <div className="flex flex-wrap gap-2">
+                      {secondaryWorkstations.map((workstation) => {
+                        const restricted = excluded.has(workstation.id);
+                        return (
+                          <Button
+                            key={workstation.id}
+                            size="sm"
+                            variant={restricted ? "destructive" : "outline"}
+                            onClick={() => void toggleRestriction(employeeId, workstation.id, restricted)}
+                          >
+                            {restricted ? "Zakázáno: " : "Povoleno: "}
+                            {workstation.display_name}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {effectiveRosterIds.size === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Nejprve přidej členy do základního týmu.</div> : null}
+            </div>
+          </Card>
+        ) : null}
       </div>
     </AppShell>
   );

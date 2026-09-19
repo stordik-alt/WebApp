@@ -47,7 +47,7 @@ function ShiftProductionPage() {
   const queryClient = useQueryClient();
   const [workDate, setWorkDate] = useState(todayIso());
   const [shift, setShift] = useState<IwShiftName>("Ranní");
-  const [drafts, setDrafts] = useState<Record<string, { code: string; pieces: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { code: string; pieces: string; priority: string }>>({});
 
   const leaderUserId = session?.user.id ?? null;
   const canManage = isTeamLeader || isAdmin;
@@ -103,9 +103,11 @@ function ShiftProductionPage() {
     if (!draft?.code.trim()) return;
     const pieces = Number(draft.pieces);
     if (!Number.isFinite(pieces) || pieces < 0) return;
+    const priority = draft.priority.trim() === "" ? null : Number(draft.priority);
+    if (priority != null && (!Number.isFinite(priority) || priority < 1)) return;
     const existing = productionByWorkstation.get(workstation.id);
     if (existing) {
-      await updateProduction(existing.id, { remaining_pieces: pieces });
+      await updateProduction(existing.id, { remaining_pieces: pieces, priority });
     } else {
       await startProduction({
         shiftId: shiftQuery.data!.id,
@@ -113,6 +115,7 @@ function ShiftProductionPage() {
         productCode: draft.code.trim(),
         area: workstation.area === "TUP" ? "TUP" : "HA",
         remainingPieces: pieces,
+        priority,
       });
     }
     await invalidate();
@@ -164,7 +167,11 @@ function ShiftProductionPage() {
           <div className="divide-y divide-border">
             {mainWorkstations.map((workstation) => {
               const production = productionByWorkstation.get(workstation.id);
-              const draft = drafts[workstation.id] ?? { code: production?.product_code ?? "", pieces: production ? String(production.remaining_pieces) : "" };
+              const draft = drafts[workstation.id] ?? {
+                code: production?.product_code ?? "",
+                pieces: production ? String(production.remaining_pieces) : "",
+                priority: production?.priority != null ? String(production.priority) : "",
+              };
               const profile = production ? profilesQuery.data?.get(production.product_code) : null;
               const capacity = profile ? productCapacityFor({ area: workstation.area === "TUP" ? "TUP" : "HA", h_capacity: profile.h_capacity, t_capacity: profile.t_capacity }) : null;
               const norm = profile ? (workstation.area === "TUP" ? profile.t_norm_per_hour : profile.h_norm_per_hour) : null;
@@ -182,7 +189,7 @@ function ShiftProductionPage() {
                   : null;
 
               return (
-                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_100px_auto_1fr] sm:items-center sm:px-5">
+                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_90px_auto_1fr] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{workstation.area}</Badge>
                     <span className="truncate text-sm font-medium">{workstation.display_name}</span>
@@ -199,6 +206,14 @@ function ShiftProductionPage() {
                     placeholder="Ks"
                     inputMode="numeric"
                     aria-label="Zbývající kusy"
+                  />
+                  <Input
+                    value={draft.priority}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, priority: e.target.value } }))}
+                    placeholder="Priorita"
+                    inputMode="numeric"
+                    aria-label="Priorita (1 = nejvyšší, jen při nedostatku)"
+                    title="Priorita 1 = nejvyšší; vyplňuje se jen při nedostatku operátorů"
                   />
                   <Button size="sm" onClick={() => void setProduction(workstation)}>
                     {production ? "Aktualizovat" : "Nastavit"}

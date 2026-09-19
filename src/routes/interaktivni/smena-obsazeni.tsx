@@ -11,7 +11,7 @@ import { useEmployees } from "@/lib/data";
 import { listWorkstations } from "@/lib/floorMap";
 import { getRotationHistory } from "@/lib/rotation";
 import { suggestAssignments, type ProductionSlot } from "@/lib/shift-assignment";
-import { addTempOperator, clearNonManualAssignments, listAssignments, listTempOperators, saveSuggestedAssignments } from "@/lib/shiftAssignments";
+import { addTempOperator, clearNonManualAssignments, listAssignments, listTempOperators, saveSuggestedAssignments, setManualAssignment } from "@/lib/shiftAssignments";
 import { ensureShift, listActiveProductions, resolveProductProfile } from "@/lib/shiftProductions";
 import type { IwShiftName } from "@/lib/shift-windows";
 import { ensureTeamForLeader, listShiftExceptions, listTeamMembers, resolveEffectiveRoster } from "@/lib/teams";
@@ -88,6 +88,33 @@ function ShiftAssignmentPage() {
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: ["iw_shift_assignments", shiftQuery.data?.id] });
+  }
+
+  // # dělá: seznam cílů pro ruční přesun (aktivní hlavní výroby + sekundární pracoviště TESTY/PREP)
+  const reassignmentTargets = useMemo(() => {
+    const mainTargets = (productionsQuery.data ?? []).flatMap((p) => {
+      const workstation = workstationsById.get(p.workstation_id);
+      if (!workstation) return [];
+      return [{ workstationId: p.workstation_id, productionId: p.id, assignmentType: "main" as const, label: workstation.display_name }];
+    });
+    const secondaryTargets = (workstationsQuery.data ?? [])
+      .filter((w) => w.is_secondary)
+      .map((w) => ({ workstationId: w.id, productionId: null, assignmentType: "secondary" as const, label: w.display_name }));
+    return [...mainTargets, ...secondaryTargets];
+  }, [productionsQuery.data, workstationsQuery.data, workstationsById]);
+
+  async function reassign(employeeId: string, targetKey: string) {
+    if (!shiftQuery.data) return;
+    const target = reassignmentTargets.find((t) => t.workstationId === targetKey);
+    if (!target) return;
+    await setManualAssignment({
+      shiftId: shiftQuery.data.id,
+      employeeId,
+      workstationId: target.workstationId,
+      productionId: target.productionId,
+      assignmentType: target.assignmentType,
+    });
+    await invalidate();
   }
 
   async function recompute() {
@@ -176,12 +203,29 @@ function ShiftAssignmentPage() {
                     <Badge variant={workstation?.is_secondary ? "outline" : "secondary"}>{workstation?.area ?? "?"}</Badge>
                     <span className="font-medium">{workstation?.display_name ?? "Bez pracoviště"}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-1.5">
                     {group.map((a) => (
-                      <Badge key={a.id} variant={a.assignment_type === "temp" ? "destructive" : "default"}>
-                        {employeesById.get(a.employee_id)?.full_name ?? a.employee_id}
-                        {a.is_manual_override ? " ✎" : ""}
-                      </Badge>
+                      <div key={a.id} className="flex flex-wrap items-center gap-2">
+                        <Badge variant={a.assignment_type === "temp" ? "destructive" : "default"}>
+                          {employeesById.get(a.employee_id)?.full_name ?? a.employee_id}
+                          {a.is_manual_override ? " ✎" : ""}
+                        </Badge>
+                        <select
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                          value={a.workstation_id ?? ""}
+                          onChange={(e) => void reassign(a.employee_id, e.target.value)}
+                          aria-label={`Přesunout ${employeesById.get(a.employee_id)?.full_name ?? a.employee_id}`}
+                        >
+                          {a.workstation_id && !reassignmentTargets.some((t) => t.workstationId === a.workstation_id) ? (
+                            <option value={a.workstation_id}>{workstation?.display_name ?? "Aktuální"}</option>
+                          ) : null}
+                          {reassignmentTargets.map((t) => (
+                            <option key={t.workstationId} value={t.workstationId}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     ))}
                   </div>
                 </div>
