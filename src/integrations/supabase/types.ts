@@ -83,6 +83,7 @@ export type Database = {
           help_score: number;
           id: string;
           import_batch_id: string | null;
+          import_item_id: string | null;
           is_demo: boolean;
           line: string;
           note: string | null;
@@ -113,6 +114,7 @@ export type Database = {
           help_score?: number;
           id?: string;
           import_batch_id?: string | null;
+          import_item_id?: string | null;
           is_demo?: boolean;
           line: string;
           note?: string | null;
@@ -143,6 +145,7 @@ export type Database = {
           help_score?: number;
           id?: string;
           import_batch_id?: string | null;
+          import_item_id?: string | null;
           is_demo?: boolean;
           line?: string;
           note?: string | null;
@@ -168,6 +171,13 @@ export type Database = {
             columns: ["employee_id"];
             isOneToOne: false;
             referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "daily_records_import_item_id_fkey";
+            columns: ["import_item_id"];
+            isOneToOne: false;
+            referencedRelation: "import_items";
             referencedColumns: ["id"];
           },
           {
@@ -411,6 +421,7 @@ export type Database = {
           product_code: string | null;
           raw_data: Json;
           role: string | null;
+          stat_status: string;
           updated_at: string;
         };
         Insert: {
@@ -430,6 +441,7 @@ export type Database = {
           product_code?: string | null;
           raw_data?: Json;
           role?: string | null;
+          stat_status?: string;
           updated_at?: string;
         };
         Update: {
@@ -449,6 +461,7 @@ export type Database = {
           product_code?: string | null;
           raw_data?: Json;
           role?: string | null;
+          stat_status?: string;
           updated_at?: string;
         };
         Relationships: [
@@ -457,6 +470,47 @@ export type Database = {
             columns: ["import_item_id"];
             isOneToOne: false;
             referencedRelation: "import_items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      import_item_hourly_stat_events: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          from_status: string | null;
+          id: string;
+          import_item_hourly_id: string;
+          note: string | null;
+          reason: string | null;
+          to_status: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          import_item_hourly_id: string;
+          note?: string | null;
+          reason?: string | null;
+          to_status: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          from_status?: string | null;
+          id?: string;
+          import_item_hourly_id?: string;
+          note?: string | null;
+          reason?: string | null;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "import_item_hourly_stat_events_import_item_hourly_id_fkey";
+            columns: ["import_item_hourly_id"];
+            isOneToOne: false;
+            referencedRelation: "import_item_hourly";
             referencedColumns: ["id"];
           },
         ];
@@ -2032,6 +2086,7 @@ export type Database = {
         };
         Returns: {
           ha_import_item_id: string;
+          ha_import_item_ids: string[];
           ha_product_code: string;
           match_status: string;
         }[];
@@ -2072,6 +2127,25 @@ export type Database = {
       };
       is_tester: { Args: { p_user_id?: string }; Returns: boolean };
       isfinite: { Args: { p_value: number }; Returns: boolean };
+      list_hourly_stat_review: {
+        Args: { p_statuses?: string[] };
+        Returns: {
+          actual_oee_pct: number;
+          actual_output: number;
+          availability_pct: number;
+          hour: number;
+          hourly_id: string;
+          import_item_id: string;
+          line: string;
+          performance_pct: number;
+          product_code: string;
+          reconstruction_status: string;
+          shift: string;
+          stat_status: string;
+          trace_id: string;
+          work_date: string;
+        }[];
+      };
       normalize_downtime_reason: { Args: { p_text: string }; Returns: string };
       recalculate_import_item_kpis: {
         Args: { p_import_item_id: string };
@@ -2080,6 +2154,10 @@ export type Database = {
       reconstruct_import_item_hourly: {
         Args: { p_import_item_id: string };
         Returns: undefined;
+      };
+      refresh_daily_records_for_import_item: {
+        Args: { p_import_item_id: string };
+        Returns: Json;
       };
       refresh_import_batch_counters: {
         Args: { p_batch_id: string };
@@ -2118,6 +2196,15 @@ export type Database = {
           severity: string;
           violation_count: number;
         }[];
+      };
+      set_hourly_stat_status: {
+        Args: {
+          p_hourly_id: string;
+          p_new_status: string;
+          p_note?: string;
+          p_reason?: string;
+        };
+        Returns: Json;
       };
       start_shift_production: { Args: { p_shift_id: string }; Returns: Json };
       sync_effective_last_hour_norm: {
