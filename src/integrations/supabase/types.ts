@@ -553,6 +553,10 @@ export type Database = {
           approved_by: string | null;
           batch_id: string;
           completed_at: string | null;
+          conflict_daily_record_ids: string[] | null;
+          conflict_resolution: string | null;
+          conflict_resolved_at: string | null;
+          conflict_resolved_by: string | null;
           created_at: string;
           error_message: string | null;
           id: string;
@@ -565,10 +569,6 @@ export type Database = {
           product_id: string | null;
           product_match_status: string;
           product_name: string | null;
-          conflict_daily_record_ids: string[] | null;
-          conflict_resolution: string | null;
-          conflict_resolved_at: string | null;
-          conflict_resolved_by: string | null;
           product_profile_status: string;
           reimport_of_id: string | null;
           rejected_at: string | null;
@@ -588,6 +588,10 @@ export type Database = {
           approved_by?: string | null;
           batch_id: string;
           completed_at?: string | null;
+          conflict_daily_record_ids?: string[] | null;
+          conflict_resolution?: string | null;
+          conflict_resolved_at?: string | null;
+          conflict_resolved_by?: string | null;
           created_at?: string;
           error_message?: string | null;
           id?: string;
@@ -600,10 +604,6 @@ export type Database = {
           product_id?: string | null;
           product_match_status?: string;
           product_name?: string | null;
-          conflict_daily_record_ids?: string[] | null;
-          conflict_resolution?: string | null;
-          conflict_resolved_at?: string | null;
-          conflict_resolved_by?: string | null;
           product_profile_status?: string;
           reimport_of_id?: string | null;
           rejected_at?: string | null;
@@ -623,6 +623,10 @@ export type Database = {
           approved_by?: string | null;
           batch_id?: string;
           completed_at?: string | null;
+          conflict_daily_record_ids?: string[] | null;
+          conflict_resolution?: string | null;
+          conflict_resolved_at?: string | null;
+          conflict_resolved_by?: string | null;
           created_at?: string;
           error_message?: string | null;
           id?: string;
@@ -635,10 +639,6 @@ export type Database = {
           product_id?: string | null;
           product_match_status?: string;
           product_name?: string | null;
-          conflict_daily_record_ids?: string[] | null;
-          conflict_resolution?: string | null;
-          conflict_resolved_at?: string | null;
-          conflict_resolved_by?: string | null;
           product_profile_status?: string;
           reimport_of_id?: string | null;
           rejected_at?: string | null;
@@ -672,6 +672,224 @@ export type Database = {
             columns: ["reimport_of_id"];
             isOneToOne: false;
             referencedRelation: "import_items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_shift_exceptions: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          employee_id: string;
+          exception_type: string;
+          id: string;
+          reason: string | null;
+          shift: string;
+          team_id: string;
+          work_date: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id: string;
+          exception_type: string;
+          id?: string;
+          reason?: string | null;
+          shift: string;
+          team_id: string;
+          work_date: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id?: string;
+          exception_type?: string;
+          id?: string;
+          reason?: string | null;
+          shift?: string;
+          team_id?: string;
+          work_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_shift_exceptions_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_shift_exceptions_team_id_fkey";
+            columns: ["team_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_teams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_team_members: {
+        Row: {
+          added_at: string;
+          employee_id: string;
+          id: string;
+          team_id: string;
+        };
+        Insert: {
+          added_at?: string;
+          employee_id: string;
+          id?: string;
+          team_id: string;
+        };
+        Update: {
+          added_at?: string;
+          employee_id?: string;
+          id?: string;
+          team_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_team_members_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_team_members_team_id_fkey";
+            columns: ["team_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_teams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_teams: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          id: string;
+          name: string;
+          team_leader_user_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          team_leader_user_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          team_leader_user_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      iw_workstation_restrictions: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          employee_id: string;
+          id: string;
+          reason: string | null;
+          restriction_type: string;
+          workstation_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id: string;
+          id?: string;
+          reason?: string | null;
+          restriction_type?: string;
+          workstation_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id?: string;
+          id?: string;
+          reason?: string | null;
+          restriction_type?: string;
+          workstation_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_workstation_restrictions_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "iw_workstation_restrictions_workstation_id_fkey";
+            columns: ["workstation_id"];
+            isOneToOne: false;
+            referencedRelation: "iw_workstations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      iw_workstations: {
+        Row: {
+          active: boolean;
+          area: string;
+          code: string;
+          created_at: string;
+          display_name: string;
+          group_name: string;
+          id: string;
+          is_secondary: boolean;
+          note: string | null;
+          requires_ha_qual: boolean;
+          requires_tup_qual: boolean;
+          sort_order: number;
+          updated_at: string;
+          workplace_id: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          area: string;
+          code: string;
+          created_at?: string;
+          display_name: string;
+          group_name: string;
+          id?: string;
+          is_secondary?: boolean;
+          note?: string | null;
+          requires_ha_qual?: boolean;
+          requires_tup_qual?: boolean;
+          sort_order?: number;
+          updated_at?: string;
+          workplace_id?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          area?: string;
+          code?: string;
+          created_at?: string;
+          display_name?: string;
+          group_name?: string;
+          id?: string;
+          is_secondary?: boolean;
+          note?: string | null;
+          requires_ha_qual?: boolean;
+          requires_tup_qual?: boolean;
+          sort_order?: number;
+          updated_at?: string;
+          workplace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "iw_workstations_workplace_id_fkey";
+            columns: ["workplace_id"];
+            isOneToOne: false;
+            referencedRelation: "workplaces";
             referencedColumns: ["id"];
           },
         ];
@@ -1329,22 +1547,52 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      _historical_recompute_run: {
+        Args: {
+          p_sample_limit: number;
+          p_work_date_from: string;
+          p_work_date_to: string;
+        };
+        Returns: Json;
+      };
       admin_set_role: {
         Args: { _role: string; _user_id: string };
         Returns: undefined;
       };
-      approve_import_item: {
-        Args: { p_actor_id?: string; p_import_item_id: string };
-        Returns: Json;
-      };
-      approve_import_item_legacy: {
-        Args: { p_actor_id?: string; p_import_item_id: string };
-        Returns: Json;
-      };
       apply_ha_tup_capping: {
-        Args: { p_tup_import_item_id: string; p_tup_product_code: string; p_allocation_fraction?: number };
+        Args: {
+          p_allocation_fraction?: number;
+          p_tup_import_item_id: string;
+          p_tup_product_code: string;
+        };
         Returns: Json;
       };
+      approve_import_item:
+        | {
+            Args: { p_actor_id?: string; p_import_item_id: string };
+            Returns: Json;
+          }
+        | {
+            Args: {
+              p_actor_id?: string;
+              p_confirm_conflict?: boolean;
+              p_import_item_id: string;
+            };
+            Returns: Json;
+          };
+      approve_import_item_legacy:
+        | {
+            Args: { p_actor_id?: string; p_import_item_id: string };
+            Returns: Json;
+          }
+        | {
+            Args: {
+              p_actor_id?: string;
+              p_confirm_conflict?: boolean;
+              p_import_item_id: string;
+            };
+            Returns: Json;
+          };
       auto_approve_import_item: {
         Args: { p_import_item_id: string };
         Returns: Json;
@@ -1372,20 +1620,52 @@ export type Database = {
       };
       auto_shift_start_minute: { Args: { p_shift: string }; Returns: number };
       classify_downtime_reason: { Args: { p_reason: string }; Returns: string };
+      codes_match: { Args: { a: string; b: string }; Returns: boolean };
       compute_import_item_product_kpis: {
         Args: { p_import_item_id: string; p_work_date?: string };
         Returns: {
-          availability: number | null;
-          oee: number | null;
-          performance: number | null;
-          product_code: string | null;
-          product_id: string | null;
-          product_name: string | null;
-          profile_complete: boolean | null;
-          profile_id: string | null;
+          availability: number;
+          oee: number;
+          performance: number;
+          product_code: string;
+          product_id: string;
+          product_name: string;
+          profile_complete: boolean;
+          profile_id: string;
         }[];
       };
       current_employee_id: { Args: never; Returns: string };
+      detect_performance_anomalies: {
+        Args: {
+          p_deviation_threshold?: number;
+          p_work_date_from?: string;
+          p_work_date_to?: string;
+        };
+        Returns: {
+          available_time: number;
+          employee_avg_oee: number;
+          employee_avg_performance: number;
+          employee_id: string;
+          employee_name: string;
+          line: string;
+          oee: number;
+          performance: number;
+          product: string;
+          reason: string;
+          record_id: string;
+          shift: string;
+          work_date: string;
+        }[];
+      };
+      downtime_pareto: {
+        Args: { p_work_date_from?: string; p_work_date_to?: string };
+        Returns: {
+          category: string;
+          occurrences: number;
+          reason_label: string;
+          total_minutes: number;
+        }[];
+      };
       ensure_import_item_product_profiles: {
         Args: { p_import_item_id: string };
         Returns: undefined;
@@ -1401,37 +1681,43 @@ export type Database = {
           last_name: string;
           updated_at: string;
         };
+        SetofOptions: {
+          from: "*";
+          to: "profiles";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       evaluate_batch_ha_tup_linkage: {
         Args: { p_batch_id: string };
         Returns: Json;
       };
-      downtime_pareto: {
-        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
-        Returns: Json;
-      };
-      detect_performance_anomalies: {
-        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null; p_deviation_threshold?: number | null };
-        Returns: Json;
+      find_ha_tup_link: {
+        Args: {
+          p_line: string;
+          p_shift: string;
+          p_tup_product_code: string;
+          p_work_date: string;
+        };
+        Returns: {
+          ha_import_item_id: string;
+          ha_product_code: string;
+          match_status: string;
+        }[];
       };
       ha_tup_linkage_report: {
-        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
-        Returns: Json;
-      };
-      historical_recompute_preview: {
-        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null; p_sample_limit?: number | null };
-        Returns: Json;
-      };
-      historical_recompute_apply: {
-        Args: { p_work_date_from?: string | null; p_work_date_to?: string | null };
-        Returns: Json;
-      };
-      find_ha_tup_link: {
-        Args: { p_line: string; p_shift: string; p_tup_product_code: string; p_work_date: string };
+        Args: { p_work_date_from?: string; p_work_date_to?: string };
         Returns: {
-          ha_import_item_id: string | null;
-          ha_product_code: string | null;
-          match_status: string | null;
+          allocation_fraction: number;
+          ha_available_output: number;
+          ha_product_code: string;
+          hours_capped: number;
+          hours_linked: number;
+          linked_ha_import_item_id: string;
+          shift: string;
+          tup_actual_output: number;
+          tup_product_code: string;
+          work_date: string;
         }[];
       };
       has_role: {
@@ -1441,9 +1727,25 @@ export type Database = {
         };
         Returns: boolean;
       };
+      historical_recompute_apply: {
+        Args: { p_work_date_from?: string; p_work_date_to?: string };
+        Returns: Json;
+      };
+      historical_recompute_preview: {
+        Args: {
+          p_sample_limit?: number;
+          p_work_date_from?: string;
+          p_work_date_to?: string;
+        };
+        Returns: Json;
+      };
       is_tester: { Args: { p_user_id?: string }; Returns: boolean };
       isfinite: { Args: { p_value: number }; Returns: boolean };
       normalize_downtime_reason: { Args: { p_text: string }; Returns: string };
+      recalculate_import_item_kpis: {
+        Args: { p_import_item_id: string };
+        Returns: undefined;
+      };
       reconstruct_import_item_hourly: {
         Args: { p_import_item_id: string };
         Returns: undefined;
@@ -1457,20 +1759,33 @@ export type Database = {
         Returns: undefined;
       };
       resolve_product_profile: {
-        Args: { p_allow_fallback?: boolean; p_code: string; p_work_date?: string };
+        Args: {
+          p_allow_fallback?: boolean;
+          p_code: string;
+          p_work_date?: string;
+        };
         Returns: {
-          h_capacity: number | null;
-          h_norm_per_hour: number | null;
-          match_source: string | null;
-          product_code: string | null;
-          product_id: string | null;
-          product_name: string | null;
-          profile_complete: boolean | null;
-          profile_ha_subassy: string | null;
-          profile_id: string | null;
-          profile_tup_subassy: string | null;
-          t_capacity: number | null;
-          t_norm_per_hour: number | null;
+          h_capacity: number;
+          h_norm_per_hour: number;
+          match_source: string;
+          product_code: string;
+          product_id: string;
+          product_name: string;
+          profile_complete: boolean;
+          profile_ha_subassy: string;
+          profile_id: string;
+          profile_tup_subassy: string;
+          t_capacity: number;
+          t_norm_per_hour: number;
+        }[];
+      };
+      run_data_integrity_audit: {
+        Args: never;
+        Returns: {
+          check_name: string;
+          sample_ids: string[];
+          severity: string;
+          violation_count: number;
         }[];
       };
       sync_effective_last_hour_norm: {

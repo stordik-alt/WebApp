@@ -29,6 +29,8 @@ import { Route as TydenniDataRouteImport } from './routes/tydenni-data'
 import { Route as UzivateleRouteImport } from './routes/uzivatele'
 import { Route as ZamestnanciRouteImport } from './routes/zamestnanci'
 import { Route as ZebricekRouteImport } from './routes/zebricek'
+import { Route as InteraktivniPracovisteMapaRouteImport } from './routes/interaktivni/pracoviste-mapa'
+import { Route as InteraktivniTymyRouteImport } from './routes/interaktivni/tymy'
 import { Route as ZamestnanecIdRouteImport } from './routes/zamestnanec.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -131,6 +133,17 @@ const ZebricekRoute = ZebricekRouteImport.update({
   path: '/zebricek',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InteraktivniPracovisteMapaRoute =
+  InteraktivniPracovisteMapaRouteImport.update({
+    id: '/interaktivni/pracoviste-mapa',
+    path: '/interaktivni/pracoviste-mapa',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const InteraktivniTymyRoute = InteraktivniTymyRouteImport.update({
+  id: '/interaktivni/tymy',
+  path: '/interaktivni/tymy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ZamestnanecIdRoute = ZamestnanecIdRouteImport.update({
   id: '/zamestnanec/$id',
   path: '/zamestnanec/$id',
@@ -158,6 +171,8 @@ export interface FileRoutesByFullPath {
   '/uzivatele': typeof UzivateleRoute
   '/zamestnanci': typeof ZamestnanciRoute
   '/zebricek': typeof ZebricekRoute
+  '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/tymy': typeof InteraktivniTymyRoute
   '/zamestnanec/$id': typeof ZamestnanecIdRoute
 }
 export interface FileRoutesByTo {
@@ -181,6 +196,8 @@ export interface FileRoutesByTo {
   '/uzivatele': typeof UzivateleRoute
   '/zamestnanci': typeof ZamestnanciRoute
   '/zebricek': typeof ZebricekRoute
+  '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/tymy': typeof InteraktivniTymyRoute
   '/zamestnanec/$id': typeof ZamestnanecIdRoute
 }
 export interface FileRoutesById {
@@ -205,6 +222,8 @@ export interface FileRoutesById {
   '/uzivatele': typeof UzivateleRoute
   '/zamestnanci': typeof ZamestnanciRoute
   '/zebricek': typeof ZebricekRoute
+  '/interaktivni/pracoviste-mapa': typeof InteraktivniPracovisteMapaRoute
+  '/interaktivni/tymy': typeof InteraktivniTymyRoute
   '/zamestnanec/$id': typeof ZamestnanecIdRoute
 }
 export interface FileRouteTypes {
@@ -230,6 +249,8 @@ export interface FileRouteTypes {
     | '/uzivatele'
     | '/zamestnanci'
     | '/zebricek'
+    | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/tymy'
     | '/zamestnanec/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -253,6 +274,8 @@ export interface FileRouteTypes {
     | '/uzivatele'
     | '/zamestnanci'
     | '/zebricek'
+    | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/tymy'
     | '/zamestnanec/$id'
   id:
     | '__root__'
@@ -276,6 +299,8 @@ export interface FileRouteTypes {
     | '/uzivatele'
     | '/zamestnanci'
     | '/zebricek'
+    | '/interaktivni/pracoviste-mapa'
+    | '/interaktivni/tymy'
     | '/zamestnanec/$id'
   fileRoutesById: FileRoutesById
 }
@@ -300,6 +325,8 @@ export interface RootRouteChildren {
   UzivateleRoute: typeof UzivateleRoute
   ZamestnanciRoute: typeof ZamestnanciRoute
   ZebricekRoute: typeof ZebricekRoute
+  InteraktivniPracovisteMapaRoute: typeof InteraktivniPracovisteMapaRoute
+  InteraktivniTymyRoute: typeof InteraktivniTymyRoute
   ZamestnanecIdRoute: typeof ZamestnanecIdRoute
 }
 
@@ -445,6 +472,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ZebricekRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/interaktivni/pracoviste-mapa': {
+      id: '/interaktivni/pracoviste-mapa'
+      path: '/interaktivni/pracoviste-mapa'
+      fullPath: '/interaktivni/pracoviste-mapa'
+      preLoaderRoute: typeof InteraktivniPracovisteMapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/interaktivni/tymy': {
+      id: '/interaktivni/tymy'
+      path: '/interaktivni/tymy'
+      fullPath: '/interaktivni/tymy'
+      preLoaderRoute: typeof InteraktivniTymyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/zamestnanec/$id': {
       id: '/zamestnanec/$id'
       path: '/zamestnanec/$id'
@@ -476,6 +517,8 @@ const rootRouteChildren: RootRouteChildren = {
   UzivateleRoute: UzivateleRoute,
   ZamestnanciRoute: ZamestnanciRoute,
   ZebricekRoute: ZebricekRoute,
+  InteraktivniPracovisteMapaRoute: InteraktivniPracovisteMapaRoute,
+  InteraktivniTymyRoute: InteraktivniTymyRoute,
   ZamestnanecIdRoute: ZamestnanecIdRoute,
 }
 export const routeTree = rootRouteImport
