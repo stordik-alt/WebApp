@@ -192,7 +192,7 @@ function FloorMapPage() {
           </div>
         </Panel>
 
-        <div className="iw-mono px-1 text-sm text-white/80">
+        <div className="iw-mono px-1 text-sm text-foreground/80">
           <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
         </div>
 
