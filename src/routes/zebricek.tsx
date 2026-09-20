@@ -207,7 +207,7 @@ function RankingPage() {
                   </div>
                   <span className="shrink-0 text-lg font-semibold tabular-nums">{fmt(perf.ipi)}</span>
                 </div>
-                <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border/50 pt-2.5 text-center">
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-4">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>
