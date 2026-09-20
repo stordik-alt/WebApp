@@ -92,7 +92,7 @@ export function HistoricalRecomputeManager() {
       {previewResult ? <div className="mt-4"><div className="mb-2 text-sm font-semibold">Výsledek náhledu (testovací vzorek, nic se neuložilo)</div><ResultSummary result={previewResult} /></div> : null}
       {applyResult ? <div className="mt-4"><div className="mb-2 text-sm font-semibold text-emerald-400">Výsledek skutečného přepočtu (uloženo)</div><ResultSummary result={applyResult} /></div> : null}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-lg">
           <DialogHeader><DialogTitle>Potvrdit hromadný přepočet</DialogTitle></DialogHeader>
           <div className="text-sm text-muted-foreground">
             Tato akce trvale přepočítá a uloží nové hodnoty Výkonu, Dostupnosti a OEE pro všechny schválené záznamy {dateFrom || dateTo ? `v rozsahu ${dateFrom || "?"} – ${dateTo || "?"}` : "ve všech dostupných datech"} (na základě náhledu: {previewResult ? `${previewResult.changed} z ${previewResult.total} by se změnilo` : "neznámo"}). Historické záznamy se nemažou ani znovu nevytvářejí, mění se pouze jejich vypočtené hodnoty.
