@@ -39,9 +39,9 @@ const formatDate = (value: string) => {
 
 function metricTone(value: number | null | undefined) {
   if (value == null) return "text-muted-foreground";
-  if (value >= 96) return "text-emerald-300";
-  if (value >= 80) return "text-amber-700 dark:text-amber-300";
-  return "text-rose-700 dark:text-rose-300";
+  if (value >= 96) return "text-success";
+  if (value >= 80) return "text-warning";
+  return "text-destructive";
 }
 
 type HourlyDetail = {
