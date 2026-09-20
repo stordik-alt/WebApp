@@ -26,9 +26,9 @@ type SortKey = "code" | "line" | "name" | "oee" | "availability" | "records";
 
 function oeeTone(value: number | null) {
   if (value == null) return "text-muted-foreground";
-  if (value >= 100) return "text-emerald-300";
-  if (value >= 80) return "text-amber-300";
-  return "text-rose-300";
+  if (value >= 100) return "text-success";
+  if (value >= 80) return "text-warning";
+  return "text-destructive";
 }
 function formatOee(value: number | null) { return value == null ? "–" : `${value.toFixed(1)} %`; }
 function shiftHours(_shift: string) { return 8; }
