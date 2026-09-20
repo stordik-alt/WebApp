@@ -36,22 +36,20 @@ export type IwShiftException = {
   created_at: string;
 };
 
-// # dělá: najde aktivní tým daného Team Leadera (jeden aktivní tým na TL dle unikátního indexu)
-export async function getActiveTeamForLeader(teamLeaderUserId: string): Promise<IwTeam | null> {
+// # dělá: načte všechny aktivní týmy daného TL (TL si jich může předem připravit víc, např. různé osádky)
+export async function listTeamsForLeader(teamLeaderUserId: string): Promise<IwTeam[]> {
   const { data, error } = await supabase
     .from("iw_teams")
     .select("*")
     .eq("team_leader_user_id", teamLeaderUserId)
     .eq("active", true)
-    .maybeSingle();
+    .order("created_at", { ascending: true });
   if (error) throw error;
-  return (data as IwTeam | null) ?? null;
+  return (data ?? []) as IwTeam[];
 }
 
-// # dělá: vytvoří základní tým pro TL, pokud ještě žádný aktivní nemá
-export async function ensureTeamForLeader(teamLeaderUserId: string, name = "Základní tým"): Promise<IwTeam> {
-  const existing = await getActiveTeamForLeader(teamLeaderUserId);
-  if (existing) return existing;
+// # dělá: vytvoří nový pojmenovaný tým pro TL (nekontroluje duplicity - unikátní jméno hlídá DB index)
+export async function createTeam(teamLeaderUserId: string, name: string): Promise<IwTeam> {
   const { data, error } = await supabase
     .from("iw_teams")
     .insert({ team_leader_user_id: teamLeaderUserId, name })
@@ -59,6 +57,14 @@ export async function ensureTeamForLeader(teamLeaderUserId: string, name = "Zák
     .single();
   if (error) throw error;
   return data as IwTeam;
+}
+
+// # dělá: zajistí, že TL má alespoň jeden tým (bootstrap pro nové uživatele); jinak vrátí existující seznam beze změny
+export async function ensureAtLeastOneTeam(teamLeaderUserId: string): Promise<IwTeam[]> {
+  const existing = await listTeamsForLeader(teamLeaderUserId);
+  if (existing.length > 0) return existing;
+  const created = await createTeam(teamLeaderUserId, "Tým 1");
+  return [created];
 }
 
 // # dělá: načte členy základního týdenního týmu

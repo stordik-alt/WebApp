@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
-import { useAuth } from "@/lib/auth";
+import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { useEmployees } from "@/lib/data";
 import { listWorkstations } from "@/lib/floorMap";
 import { getShiftSnapshot, listHistorySegments } from "@/lib/shiftHistory";
 import { ensureShift } from "@/lib/shiftProductions";
 import type { IwShiftName } from "@/lib/shift-windows";
-import { ensureTeamForLeader } from "@/lib/teams";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/interaktivni/smena-historie")({
@@ -22,12 +21,6 @@ export const Route = createFileRoute("/interaktivni/smena-historie")({
   }),
   component: ShiftHistoryPage,
 });
-
-const SHIFTS: IwShiftName[] = ["Ranní", "Odpolední", "Noční"];
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 type ActualRecord = { employee_id: string; line: string; product: string | null; oee: number | null };
 
@@ -51,18 +44,12 @@ function useActualRecords(workDate: string, shift: IwShiftName, employeeIds: str
  * pipeline OCR importu zůstává jediným zdrojem pravdy pro skutečné výsledky.
  */
 function ShiftHistoryPage() {
-  const { session, isTeamLeader, isAdmin } = useAuth();
-  const [workDate, setWorkDate] = useState(todayIso());
-  const [shift, setShift] = useState<IwShiftName>("Ranní");
+  const { leaderUserId, canManage, teamId, workDate, shift } = useShiftSelection();
 
-  const leaderUserId = session?.user.id ?? null;
-  const canManage = isTeamLeader || isAdmin;
-
-  const teamQuery = useQuery({ queryKey: ["iw_team", leaderUserId], queryFn: () => ensureTeamForLeader(leaderUserId as string), enabled: Boolean(leaderUserId) && canManage });
   const shiftQuery = useQuery({
-    queryKey: ["iw_shift", teamQuery.data?.id, workDate, shift],
-    queryFn: () => ensureShift({ teamId: teamQuery.data!.id, workDate, shift, createdBy: leaderUserId as string }),
-    enabled: Boolean(teamQuery.data) && Boolean(leaderUserId),
+    queryKey: ["iw_shift", teamId, workDate, shift],
+    queryFn: () => ensureShift({ teamId: teamId as string, workDate, shift, createdBy: leaderUserId as string }),
+    enabled: Boolean(teamId) && Boolean(leaderUserId),
   });
 
   const employeesQuery = useEmployees();
@@ -99,19 +86,7 @@ function ShiftHistoryPage() {
   return (
     <AppShell title="Historie směny" subtitle="Plánovaný stav ze ZAHÁJIT VÝROBU vedle skutečných potvrzených importů - jen pro přehled.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Panel className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-end gap-3">
-            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-            <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
-              {SHIFTS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <span className="iw-label ml-auto">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
-          </div>
-        </Panel>
+        <div className="iw-mono px-1 text-xs text-white/50">Stav směny: {shiftQuery.data?.status ?? "…"}</div>
 
         <Panel>
           <PanelHeader icon={<History className="h-4 w-4" />} title="Časové úseky" subtitle="PERSON → ČAS → PRACOVIŠTĚ → VÝROBEK → KOLEGOVÉ → VÝSLEDEK" />

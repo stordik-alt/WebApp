@@ -1,73 +1,100 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlayCircle } from "lucide-react";
+import { Factory } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { FloorMap, type FloorMapWorkstationView } from "@/components/interaktivni/FloorMap";
-import { Panel } from "@/components/interaktivni/Panel";
-import { useAuth } from "@/lib/auth";
-import { listWorkstations } from "@/lib/floorMap";
+import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
+import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
+import { listWorkstations, type IwWorkstation } from "@/lib/floorMap";
 import { computeExpectedCompletion } from "@/lib/shift-eta";
-import { listAssignments, listTempOperators } from "@/lib/shiftAssignments";
-import { startShiftProduction } from "@/lib/shiftHistory";
-import { ensureShift, listActiveProductions, resolveProductProfile } from "@/lib/shiftProductions";
-import type { IwShiftName } from "@/lib/shift-windows";
-import { ensureTeamForLeader } from "@/lib/teams";
+import { productCapacityFor, productionCapacity } from "@/lib/production-capacity";
+import { listAssignments } from "@/lib/shiftAssignments";
+import { ensureShift, listActiveProductions, resolveProductProfile, startProduction, updateProduction } from "@/lib/shiftProductions";
 
 export const Route = createFileRoute("/interaktivni/mapa")({
   head: () => ({
     meta: [
       { title: "Mapa haly – Interaktivní prostředí" },
-      { name: "description", content: "Aktuální stav výrobní haly, kapacita a ZAHÁJIT VÝROBU." },
+      { name: "description", content: "Zadání výroby a zbývajících kusů na každou linku + aktuální stav haly." },
     ],
   }),
   component: FloorMapPage,
 });
 
-const SHIFTS: IwShiftName[] = ["Ranní", "Odpolední", "Noční"];
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
 function nowHHMM() {
   return new Date().toISOString().slice(11, 16);
 }
 
 function FloorMapPage() {
-  const { session, isTeamLeader, isAdmin } = useAuth();
+  const { leaderUserId, canManage, teamId, workDate, shift } = useShiftSelection();
   const queryClient = useQueryClient();
-  const [workDate, setWorkDate] = useState(todayIso());
-  const [shift, setShift] = useState<IwShiftName>("Ranní");
-  const [starting, setStarting] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, { code: string; pieces: string }>>({});
 
-  const leaderUserId = session?.user.id ?? null;
-  const canManage = isTeamLeader || isAdmin;
-
-  const teamQuery = useQuery({ queryKey: ["iw_team", leaderUserId], queryFn: () => ensureTeamForLeader(leaderUserId as string), enabled: Boolean(leaderUserId) && canManage });
   const shiftQuery = useQuery({
-    queryKey: ["iw_shift", teamQuery.data?.id, workDate, shift],
-    queryFn: () => ensureShift({ teamId: teamQuery.data!.id, workDate, shift, createdBy: leaderUserId as string }),
-    enabled: Boolean(teamQuery.data) && Boolean(leaderUserId),
+    queryKey: ["iw_shift", teamId, workDate, shift],
+    queryFn: () => ensureShift({ teamId: teamId as string, workDate, shift, createdBy: leaderUserId as string }),
+    enabled: Boolean(teamId) && Boolean(leaderUserId),
   });
 
   const workstationsQuery = useQuery({ queryKey: ["iw_workstations"], queryFn: listWorkstations });
-  const productionsQuery = useQuery({ queryKey: ["iw_shift_productions", shiftQuery.data?.id], queryFn: () => listActiveProductions(shiftQuery.data!.id), enabled: Boolean(shiftQuery.data) });
+  const mainWorkstations = (workstationsQuery.data ?? []).filter((w) => !w.is_secondary);
+
+  const productionsQuery = useQuery({
+    queryKey: ["iw_shift_productions", shiftQuery.data?.id],
+    queryFn: () => listActiveProductions(shiftQuery.data!.id),
+    enabled: Boolean(shiftQuery.data),
+  });
+  const productions = productionsQuery.data ?? [];
+  const productionByWorkstation = useMemo(() => new Map(productions.map((p) => [p.workstation_id, p])), [productions]);
+
   const assignmentsQuery = useQuery({ queryKey: ["iw_shift_assignments", shiftQuery.data?.id], queryFn: () => listAssignments(shiftQuery.data!.id), enabled: Boolean(shiftQuery.data) });
-  const tempOperatorsQuery = useQuery({ queryKey: ["iw_shift_temp_operators", shiftQuery.data?.id], queryFn: () => listTempOperators(shiftQuery.data!.id), enabled: Boolean(shiftQuery.data) });
 
   const profilesQuery = useQuery({
-    queryKey: ["iw_resolved_profiles_map", (productionsQuery.data ?? []).map((p) => p.product_code).join(","), workDate],
+    queryKey: ["iw_resolved_profiles", productions.map((p) => p.product_code).join(","), workDate],
     queryFn: async () => {
-      const entries = await Promise.all((productionsQuery.data ?? []).map(async (p) => [p.product_code, await resolveProductProfile(p.product_code, workDate)] as const));
+      const entries = await Promise.all(productions.map(async (p) => [p.product_code, await resolveProductProfile(p.product_code, workDate)] as const));
       return new Map(entries);
     },
-    enabled: (productionsQuery.data ?? []).length > 0,
+    enabled: productions.length > 0,
   });
+
+  const totalCapacity = useMemo(() => {
+    if (!profilesQuery.data) return 0;
+    return productionCapacity(
+      productions.map((p) => {
+        const profile = profilesQuery.data!.get(p.product_code);
+        return { area: p.area, h_capacity: profile?.h_capacity ?? null, t_capacity: profile?.t_capacity ?? null };
+      }),
+    );
+  }, [productions, profilesQuery.data]);
+
+  async function invalidate() {
+    await queryClient.invalidateQueries({ queryKey: ["iw_shift_productions", shiftQuery.data?.id] });
+  }
+
+  async function setProduction(workstation: IwWorkstation) {
+    const draft = drafts[workstation.id];
+    if (!draft?.code.trim()) return;
+    const pieces = Number(draft.pieces);
+    if (!Number.isFinite(pieces) || pieces < 0) return;
+    const existing = productionByWorkstation.get(workstation.id);
+    if (existing) {
+      await updateProduction(existing.id, { remaining_pieces: pieces });
+    } else {
+      await startProduction({
+        shiftId: shiftQuery.data!.id,
+        workstationId: workstation.id,
+        productCode: draft.code.trim(),
+        area: workstation.area === "TUP" ? "TUP" : "HA",
+        remainingPieces: pieces,
+      });
+    }
+    await invalidate();
+  }
 
   const groups = useMemo(() => {
     const workstations = workstationsQuery.data ?? [];
-    const productionByWorkstation = new Map((productionsQuery.data ?? []).map((p) => [p.workstation_id, p]));
     const assignmentsByWorkstation = new Map<string, { count: number; hasTemp: boolean }>();
     for (const a of assignmentsQuery.data ?? []) {
       if (!a.workstation_id) continue;
@@ -84,7 +111,7 @@ function FloorMapPage() {
       const capacity = profile ? (workstation.area === "TUP" ? profile.t_capacity : profile.h_capacity) : null;
       const norm = profile ? (workstation.area === "TUP" ? profile.t_norm_per_hour : profile.h_norm_per_hour) : null;
       let expectedCompletionLabel: string | null = null;
-      if (production && capacity && norm) {
+      if (production && capacity && norm && assignment.count > 0) {
         const eta = computeExpectedCompletion({
           shift,
           workDate,
@@ -107,7 +134,6 @@ function FloorMapPage() {
         expectedCompletionLabel,
       };
     });
-    // # dělá: seskupí view podle group_name ve stejném pořadí, v jakém jsou pracoviště seřazená (sort_order)
     const result = new Map<string, FloorMapWorkstationView[]>();
     for (const view of views) {
       const list = result.get(view.workstation.group_name) ?? [];
@@ -115,21 +141,7 @@ function FloorMapPage() {
       result.set(view.workstation.group_name, list);
     }
     return result;
-  }, [workstationsQuery.data, productionsQuery.data, assignmentsQuery.data, profilesQuery.data, shift, workDate]);
-
-  async function handleStart() {
-    if (!shiftQuery.data) return;
-    setStarting(true);
-    try {
-      await startShiftProduction(shiftQuery.data.id);
-      toast.success("Výroba zahájena, výchozí stav směny byl uložen.");
-      await queryClient.invalidateQueries({ queryKey: ["iw_shift", teamQuery.data?.id, workDate, shift] });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Zahájení výroby selhalo.");
-    } finally {
-      setStarting(false);
-    }
-  }
+  }, [workstationsQuery.data, productionByWorkstation, assignmentsQuery.data, profilesQuery.data, shift, workDate]);
 
   if (!canManage) {
     return (
@@ -139,27 +151,50 @@ function FloorMapPage() {
     );
   }
 
-  const isDraft = shiftQuery.data?.status === "draft";
-
   return (
-    <AppShell title="Mapa haly" subtitle="Nedostatek operátorů nikdy neblokuje zahájení výroby.">
+    <AppShell title="Mapa haly" subtitle="Zadej výrobu a zbývající kusy na každou linku - kapacita a dokončení se počítají živě.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Panel className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-end gap-3">
-            <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-            <select value={shift} onChange={(e) => setShift(e.target.value as IwShiftName)}>
-              {SHIFTS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <span className="iw-label">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
-            <button type="button" className="iw-cta w-full justify-center sm:ml-auto sm:w-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
-              <PlayCircle className="h-4 w-4" /> ZAHÁJIT VÝROBU
-            </button>
+        <Panel>
+          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Kód produktu + zbývající kusy; priorita se nastavuje až v Rozdělení výroby" />
+          <div className="divide-y divide-white/10">
+            {mainWorkstations.map((workstation) => {
+              const production = productionByWorkstation.get(workstation.id);
+              const draft = drafts[workstation.id] ?? { code: production?.product_code ?? "", pieces: production ? String(production.remaining_pieces) : "" };
+              const profile = production ? profilesQuery.data?.get(production.product_code) : null;
+              const capacity = profile ? productCapacityFor({ area: workstation.area === "TUP" ? "TUP" : "HA", h_capacity: profile.h_capacity, t_capacity: profile.t_capacity }) : null;
+
+              return (
+                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_auto_1fr] sm:items-center sm:px-5">
+                  <div className="flex items-center gap-2">
+                    <span className="iw-chip">{workstation.area}</span>
+                    <span className="iw-mono truncate text-sm text-white/85">{workstation.display_name}</span>
+                  </div>
+                  <input
+                    value={draft.code}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, code: e.target.value } }))}
+                    placeholder="Kód produktu"
+                    aria-label="Kód produktu"
+                  />
+                  <input
+                    value={draft.pieces}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
+                    placeholder="Ks"
+                    inputMode="numeric"
+                    aria-label="Zbývající kusy"
+                  />
+                  <button type="button" className="iw-btn" onClick={() => void setProduction(workstation)}>
+                    {production ? "Aktualizovat" : "Uložit"}
+                  </button>
+                  <div className="iw-mono text-[11px] text-white/45">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
+                </div>
+              );
+            })}
           </div>
         </Panel>
+
+        <div className="iw-mono px-1 text-sm text-white/80">
+          <span className="text-white/45">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
+        </div>
 
         <FloorMap groups={groups} />
       </div>
