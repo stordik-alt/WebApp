@@ -353,7 +353,7 @@ function WeeklyPage() {
               <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
             ) : (
               filteredWeekly.map((w) => (
-                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-slate-950/35"}`}>
+                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-muted/25"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week}</p></div>
                     {w.is_alert ? (w.alert_resolved ? <Badge variant="outline" className="shrink-0">Alert vyřešen</Badge> : <Badge variant="destructive" className="shrink-0">QUALITY ALERT</Badge>) : <Badge className="shrink-0 bg-success text-success-foreground">OK</Badge>}
