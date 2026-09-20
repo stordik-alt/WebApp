@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useEmployees, useShiftAggregates, useSystemHealth, useWeeklyRecords } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { useCountUp } from "@/lib/use-count-up";
-import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
+import { avg, effectiveQuality, fmt, isoWeekMonday, localDateKey } from "@/lib/metrics";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,10 +57,10 @@ function Dashboard() {
   const { data: health } = useSystemHealth(isAdmin);
 
   const today = new Date();
-  const defaultTo = today.toISOString().slice(0, 10);
+  const defaultTo = localDateKey(today);
   const defaultFromDate = new Date(today);
   defaultFromDate.setDate(defaultFromDate.getDate() - 29);
-  const defaultFrom = defaultFromDate.toISOString().slice(0, 10);
+  const defaultFrom = localDateKey(defaultFromDate);
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(defaultTo);
 
