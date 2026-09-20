@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { localDateKey } from "@/lib/metrics";
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -172,7 +173,7 @@ function RemeasurePage() {
 function AcceptedItem({ row, onDone }: { row: NormRemeasurement; onDone: () => void }) {
   const [ha, setHa] = useState("");
   const [tup, setTup] = useState("");
-  const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [validFrom, setValidFrom] = useState(localDateKey());
   const [note, setNote] = useState("");
   const [by, setBy] = useState("");
 
