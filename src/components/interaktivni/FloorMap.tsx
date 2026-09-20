@@ -34,17 +34,17 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
   return (
     <div className={`iw-panel iw-panel-live rounded-lg p-3 ${STATUS_CLASS[status]}`}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="iw-mono truncate text-xs font-semibold text-white/90">{view.workstation.display_name}</span>
+        <span className="iw-mono truncate text-xs font-semibold text-foreground">{view.workstation.display_name}</span>
         <StatusBadge status={status} />
       </div>
-      <div className="iw-mono space-y-0.5 text-[11px] text-white/50">
+      <div className="iw-mono space-y-0.5 text-[11px] text-muted-foreground">
         {view.productCode ? <div>PRODUKT · {view.productCode}</div> : null}
         {view.remainingPieces != null ? <div>ZBÝVÁ · {view.remainingPieces} ks</div> : null}
         <div>
           OPERÁTOŘI · {view.assignedCount}
           {view.designedCapacity != null ? ` / ${view.designedCapacity}` : ""}
         </div>
-        {view.expectedCompletionLabel ? <div className="text-white/70">{view.expectedCompletionLabel}</div> : null}
+        {view.expectedCompletionLabel ? <div className="text-foreground/70">{view.expectedCompletionLabel}</div> : null}
       </div>
       {!view.workstation.is_secondary ? (
         <div className="iw-capacity-track mt-2">
