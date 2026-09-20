@@ -85,7 +85,7 @@ function Row({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3 last:border-0 last:pb-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         {Icon ? <Icon className="h-4 w-4 text-muted-foreground/70" /> : null}
         {label}
