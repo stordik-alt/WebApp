@@ -10,6 +10,10 @@
 .iw-scope {
   --iw-bg-deep: 224 55% 6%;
   --iw-bg-panel: 223 45% 10%;
+  --iw-text: 218 30% 94%;
+  --iw-text-muted: 218 20% 62%;
+  --iw-control-bg: 0 0% 100% / 0.04;
+  --iw-control-text: 218 30% 94%;
   --iw-grid-line: 190 70% 60%;
   --iw-live-green: 152 65% 52%;
   --iw-live-amber: 38 92% 58%;
@@ -24,6 +28,10 @@
 
 /* Základní hlubší plocha - i ve světlém režimu zůstává "mission control" tmavá,
    protože jde záměrně o odlišné prostředí, ne o další stránku aplikace. */
+.iw-scope {
+  color: hsl(var(--iw-text));
+}
+
 .iw-scope::before {
   content: "";
   position: fixed;
@@ -102,7 +110,7 @@
   border: 1px solid hsl(var(--iw-grid-line) / 0.25);
   border-radius: var(--radius-lg, 1rem);
   box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.14) inset, 0 18px 40px hsl(0 0% 0% / 0.35);
-  color: hsl(218 30% 94%);
+  color: hsl(var(--iw-text));
 }
 
 /* Kompozitní selektor (vyšší specificita než .iw-panel nebo .border-0 samotné) -
@@ -133,7 +141,7 @@
 }
 
 .iw-mono { font-family: var(--iw-font-mono); letter-spacing: 0.02em; }
-.iw-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.14em; color: hsl(218 20% 62%); }
+.iw-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.14em; color: hsl(var(--iw-text-muted)); }
 
 /* Živý pulzující "puls" bod - vyjadřuje, že se na daném pracovišti PRÁVĚ TEĎ vyrábí. */
 .iw-pulse-dot {
@@ -210,7 +218,7 @@
   border-radius: 0.5rem;
   border: 1px solid hsl(var(--iw-grid-line) / 0.2);
   background: hsl(0 0% 100% / 0.04);
-  color: hsl(218 30% 94%);
+  color: hsl(var(--iw-control-text));
   padding: 0 0.6rem;
   font-size: 0.8rem;
   font-family: var(--iw-font-mono);
@@ -261,7 +269,7 @@
   font-family: var(--iw-font-mono);
   font-size: 0.75rem;
   font-weight: 500;
-  color: hsl(218 30% 90%);
+  color: hsl(var(--iw-text));
   background: hsl(0 0% 100% / 0.06);
   border: 1px solid hsl(var(--iw-grid-line) / 0.18);
   cursor: pointer;
@@ -286,7 +294,7 @@
   font-size: 0.72rem;
   background: hsl(0 0% 100% / 0.06);
   border: 1px solid hsl(var(--iw-grid-line) / 0.14);
-  color: hsl(218 28% 88%);
+  color: hsl(var(--iw-text));
 }
 .iw-chip-temp { border-color: hsl(var(--iw-live-blue) / 0.45); color: hsl(var(--iw-live-blue)); }
 
@@ -300,6 +308,59 @@
   .iw-cta {
     min-height: 44px;
   }
+}
+
+
+/* Light theme: retain the industrial identity without forcing dark-only surfaces. */
+:root:not(.dark) .iw-scope {
+  --iw-bg-deep: 220 22% 96%;
+  --iw-bg-panel: 220 18% 100%;
+  --iw-grid-line: 205 70% 42%;
+  --iw-text: 222 30% 16%;
+  --iw-text-muted: 220 14% 42%;
+  --iw-control-bg: 220 20% 97%;
+  --iw-control-text: 222 30% 16%;
+}
+
+:root:not(.dark) .iw-scope::before {
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--iw-grid-line) / 0.08), transparent 60%), hsl(var(--iw-bg-deep));
+}
+
+:root:not(.dark) .iw-scope .iw-panel {
+  background: linear-gradient(180deg, hsl(var(--iw-bg-panel) / 0.88), hsl(var(--iw-bg-panel) / 0.78));
+  border-color: hsl(var(--iw-grid-line) / 0.22);
+  box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.08) inset, 0 10px 24px hsl(220 25% 20% / 0.10);
+}
+
+:root:not(.dark) .iw-scope input,
+:root:not(.dark) .iw-scope select,
+:root:not(.dark) .iw-scope .iw-control {
+  background: hsl(var(--iw-control-bg));
+  color: hsl(var(--iw-control-text));
+  border-color: hsl(var(--iw-grid-line) / 0.22);
+}
+
+:root:not(.dark) .iw-scope .iw-btn,
+:root:not(.dark) .iw-scope .iw-chip {
+  background: hsl(220 20% 96%);
+  color: hsl(var(--iw-text));
+  border-color: hsl(var(--iw-grid-line) / 0.20);
+}
+
+:root:not(.dark) .iw-scope .iw-btn:hover:not(:disabled),
+:root:not(.dark) .iw-scope .iw-chip:hover {
+  background: hsl(220 20% 91%);
+}
+
+:root:not(.dark) .iw-scope .iw-capacity-track {
+  background: hsl(220 20% 15% / 0.10);
+}
+
+@media (max-width: 767px) {
+  .iw-scope .iw-panel-header,
+  .iw-scope .iw-panel-header-column { padding-inline: 0.9rem; }
+  .iw-scope .iw-btn,
+  .iw-scope .iw-cta { width: 100%; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
