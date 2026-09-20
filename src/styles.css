@@ -182,19 +182,6 @@ button, a, input, select, textarea { transition: background-color 160ms ease, bo
 .shadow-md { box-shadow: var(--shadow-md) !important; }
 .card { background: hsl(var(--card)); color: hsl(var(--card-foreground)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
 
-/* Shared frame for legacy table/panel wrappers that do not use the Card component. */
-.rounded-lg.border.border-border.bg-card,
-.rounded-xl.border.border-border.bg-card,
-.rounded-2xl.border.border-border.bg-card,
-.rounded-lg.border.border-border\/80.bg-slate-950\/40,
-.rounded-2xl.border.border-border\/80.bg-slate-950\/40,
-.rounded-xl.bg-card\/90 {
-  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
-  box-shadow: var(--neon-shadow), var(--shadow-card) !important;
-  outline: 1px solid hsl(var(--neon-border) / var(--neon-ring-alpha));
-  outline-offset: 0;
-}
-
 table thead { background: hsl(var(--muted) / 0.55); }
 table tbody tr { border-color: hsl(var(--border) / 0.72); }
 table tbody tr:hover { background: hsl(var(--accent) / 0.48); }
@@ -205,9 +192,6 @@ input::placeholder, textarea::placeholder { color: hsl(var(--muted-foreground) /
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.25); border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); background-clip: padding-box; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
-.px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
-.py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-
 /* Light-mode cleanup for the Employees KPI strip. Keep the existing dark mode untouched. */
 html:not(.dark) .rounded-xl.bg-slate-950\/40 {
   background-color: hsl(var(--background)) !important;
@@ -323,13 +307,6 @@ html:not(.dark) .rounded-md.bg-fuchsia-400\/10 {
   background-color: hsl(290 48% 95%) !important;
   color: hsl(290 55% 30%) !important;
 }
-
-html:not(.dark) [data-app-title="Dashboard"] .bg-success\/10 { background-color: hsl(158 30% 93%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-primary\/10 { background-color: hsl(158 30% 94%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-purple-400\/10,
-html:not(.dark) [data-app-title="Dashboard"] .bg-violet-400\/10 { background-color: hsl(270 48% 95%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-sky-400\/10,
-html:not(.dark) [data-app-title="Dashboard"] .bg-blue-400\/10 { background-color: hsl(195 55% 94%) !important; }
 
 html:not(.dark) .bg-background\/80 { background-color: hsl(var(--background) / 0.92) !important; }
 
