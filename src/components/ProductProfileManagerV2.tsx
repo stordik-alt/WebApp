@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { localDateKey } from "@/lib/metrics";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, FileText, Pencil, Plus, Save, Upload, X } from "lucide-react";
@@ -103,7 +104,7 @@ export function ProductProfileManagerV2() {
     }
     setBusy(true);
     try {
-      const date = new Date().toISOString().slice(0, 10);
+      const date = localDateKey();
       const targetKey = keyOf(haCode, tupCode);
       const current = grouped.current.find((profile) => keyOfProfile(profile) === targetKey);
       const editableSamePair = editing && keyOfProfile(editing) === targetKey ? editing : current;
