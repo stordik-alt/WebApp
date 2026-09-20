@@ -78,7 +78,7 @@ export function HistoricalRecomputeManager() {
 
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2"><History className="h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hromadný přepočet historických záznamů</h2><p className="text-xs text-muted-foreground">Přepočítá schválené výrobní záznamy aktuální výpočtovou logikou (Product Profile, HA/TUP vazby, hodinová rekonstrukce). Nemaže ani znovu nevytváří žádné záznamy - pouze aktualizuje výsledky.</p></div></div>
+      <div className="flex items-start gap-2"><History className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hromadný přepočet historických záznamů</h2><p className="text-xs text-muted-foreground">Přepočítá schválené výrobní záznamy aktuální výpočtovou logikou (Product Profile, HA/TUP vazby, hodinová rekonstrukce). Nemaže ani znovu nevytváří žádné záznamy - pouze aktualizuje výsledky.</p></div></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="grid gap-1.5"><Label>Datum od (nepovinné)</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
         <div className="grid gap-1.5"><Label>Datum do (nepovinné)</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
