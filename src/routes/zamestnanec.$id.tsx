@@ -192,7 +192,7 @@ function EmployeeProfile() {
     return keys.map((k) => {
       const d = myDaily.filter((r) => fn(r.work_date) === k);
       const w = myWeekly.filter(
-        (r) => fn(isoWeekMonday(r.iso_year, r.iso_week).toISOString().slice(0, 10)) === k,
+        (r) => fn(localDateKey(isoWeekMonday(r.iso_year, r.iso_week))) === k,
       );
       return { key: k, perf: computePerformance(d, w) };
     });
