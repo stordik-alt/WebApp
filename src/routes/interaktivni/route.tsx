@@ -131,7 +131,7 @@ function InteraktivniLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-white/35 transition-colors hover:bg-muted/40 hover:text-foreground/80"
+                className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground/70 transition-colors hover:bg-muted/40 hover:text-foreground/80"
                 activeProps={{ className: "shrink-0 whitespace-nowrap rounded-lg bg-muted/60 px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-foreground/80" }}
               >
                 {item.label}
