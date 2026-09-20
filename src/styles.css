@@ -366,3 +366,7 @@ html.dark .recharts-cartesian-axis-line { fill: hsl(218 22% 67%) !important; str
 
 /* Dark mode dashboard chart gradient bars: reduce decorative color extremes. */
 html.dark [data-app-title="Dashboard"] .recharts-bar-rectangle path { filter: saturate(0.78) brightness(0.92); }
+
+
+/* Tester/read-only mode: hide write actions without page-specific DOM hacks. */
+[data-read-only="true"] [data-testid="write-action"] { display: none !important; }
