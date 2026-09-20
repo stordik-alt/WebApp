@@ -176,7 +176,7 @@ function ShiftAssignmentPage() {
                 </option>
               ))}
             </select>
-            <button type="button" className="iw-btn ml-auto" onClick={() => void recompute()}>
+            <button type="button" className="iw-btn w-full justify-center sm:ml-auto sm:w-auto" onClick={() => void recompute()}>
               <RefreshCw className="h-4 w-4" /> Přepočítat
             </button>
           </div>
@@ -201,6 +201,7 @@ function ShiftAssignmentPage() {
                           {a.is_manual_override ? " ✎" : ""}
                         </span>
                         <select
+                          className="min-w-[9rem] flex-1 sm:flex-none"
                           value={a.workstation_id ?? ""}
                           onChange={(e) => void reassign(a.employee_id, e.target.value)}
                           aria-label={`Přesunout ${employeesById.get(a.employee_id)?.full_name ?? a.employee_id}`}

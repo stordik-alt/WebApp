@@ -100,9 +100,28 @@
   color: hsl(218 30% 94%);
 }
 
+/* Kompozitní selektor (vyšší specificita než .iw-panel nebo .border-0 samotné) -
+   garantuje, že .iw-panel překryje Tailwindovo border-0 bez ohledu na pořadí
+   importu CSS (AccordionItem v FloorMap.tsx potřebuje zrušit výchozí border-b). */
+.iw-panel.border-0 {
+  border: 1px solid hsl(var(--iw-grid-line) / 0.16);
+}
+
 .iw-panel-header {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid hsl(var(--iw-grid-line) / 0.12);
+}
+
+/* Varianta pro hlavičky s vlastním obsahem pod titulkem (např. filtry) -
+   samostatná třída místo spoléhání na to, že Tailwind utility třídy přebijí
+   .iw-panel-header v cascade (stejná specificita, pořadí importu není jisté). */
+.iw-panel-header-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid hsl(var(--iw-grid-line) / 0.12);
@@ -172,6 +191,11 @@
   0% { transform: translateX(-120%); }
   100% { transform: translateX(280%); }
 }
+
+/* Skryje scrollbar u horizontálně scrollovatelné sub-navigace na mobilu -
+   scroll zůstává funkční (touch/wheel), jen bez viditelného pruhu. */
+.iw-scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.iw-scrollbar-none::-webkit-scrollbar { display: none; }
 
 /* Ovládací prvky (datum/směna/text/číslo) v jednotném tmavém stylu prostředí. */
 .iw-scope input,
@@ -260,6 +284,18 @@
   color: hsl(218 28% 88%);
 }
 .iw-chip-temp { border-color: hsl(var(--iw-live-blue) / 0.45); color: hsl(var(--iw-live-blue)); }
+
+/* Dotykové cíle na mobilu ≥44px (Apple/Google doporučení) - na desktopu
+   zůstává hustší, myší ovládaná varianta beze změny. */
+@media (max-width: 767px) {
+  .iw-scope input,
+  .iw-scope select,
+  .iw-control,
+  .iw-btn,
+  .iw-cta {
+    min-height: 44px;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .iw-scanline::after, .iw-particle, .iw-pulse-dot::after, .iw-capacity-fill::after, .iw-cta { animation: none !important; }

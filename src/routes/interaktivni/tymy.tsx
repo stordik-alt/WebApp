@@ -134,7 +134,7 @@ function TeamsPage() {
         </Panel>
 
         <Panel>
-          <div className="iw-panel-header flex-col items-start gap-3">
+          <div className="iw-panel-header-column">
             <div>
               <h2 className="text-sm font-semibold text-white">Výjimky pro konkrétní směnu</h2>
               <p className="iw-label mt-0.5">Základní tým se výjimkou nemění – platí jen pro tento work_date + směnu</p>

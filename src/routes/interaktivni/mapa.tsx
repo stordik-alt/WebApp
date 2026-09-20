@@ -155,7 +155,7 @@ function FloorMapPage() {
               ))}
             </select>
             <span className="iw-label">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
-            <button type="button" className="iw-cta ml-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
+            <button type="button" className="iw-cta w-full justify-center sm:ml-auto sm:w-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
               <PlayCircle className="h-4 w-4" /> ZAHÁJIT VÝROBU
             </button>
           </div>

@@ -36,14 +36,16 @@ function InteraktivniLayout() {
   return (
     <div className="iw-scope min-h-[calc(100vh-8rem)]">
       <LiveBackground />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
-        <nav className="flex flex-wrap gap-1">
+      <div className="mb-4 flex items-center gap-3 border-b border-white/10 pb-3">
+        {/* Na mobilu horizontální scroll místo zalamování - běžný vzor mobilních aplikací,
+            ne "wrapované" menu, které by na malé obrazovce vypadalo jako klasický web. */}
+        <nav className="iw-scrollbar-none flex flex-1 gap-1 overflow-x-auto">
           {SUB_NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="iw-label rounded-lg px-3 py-2 text-white/55 transition-colors hover:bg-white/5 hover:text-white/85"
-              activeProps={{ className: "iw-label rounded-lg bg-white/10 px-3 py-2 text-[hsl(152_65%_58%)] shadow-[inset_0_-2px_0_hsl(152_65%_52%)]" }}
+              className="iw-label shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-white/55 transition-colors hover:bg-white/5 hover:text-white/85"
+              activeProps={{ className: "iw-label shrink-0 whitespace-nowrap rounded-lg bg-white/10 px-3 py-2.5 text-[hsl(152_65%_58%)] shadow-[inset_0_-2px_0_hsl(152_65%_52%)]" }}
             >
               {item.label}
             </Link>
