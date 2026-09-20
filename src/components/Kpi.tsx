@@ -33,7 +33,7 @@ export function KpiCard({
   const valueClass = isPercentage ? "" : toneClass;
 
   return (
-    <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
+    <Card className="kpi-enterprise gap-0 p-4 shadow-[var(--shadow-card)] sm:p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
