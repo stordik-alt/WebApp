@@ -113,7 +113,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 variant="outline"
                 disabled={busy}
                 onClick={() => setMode("up")}
-                className="h-16 rounded-2xl border-slate-500/80 bg-slate-950/10 text-lg font-medium text-foreground hover:bg-white/5"
+                className="h-16 rounded-2xl border-slate-500/80 bg-slate-950/10 text-lg font-medium text-foreground hover:bg-muted/60"
               >
                 <UserPlus className="mr-3 h-6 w-6" />
                 Registrovat se
@@ -291,7 +291,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                   setSentTo(null);
                   setMode(isRegister ? "in" : "up");
                 }}
-                className="h-14 rounded-2xl border-slate-500/80 bg-slate-950/10 text-base hover:bg-white/5"
+                className="h-14 rounded-2xl border-slate-500/80 bg-slate-950/10 text-base hover:bg-muted/60"
               >
                 {isRegister ? <LogIn className="mr-3 h-5 w-5" /> : <UserPlus className="mr-3 h-5 w-5" />}
                 {isRegister ? "Již mám účet – přihlásit se" : "Nemám účet – registrovat se"}
