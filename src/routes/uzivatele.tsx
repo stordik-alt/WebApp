@@ -152,7 +152,7 @@ function UsersPage() {
               <DialogTrigger asChild>
                 <Button>Vytvořit Tester účet</Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[92vh] overflow-y-auto">
+              <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)]">
                 <DialogHeader>
                   <DialogTitle>Nový Tester účet</DialogTitle>
                 </DialogHeader>

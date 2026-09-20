@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Activity, Plus } from "lucide-react";
 import { useState } from "react";
+import { localDateKey } from "@/lib/metrics";
 import { ShiftSelectionProvider, useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { LiveBackground } from "@/components/interaktivni/LiveBackground";
 import type { IwShiftName } from "@/lib/shift-windows";
@@ -25,7 +26,7 @@ const SECONDARY_NAV = [
 
 function LiveClock() {
   return (
-    <span className="iw-mono flex items-center gap-1.5 text-[11px] text-white/50">
+    <span className="iw-mono flex items-center gap-1.5 text-[11px] text-muted-foreground">
       <Activity className="h-3 w-3 text-[hsl(152_65%_52%)]" aria-hidden="true" />
       LIVE
     </span>
@@ -52,7 +53,7 @@ function SelectionBar() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="iw-label">Tým</span>
         {teamsLoading ? (
-          <span className="text-xs text-white/45">Načítám…</span>
+          <span className="text-xs text-muted-foreground">Načítám…</span>
         ) : (
           <select value={teamId ?? ""} onChange={(e) => setTeamId(e.target.value)} aria-label="Vybraný tým">
             {teams.map((team) => (
@@ -111,7 +112,7 @@ function InteraktivniLayout() {
     <ShiftSelectionProvider>
       <div className="iw-scope min-h-[calc(100vh-8rem)]">
         <LiveBackground />
-        <div className="mb-3 flex items-center gap-3 border-b border-white/10 pb-3">
+        <div className="mb-3 flex items-center gap-3 border-b border-border/60 pb-3">
           {/* Na mobilu horizontální scroll místo zalamování - běžný vzor mobilních aplikací,
               ne "wrapované" menu, které by na malé obrazovce vypadalo jako klasický web. */}
           <nav className="iw-scrollbar-none flex flex-1 items-center gap-1 overflow-x-auto">
@@ -119,19 +120,19 @@ function InteraktivniLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="iw-label shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-white/55 transition-colors hover:bg-white/5 hover:text-white/85"
-                activeProps={{ className: "iw-label shrink-0 whitespace-nowrap rounded-lg bg-white/10 px-3 py-2.5 text-[hsl(152_65%_58%)] shadow-[inset_0_-2px_0_hsl(152_65%_52%)]" }}
+                className="iw-label shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                activeProps={{ className: "iw-label shrink-0 whitespace-nowrap rounded-lg bg-muted px-3 py-2.5 text-[hsl(152_65%_45%)] dark:text-[hsl(152_65%_58%)] shadow-[inset_0_-2px_0_hsl(152_65%_52%)]" }}
               >
                 {item.label}
               </Link>
             ))}
-            <span className="mx-1 h-4 w-px shrink-0 bg-white/10" aria-hidden="true" />
+            <span className="mx-1 h-4 w-px shrink-0 bg-border/70" aria-hidden="true" />
             {SECONDARY_NAV.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-white/35 transition-colors hover:bg-white/5 hover:text-white/60"
-                activeProps={{ className: "shrink-0 whitespace-nowrap rounded-lg bg-white/5 px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-white/70" }}
+                className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground/70 transition-colors hover:bg-muted/40 hover:text-foreground/80"
+                activeProps={{ className: "shrink-0 whitespace-nowrap rounded-lg bg-muted/60 px-2.5 py-2.5 text-[10px] uppercase tracking-wider text-foreground/80" }}
               >
                 {item.label}
               </Link>

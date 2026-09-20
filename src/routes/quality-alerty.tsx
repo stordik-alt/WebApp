@@ -139,13 +139,13 @@ function QualityAlertsPage() {
             <EmptyState icon={ShieldCheck} title="Žádné Quality Alerty." description="Všechny týdenní záznamy jsou v pořádku." />
           ) : (
             alerts.map((w) => (
-              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>
+              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-muted/25" : "border-destructive/30 bg-destructive/5"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week} · {w.alert_cause ?? "Bez příčiny"}</p></div>
                   {w.alert_resolved ? <Badge variant="outline" className="shrink-0">Vyřešeno</Badge> : <Badge variant="destructive" className="shrink-0">Nevyřešeno</Badge>}
                 </div>
                 {w.alert_note ? <p className="mt-2 truncate text-xs text-muted-foreground">{w.alert_note}</p> : null}
-                <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-3">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Yield</p><p className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Chyba op.</p><p className="text-sm font-semibold">{w.operator_error === null || w.operator_error === undefined ? "–" : w.operator_error ? "Ano" : "Ne"}</p></div>

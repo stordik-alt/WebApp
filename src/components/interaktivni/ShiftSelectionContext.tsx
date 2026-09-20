@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
+import { localDateKey } from "@/lib/metrics";
 import { createTeam, ensureAtLeastOneTeam, type IwShiftName, type IwTeam } from "@/lib/teams";
 
 export type ShiftSelectionValue = {
@@ -20,7 +21,7 @@ export type ShiftSelectionValue = {
 const ShiftSelectionContext = createContext<ShiftSelectionValue | null>(null);
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 /**

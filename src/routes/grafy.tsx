@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { localDateKey } from "@/lib/metrics";
 import { useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -41,7 +42,7 @@ const SERIES_COLORS = [
 ];
 
 function isoDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return localDateKey(date);
 }
 
 function defaultFrom() {

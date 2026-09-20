@@ -1,4 +1,5 @@
 import type { DailyRecord } from "./metrics";
+import { localDateKey } from "@/lib/metrics";
 
 export type Product = {
   id: string;
@@ -50,7 +51,7 @@ export function normValidAt(
 }
 
 export function currentNorm(norms: ProductNorm[], productId: string, operation: "HA" | "TUP") {
-  return normValidAt(norms, productId, operation, new Date().toISOString().slice(0, 10));
+  return normValidAt(norms, productId, operation, localDateKey());
 }
 
 export function getNormHistory(

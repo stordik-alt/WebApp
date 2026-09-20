@@ -192,7 +192,7 @@ function EmployeeProfile() {
     return keys.map((k) => {
       const d = myDaily.filter((r) => fn(r.work_date) === k);
       const w = myWeekly.filter(
-        (r) => fn(isoWeekMonday(r.iso_year, r.iso_week).toISOString().slice(0, 10)) === k,
+        (r) => fn(localDateKey(isoWeekMonday(r.iso_year, r.iso_week))) === k,
       );
       return { key: k, perf: computePerformance(d, w) };
     });
@@ -341,7 +341,7 @@ function EmployeeProfile() {
               <EmptyState icon={BarChart3} title="Zatím žádná data." description="Statistiky se zobrazí po prvních schválených směnách." />
             ) : (
               [...quarters, ...halves].map(({ key, perf }) => (
-                <div key={key} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+                <div key={key} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{key}</span>
                     {perf.enoughData ? (
@@ -415,7 +415,7 @@ function EmployeeProfile() {
             <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
           ) : (
             myWeekly.map((w) => (
-              <div key={w.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div key={w.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{w.iso_year}/T{w.iso_week}</span>
                   <span className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} % yield</span>
@@ -618,7 +618,7 @@ function EmployeeProfile() {
             <EmptyState icon={ShieldCheck} title={myAlerts.length === 0 ? "Žádné Quality Alerty." : "Žádné alerty neodpovídají filtrům."} />
           ) : (
             filteredAlerts.map((w) => (
-              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>
+              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-muted/25" : "border-destructive/30 bg-destructive/5"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><span className="font-medium">{w.iso_year}/T{w.iso_week}</span><p className="mt-0.5 truncate text-xs text-muted-foreground">{w.alert_cause ?? "Bez příčiny"}</p></div>
                   {w.alert_resolved ? <Badge variant="outline" className="shrink-0">Vyřešeno</Badge> : <Badge variant="destructive" className="shrink-0">Nevyřešeno</Badge>}

@@ -1,4 +1,5 @@
 import type { Product, ProductNorm } from "./products";
+import { localDateKey } from "@/lib/metrics";
 import { supabase } from "@/integrations/supabase/client";
 
 export type ProductProfile = {
@@ -20,7 +21,7 @@ const normalizeCode = (value: string | null | undefined) => (value ?? "").trim()
 
 export function profileNorms(profiles: ProductProfile[], products: Product[], onlyValid = false): ProductNorm[] {
   const byCode = new Map(products.map((p) => [normalizeCode(p.code), p]));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const out: ProductNorm[] = [];
   for (const profile of profiles) {
     if (onlyValid && (profile.valid_from > today || (profile.valid_to !== null && profile.valid_to < today))) continue;

@@ -53,14 +53,14 @@ function FloorMapAdminPage() {
     <AppShell title="Mapa haly" subtitle="Best-effort rekonstrukce reálného rozložení – oprav skupinu, název nebo poznámku podle skutečnosti.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
         {isLoading ? (
-          <Panel className="p-5 text-sm text-white/60">Načítám mapu haly…</Panel>
+          <Panel className="p-5 text-sm text-muted-foreground">Načítám mapu haly…</Panel>
         ) : isError ? (
-          <Panel className="p-5 text-sm text-[hsl(350_78%_65%)]">Nepodařilo se načíst mapu haly.</Panel>
+          <Panel className="p-5 text-sm text-rose-700 dark:text-rose-300">Nepodařilo se načíst mapu haly.</Panel>
         ) : (
           [...groups.entries()].map(([groupName, items]) => (
             <Panel key={groupName}>
               <PanelHeader icon={<LayoutGrid className="h-4 w-4" />} title={groupName} subtitle={`${items.length} pracovišť`} />
-              <div className="divide-y divide-white/10">
+              <div className="divide-y divide-border/70">
                 {items.map((workstation) => (
                   <div key={workstation.id} className="px-4 py-4 sm:px-5">
                     {editingId === workstation.id ? (
@@ -79,10 +79,10 @@ function FloorMapAdminPage() {
                       </div>
                     ) : (
                       <button type="button" className="flex w-full flex-wrap items-center gap-3 text-left" onClick={() => beginEdit(workstation)}>
-                        <span className="iw-mono text-xs font-semibold text-white/70">{workstation.code}</span>
+                        <span className="iw-mono text-xs font-semibold text-foreground/70">{workstation.code}</span>
                         <span className="iw-chip">{workstation.area}</span>
-                        <span className="iw-mono min-w-0 flex-1 truncate text-sm text-white/85">{workstation.display_name}</span>
-                        {workstation.note ? <span className="text-xs text-[hsl(38_92%_65%)]">⚠ {workstation.note}</span> : null}
+                        <span className="iw-mono min-w-0 flex-1 truncate text-sm text-foreground/85">{workstation.display_name}</span>
+                        {workstation.note ? <span className="text-xs text-amber-700 dark:text-amber-300">⚠ {workstation.note}</span> : null}
                       </button>
                     )}
                   </div>

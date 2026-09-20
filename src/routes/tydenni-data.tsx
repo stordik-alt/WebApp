@@ -268,19 +268,19 @@ function WeeklyPage() {
         </Card>
 
         <div className="min-w-0 overflow-hidden rounded-xl border !border-primary/40 bg-card shadow-[0_0_18px_hsl(var(--primary)/0.10),0_0_34px_hsl(var(--chart-4)/0.06),var(--shadow-card)] !ring-1 !ring-primary/15">
-          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-            <Input className="h-9 w-[180px]" placeholder="Hledat zaměstnance" value={weeklyFilterText} onChange={(e) => setWeeklyFilterText(e.target.value)} />
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Input className="h-9 w-full sm:w-[180px]" placeholder="Hledat zaměstnance" value={weeklyFilterText} onChange={(e) => setWeeklyFilterText(e.target.value)} />
             <Select value={weeklyFilterStatus} onValueChange={setWeeklyFilterStatus}>
-              <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">Všechny stavy</SelectItem><SelectItem value="ok">OK</SelectItem><SelectItem value="alert">Quality Alert</SelectItem></SelectContent>
             </Select>
             <Select value={weeklySort} onValueChange={(v) => setWeeklySort(v as typeof weeklySort)}>
-              <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full sm:w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="week">Týden</SelectItem><SelectItem value="employee">Zaměstnanec</SelectItem><SelectItem value="yield">Yield</SelectItem><SelectItem value="score">Quality skóre</SelectItem></SelectContent>
             </Select>
             <Button size="sm" variant="outline" onClick={() => setWeeklySortDir((d) => d === "asc" ? "desc" : "asc")}>{weeklySortDir === "asc" ? "↑" : "↓"}</Button>
             <Button size="sm" variant="ghost" onClick={() => { setWeeklyFilterText(""); setWeeklyFilterStatus("all"); }}>Zrušit filtry</Button>
-            <span className="ml-auto text-xs text-muted-foreground">{filteredWeekly.length} záznamů</span>
+            <span className="text-xs text-muted-foreground sm:ml-auto">{filteredWeekly.length} záznamů</span>
           </div>
           <div className="hidden md:block">
             <Table>
@@ -353,7 +353,7 @@ function WeeklyPage() {
               <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
             ) : (
               filteredWeekly.map((w) => (
-                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-slate-950/35"}`}>
+                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-muted/25"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week}</p></div>
                     {w.is_alert ? (w.alert_resolved ? <Badge variant="outline" className="shrink-0">Alert vyřešen</Badge> : <Badge variant="destructive" className="shrink-0">QUALITY ALERT</Badge>) : <Badge className="shrink-0 bg-success text-success-foreground">OK</Badge>}
@@ -376,7 +376,7 @@ function WeeklyPage() {
       </div>
 
       <Dialog open={!!alertRow} onOpenChange={(o) => !o && setAlertRow(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" /> Vyšetření Quality Alertu

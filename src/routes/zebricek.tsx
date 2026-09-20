@@ -46,8 +46,8 @@ function RankingPage() {
 
   const defFrom = new Date();
   defFrom.setMonth(defFrom.getMonth() - 3);
-  const [from, setFrom] = useState(defFrom.toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(localDateKey(defFrom));
+  const [to, setTo] = useState(localDateKey());
   const [line, setLine] = useState("all");
   const [position, setPosition] = useState("all");
   const [onlyActive, setOnlyActive] = useState(true);
@@ -69,7 +69,7 @@ function RankingPage() {
         );
         const w = weekly.filter((r) => {
           if (r.employee_id !== e.id) return false;
-          const monday = isoWeekMonday(r.iso_year, r.iso_week).toISOString().slice(0, 10);
+          const monday = localDateKey(isoWeekMonday(r.iso_year, r.iso_week));
           return monday >= from && monday <= to;
         });
         const shifts = aggregateShifts(d, evaluations, links);
@@ -196,7 +196,7 @@ function RankingPage() {
             <EmptyState icon={Trophy} title="Pro zvolené filtry nejsou žádná data." description="Zkuste rozšířit období nebo snížit minimální počet směn." />
           ) : (
             rows.map(({ employee, perf }, i) => (
-              <div key={employee.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div key={employee.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span className="text-lg leading-none">{medal(i)}</span>
@@ -207,7 +207,7 @@ function RankingPage() {
                   </div>
                   <span className="shrink-0 text-lg font-semibold tabular-nums">{fmt(perf.ipi)}</span>
                 </div>
-                <div className="mt-3 grid grid-cols-4 gap-2 border-t border-border/50 pt-2.5 text-center">
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-4">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>

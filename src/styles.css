@@ -64,11 +64,6 @@
   --shadow-md: 0 12px 32px hsl(222 35% 15% / 0.08), 0 2px 8px hsl(222 35% 15% / 0.04);
   --shadow-card: 0 1px 2px hsl(222 35% 15% / 0.04), 0 10px 30px hsl(222 35% 15% / 0.045);
 
-  /* Global neon frame tokens — light mode uses deep mint #256C52. */
-  --neon-border: 158 49% 28%;
-  --neon-border-alpha: 0.72;
-  --neon-ring-alpha: 0.05;
-  --neon-shadow: 0 5px 18px hsl(158 49% 28% / 0.07), 0 1px 4px hsl(222 35% 15% / 0.04);
 }
 
 .dark {
@@ -116,10 +111,6 @@
   --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.22), 0 1px 3px hsl(0 0% 0% / 0.15);
   --shadow-md: 0 16px 38px hsl(0 0% 0% / 0.30), 0 3px 10px hsl(0 0% 0% / 0.17);
   --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.21), 0 14px 34px hsl(0 0% 0% / 0.17);
-  --neon-border: 183 70% 52%;
-  --neon-border-alpha: 0.28;
-  --neon-ring-alpha: 0.07;
-  --neon-shadow: 0 0 10px hsl(var(--neon-border) / 0.045), 0 8px 22px hsl(0 0% 0% / 0.16);
 }
 
 @theme inline {
@@ -182,19 +173,6 @@ button, a, input, select, textarea { transition: background-color 160ms ease, bo
 .shadow-md { box-shadow: var(--shadow-md) !important; }
 .card { background: hsl(var(--card)); color: hsl(var(--card-foreground)); border: 1px solid hsl(var(--border)); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
 
-/* Shared frame for legacy table/panel wrappers that do not use the Card component. */
-.rounded-lg.border.border-border.bg-card,
-.rounded-xl.border.border-border.bg-card,
-.rounded-2xl.border.border-border.bg-card,
-.rounded-lg.border.border-border\/80.bg-slate-950\/40,
-.rounded-2xl.border.border-border\/80.bg-slate-950\/40,
-.rounded-xl.bg-card\/90 {
-  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
-  box-shadow: var(--neon-shadow), var(--shadow-card) !important;
-  outline: 1px solid hsl(var(--neon-border) / var(--neon-ring-alpha));
-  outline-offset: 0;
-}
-
 table thead { background: hsl(var(--muted) / 0.55); }
 table tbody tr { border-color: hsl(var(--border) / 0.72); }
 table tbody tr:hover { background: hsl(var(--accent) / 0.48); }
@@ -205,9 +183,6 @@ input::placeholder, textarea::placeholder { color: hsl(var(--muted-foreground) /
 ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.25); border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); background-clip: padding-box; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
-.px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
-.py-8 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
-
 /* Light-mode cleanup for the Employees KPI strip. Keep the existing dark mode untouched. */
 html:not(.dark) .rounded-xl.bg-slate-950\/40 {
   background-color: hsl(var(--background)) !important;
@@ -251,17 +226,7 @@ html:not(.dark) .bg-slate-950\/60 {
   background-color: hsl(var(--background)) !important;
   color: hsl(var(--foreground));
 }
-html:not(.dark) .bg-slate-950\/40,
-html:not(.dark) .bg-slate-950\/60,
-html:not(.dark) .bg-card\/90,
-html:not(.dark) .bg-card\/70 {
-  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
-}
-
-/* Scheme-aware, not a fixed hue - a hardcoded color here would clash with
-   whichever appearance scheme (blue/green/teal/orange/red/...) is active,
-   since this selector's specificity otherwise beats appearance-themes.css's
-   own scheme-aware table rule. */
+/* Scheme-aware table header surface. */
 html:not(.dark) table thead {
   background: hsl(var(--muted) / 0.75) !important;
 }
@@ -324,13 +289,6 @@ html:not(.dark) .rounded-md.bg-fuchsia-400\/10 {
   color: hsl(290 55% 30%) !important;
 }
 
-html:not(.dark) [data-app-title="Dashboard"] .bg-success\/10 { background-color: hsl(158 30% 93%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-primary\/10 { background-color: hsl(158 30% 94%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-purple-400\/10,
-html:not(.dark) [data-app-title="Dashboard"] .bg-violet-400\/10 { background-color: hsl(270 48% 95%) !important; }
-html:not(.dark) [data-app-title="Dashboard"] .bg-sky-400\/10,
-html:not(.dark) [data-app-title="Dashboard"] .bg-blue-400\/10 { background-color: hsl(195 55% 94%) !important; }
-
 html:not(.dark) .bg-background\/80 { background-color: hsl(var(--background) / 0.92) !important; }
 
 /* Dark-mode refinement: keep the neon identity, but make it controlled rather than glowing everywhere. */
@@ -389,3 +347,7 @@ html.dark .recharts-cartesian-axis-line { fill: hsl(218 22% 67%) !important; str
 
 /* Dark mode dashboard chart gradient bars: reduce decorative color extremes. */
 html.dark [data-app-title="Dashboard"] .recharts-bar-rectangle path { filter: saturate(0.78) brightness(0.92); }
+
+
+/* Tester/read-only mode: hide write actions without page-specific DOM hacks. */
+[data-read-only="true"] [data-testid="write-action"] { display: none !important; }

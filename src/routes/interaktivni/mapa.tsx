@@ -146,7 +146,7 @@ function FloorMapPage() {
   if (!canManage) {
     return (
       <AppShell title="Mapa haly" subtitle="Aktuální stav výrobní haly.">
-        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
+        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -156,7 +156,7 @@ function FloorMapPage() {
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Kód produktu + zbývající kusy; priorita se nastavuje až v Rozdělení výroby" />
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-border/70">
             {mainWorkstations.map((workstation) => {
               const production = productionByWorkstation.get(workstation.id);
               const draft = drafts[workstation.id] ?? { code: production?.product_code ?? "", pieces: production ? String(production.remaining_pieces) : "" };
@@ -167,7 +167,7 @@ function FloorMapPage() {
                 <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_auto_1fr] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
                     <span className="iw-chip">{workstation.area}</span>
-                    <span className="iw-mono truncate text-sm text-white/85">{workstation.display_name}</span>
+                    <span className="iw-mono truncate text-sm text-foreground/85">{workstation.display_name}</span>
                   </div>
                   <input
                     value={draft.code}
@@ -185,15 +185,15 @@ function FloorMapPage() {
                   <button type="button" className="iw-btn" onClick={() => void setProduction(workstation)}>
                     {production ? "Aktualizovat" : "Uložit"}
                   </button>
-                  <div className="iw-mono text-[11px] text-white/45">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
+                  <div className="iw-mono text-[11px] text-muted-foreground">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
                 </div>
               );
             })}
           </div>
         </Panel>
 
-        <div className="iw-mono px-1 text-sm text-white/80">
-          <span className="text-white/45">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
+        <div className="iw-mono px-1 text-sm text-foreground/80">
+          <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
         </div>
 
         <FloorMap groups={groups} />

@@ -95,7 +95,7 @@ export function HourlyAnomalyReview() {
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hodinové anomálie – ke kontrole</h2><p className="text-xs text-muted-foreground">Hodinový výsledek je anomální, pokud z dostupných hodinových dat nelze spolehlivě určit efektivní čas výroby. Nejde automaticky o chybu - vyřazení je vždy jen na úrovni té konkrétní hodiny, nikdy celého dne/produktu/pracoviště, a výrobní data se nikdy nemažou ani nemění.</p></div></div>
-      <div className="mt-3"><Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}><SelectTrigger className="w-[240px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Čeká na kontrolu</SelectItem><SelectItem value="excluded">Ručně vyřazené</SelectItem><SelectItem value="all">Vše (včetně ručně zahrnutých)</SelectItem></SelectContent></Select></div>
+      <div className="mt-3"><Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}><SelectTrigger className="w-full sm:w-[240px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Čeká na kontrolu</SelectItem><SelectItem value="excluded">Ručně vyřazené</SelectItem><SelectItem value="all">Vše (včetně ručně zahrnutých)</SelectItem></SelectContent></Select></div>
       {query.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Načítám…</p> : query.isError ? <p className="mt-4 text-sm text-destructive">Data se nepodařilo načíst.</p> : rows.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">Žádné hodiny v tomto filtru.</p> : <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[960px] text-xs"><thead><tr className="border-b text-left text-muted-foreground"><th className="px-2 py-2">Datum / směna</th><th className="px-2 py-2">Linka / produkt</th><th className="px-2 py-2">Hodina</th><th className="px-2 py-2 text-right">Výstup</th><th className="px-2 py-2 text-right">Výkon</th><th className="px-2 py-2 text-right">OEE</th><th className="px-2 py-2">Stav</th><th className="px-2 py-2">Import</th><th className="px-2 py-2 text-right">Akce</th></tr></thead><tbody>{rows.map((r) => <Fragment key={r.hourly_id}>
         <tr className="border-b border-border/40">
           <td className="px-2 py-2">{r.work_date} · {r.shift}</td>
@@ -116,13 +116,13 @@ export function HourlyAnomalyReview() {
             </div>
           </td>
         </tr>
-        {expanded === r.hourly_id ? <tr className="border-b border-border/40 bg-slate-900/30"><td colSpan={9} className="px-3 py-2">
+        {expanded === r.hourly_id ? <tr className="border-b border-border/40 bg-muted/20"><td colSpan={9} className="px-3 py-2">
           {eventsQuery.isLoading ? <p className="text-xs text-muted-foreground">Načítám historii…</p> : !eventsQuery.data?.length ? <p className="text-xs text-muted-foreground">Zatím žádná ruční rozhodnutí.</p> : <ul className="space-y-1 text-[11px] text-muted-foreground">{eventsQuery.data.map((ev) => <li key={ev.id}>{new Date(ev.created_at).toLocaleString("cs-CZ")} · {ev.from_status ?? "?"} → {ev.to_status}{ev.reason ? ` · ${ev.reason}` : ""}{ev.note ? ` (${ev.note})` : ""}</li>)}</ul>}
         </td></tr> : null}
       </Fragment>)}</tbody></table></div>}
 
       <Dialog open={!!dialog} onOpenChange={(open) => { if (!open) { setDialog(null); setReason(""); setNote(""); } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-lg">
           <DialogHeader><DialogTitle>{dialog?.newStatus === "MANUALLY_EXCLUDED" ? "Vyřadit hodinu ze statistik" : "Zahrnout hodinu do statistik"}</DialogTitle></DialogHeader>
           {dialog ? <div className="space-y-3 text-sm">
             <p className="text-muted-foreground">{dialog.row.work_date} · {dialog.row.shift} · {dialog.row.line} · hodina {dialog.row.hour}:00 · {dialog.row.product_code ?? "bez produktu"}. Vyřazení nemaže ani nemění výrobní data, mění pouze statistický stav.</p>

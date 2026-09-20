@@ -61,7 +61,7 @@ function TeamsPage() {
   if (!canManage) {
     return (
       <AppShell title="Týmy" subtitle="Týdenní základní tým Team Leadera.">
-        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
+        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -73,22 +73,22 @@ function TeamsPage() {
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Users className="h-4 w-4" />} title={teamName ? `Tým: ${teamName}` : "Základní tým"} subtitle={`${members.length} členů`} />
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-border/70">
             {members.map((member) => {
               const employee = employeesById.get(member.employee_id);
               return (
                 <div key={member.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-                  <span className="iw-mono truncate text-sm text-white/85">{employee?.full_name ?? member.employee_id}</span>
+                  <span className="iw-mono truncate text-sm text-foreground/85">{employee?.full_name ?? member.employee_id}</span>
                   <button type="button" className="iw-btn iw-btn-danger" onClick={() => void removeTeamMember(member.team_id, member.employee_id).then(invalidateMembers)}>
                     <UserMinus className="h-4 w-4" /> Odebrat
                   </button>
                 </div>
               );
             })}
-            {members.length === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Tento tým zatím nemá žádné členy.</div> : null}
+            {members.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Tento tým zatím nemá žádné členy.</div> : null}
           </div>
           {nonMembers.length > 0 && teamId ? (
-            <div className="border-t border-white/10 px-4 py-3 sm:px-5">
+            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
               <p className="iw-label mb-2">Přidat do týmu</p>
               <div className="flex flex-wrap gap-2">
                 {nonMembers.map((employee) => (
@@ -108,13 +108,13 @@ function TeamsPage() {
               title="Omezení pracovišť"
               subtitle="Zaměstnanec s omezením nesmí být na dané sekundární pracoviště přiřazen"
             />
-            <div className="divide-y divide-white/10">
+            <div className="divide-y divide-border/70">
               {[...memberIds].map((employeeId) => {
                 const employee = employeesById.get(employeeId);
                 const excluded = exclusionMap.get(employeeId) ?? new Set<string>();
                 return (
                   <div key={employeeId} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-                    <span className="iw-mono min-w-[10rem] truncate text-sm text-white/85">{employee?.full_name ?? employeeId}</span>
+                    <span className="iw-mono min-w-0 flex-1 truncate text-sm text-foreground/85">{employee?.full_name ?? employeeId}</span>
                     <div className="flex flex-wrap gap-2">
                       {secondaryWorkstations.map((workstation) => {
                         const restricted = excluded.has(workstation.id);
@@ -134,7 +134,7 @@ function TeamsPage() {
                   </div>
                 );
               })}
-              {memberIds.size === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Nejprve přidej členy do týmu.</div> : null}
+              {memberIds.size === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Nejprve přidej členy do týmu.</div> : null}
             </div>
           </Panel>
         ) : null}

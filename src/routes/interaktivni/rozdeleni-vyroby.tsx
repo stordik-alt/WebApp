@@ -202,7 +202,7 @@ function ProductionAssignmentPage() {
   if (!canManage) {
     return (
       <AppShell title="Rozdělení výroby" subtitle="Obsazení, výběr výrob a návrh rozdělení operátorů.">
-        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
+        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -233,7 +233,7 @@ function ProductionAssignmentPage() {
               ))}
             </div>
           </div>
-          <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+          <div className="border-t border-border/60 px-4 py-4 sm:px-5">
             <p className="iw-label mb-2">Přidat / odebrat pro dnešek</p>
             <div className="flex flex-wrap gap-2">
               {(employeesQuery.data ?? [])
@@ -258,7 +258,7 @@ function ProductionAssignmentPage() {
             </div>
           </div>
           {(exceptionsQuery.data ?? []).length > 0 ? (
-            <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+            <div className="border-t border-border/60 px-4 py-4 sm:px-5">
               <div className="space-y-2">
                 {(exceptionsQuery.data ?? []).map((exception) => (
                   <div key={exception.id} className="flex items-center justify-between gap-3 text-sm">
@@ -273,7 +273,7 @@ function ProductionAssignmentPage() {
               </div>
             </div>
           ) : null}
-          <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+          <div className="border-t border-border/60 px-4 py-4 sm:px-5">
             <p className="iw-label mb-2">Dočasní operátoři</p>
             <div className="flex flex-wrap gap-2">
               {(employeesQuery.data ?? [])
@@ -296,7 +296,7 @@ function ProductionAssignmentPage() {
           <PanelHeader icon={<ClipboardList className="h-4 w-4" />} title="Krok 2 · Vyberte výroby" subtitle="Klikněte na produkty v pořadí priority (1. klik = nejvyšší priorita)" />
           <div className="flex flex-wrap gap-2 px-4 py-4 sm:px-5">
             {productions.length === 0 ? (
-              <p className="text-sm text-white/45">Zatím není zadaná žádná výroba - vyplň ji na kartě Mapa haly.</p>
+              <p className="text-sm text-muted-foreground">Zatím není zadaná žádná výroba - vyplň ji na kartě Mapa haly.</p>
             ) : (
               productions.map((production) => {
                 const workstation = workstationsById.get(production.workstation_id);
@@ -316,7 +316,7 @@ function ProductionAssignmentPage() {
               })
             )}
           </div>
-          <div className="border-t border-white/10 px-4 py-3 sm:px-5">
+          <div className="border-t border-border/60 px-4 py-3 sm:px-5">
             <button type="button" className="iw-btn iw-btn-active w-full justify-center sm:w-auto" disabled={productions.length === 0} onClick={() => void saveProductionSelection()}>
               Uložit výběr a priority
             </button>
@@ -331,14 +331,14 @@ function ProductionAssignmentPage() {
                 <RefreshCw className="h-4 w-4" /> Přepočítat
               </button>
             </div>
-            <div className="divide-y divide-white/10">
+            <div className="divide-y divide-border/70">
               {[...grouped.entries()].map(([workstationId, group]) => {
                 const workstation = workstationId ? workstationsById.get(workstationId) : null;
                 return (
                   <div key={workstationId ?? "none"} className="px-4 py-3 sm:px-5">
                     <div className="mb-1.5 flex items-center gap-2">
                       <span className="iw-chip">{workstation?.area ?? "?"}</span>
-                      <span className="iw-mono text-sm text-white/85">{workstation?.display_name ?? "Bez pracoviště"}</span>
+                      <span className="iw-mono text-sm text-foreground/85">{workstation?.display_name ?? "Bez pracoviště"}</span>
                     </div>
                     <div className="grid gap-1.5">
                       {group.map((a) => (
@@ -361,9 +361,9 @@ function ProductionAssignmentPage() {
                   </div>
                 );
               })}
-              {assignments.length === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Zatím žádný návrh - klikni na "Přepočítat".</div> : null}
+              {assignments.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Zatím žádný návrh - klikni na "Přepočítat".</div> : null}
             </div>
-            <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+            <div className="border-t border-border/60 px-4 py-4 sm:px-5">
               <span className="iw-label mr-3">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
               <button type="button" className="iw-cta mt-3 w-full justify-center sm:mt-0 sm:w-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
                 <PlayCircle className="h-4 w-4" /> ZAHÁJIT VÝROBU

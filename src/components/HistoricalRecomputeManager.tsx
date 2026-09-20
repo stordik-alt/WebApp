@@ -78,7 +78,7 @@ export function HistoricalRecomputeManager() {
 
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2"><History className="h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hromadný přepočet historických záznamů</h2><p className="text-xs text-muted-foreground">Přepočítá schválené výrobní záznamy aktuální výpočtovou logikou (Product Profile, HA/TUP vazby, hodinová rekonstrukce). Nemaže ani znovu nevytváří žádné záznamy - pouze aktualizuje výsledky.</p></div></div>
+      <div className="flex items-start gap-2"><History className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Hromadný přepočet historických záznamů</h2><p className="text-xs text-muted-foreground">Přepočítá schválené výrobní záznamy aktuální výpočtovou logikou (Product Profile, HA/TUP vazby, hodinová rekonstrukce). Nemaže ani znovu nevytváří žádné záznamy - pouze aktualizuje výsledky.</p></div></div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="grid gap-1.5"><Label>Datum od (nepovinné)</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
         <div className="grid gap-1.5"><Label>Datum do (nepovinné)</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
@@ -92,7 +92,7 @@ export function HistoricalRecomputeManager() {
       {previewResult ? <div className="mt-4"><div className="mb-2 text-sm font-semibold">Výsledek náhledu (testovací vzorek, nic se neuložilo)</div><ResultSummary result={previewResult} /></div> : null}
       {applyResult ? <div className="mt-4"><div className="mb-2 text-sm font-semibold text-emerald-400">Výsledek skutečného přepočtu (uloženo)</div><ResultSummary result={applyResult} /></div> : null}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-lg">
           <DialogHeader><DialogTitle>Potvrdit hromadný přepočet</DialogTitle></DialogHeader>
           <div className="text-sm text-muted-foreground">
             Tato akce trvale přepočítá a uloží nové hodnoty Výkonu, Dostupnosti a OEE pro všechny schválené záznamy {dateFrom || dateTo ? `v rozsahu ${dateFrom || "?"} – ${dateTo || "?"}` : "ve všech dostupných datech"} (na základě náhledu: {previewResult ? `${previewResult.changed} z ${previewResult.total} by se změnilo` : "neznámo"}). Historické záznamy se nemažou ani znovu nevytvářejí, mění se pouze jejich vypočtené hodnoty.

@@ -19,13 +19,13 @@ export function TableRowSkeleton({ columns, rows = 5 }: { columns: number; rows?
 }
 
 // Mobile-card placeholder, matching the `rounded-xl border border-border/60
-// bg-slate-950/35 p-3` card shape already established for the md:hidden
+// bg-muted/25 p-3` card shape already established for the md:hidden
 // list views across the app.
 export function CardSkeletonList({ count = 3 }: { count?: number }) {
   return (
     <div className="space-y-2 p-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+        <div key={i} className="rounded-xl border border-border/60 bg-muted/25 p-3">
           <div className="flex items-center justify-between gap-2">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-5 w-16 rounded-full" />

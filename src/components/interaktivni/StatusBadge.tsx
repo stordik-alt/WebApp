@@ -21,7 +21,7 @@ const CONFIG: Record<WorkstationStatus, { icon: string; label: (shortfall?: numb
 export function StatusBadge({ status, shortfall }: { status: WorkstationStatus; shortfall?: number }) {
   const config = CONFIG[status];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/85 ${config.statusClass}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/85 ${config.statusClass}`}>
       {config.live ? <span className="iw-pulse-dot" aria-hidden="true" /> : <span aria-hidden="true">{config.icon}</span>}
       <span>{config.label(shortfall)}</span>
     </span>

@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useEmployees, useShiftAggregates, useSystemHealth, useWeeklyRecords } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { useCountUp } from "@/lib/use-count-up";
-import { avg, effectiveQuality, fmt, isoWeekMonday } from "@/lib/metrics";
+import { avg, effectiveQuality, fmt, isoWeekMonday, localDateKey } from "@/lib/metrics";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,10 +57,10 @@ function Dashboard() {
   const { data: health } = useSystemHealth(isAdmin);
 
   const today = new Date();
-  const defaultTo = today.toISOString().slice(0, 10);
+  const defaultTo = localDateKey(today);
   const defaultFromDate = new Date(today);
   defaultFromDate.setDate(defaultFromDate.getDate() - 29);
-  const defaultFrom = defaultFromDate.toISOString().slice(0, 10);
+  const defaultFrom = localDateKey(defaultFromDate);
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(defaultTo);
 
@@ -76,7 +76,8 @@ function Dashboard() {
   const weeklyInRange = useMemo(() => {
     if (!fromDate && !toDate) return weekly;
     return weekly.filter((w) => {
-      const monday = isoWeekMonday(w.iso_year, w.iso_week).toISOString().slice(0, 10);
+      const mondayDate = isoWeekMonday(w.iso_year, w.iso_week);
+      const monday = localDateKey(mondayDate);
       if (fromDate && monday < fromDate) return false;
       if (toDate && monday > toDate) return false;
       return true;
@@ -156,8 +157,8 @@ function Dashboard() {
       title="Dashboard"
       subtitle="Řídicí centrum výrobního výkonu"
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm sm:w-auto">
             <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
             <label className="sr-only" htmlFor="dashboard-from-date">Datum od</label>
             <input
@@ -165,7 +166,7 @@ function Dashboard() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-[118px] bg-transparent text-xs font-medium text-foreground outline-none"
+              className="min-w-0 flex-1 bg-transparent text-xs font-medium text-foreground outline-none sm:w-[118px] sm:flex-none"
               aria-label="Datum od"
             />
             <span className="text-xs text-muted-foreground">–</span>
@@ -187,24 +188,24 @@ function Dashboard() {
               30 dní
             </button>
           </div>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full sm:w-auto">
             <Link to="/denni-data">Zadat denní data</Link>
           </Button>
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link to="/tydenni-data">Zadat týdenní data</Link>
           </Button>
         </div>
       }
     >
       <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-3 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-4">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/20 bg-card/80 p-3  backdrop-blur sm:p-4">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl lg:pr-3">
             <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
               <Sparkles className="h-2.5 w-2.5" /> Live overview
             </div>
-            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Výkon je pod kontrolou.</h2>
+            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Řídicí přehled výkonu</h2>
             <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Jedním pohledem vidíte OEE, kvalitu, lidi i signály, které vyžadují pozornost.</p>
           </div>
           <div className="w-full space-y-2 lg:w-[520px] lg:shrink-0">
@@ -310,9 +311,9 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
-        <Card className="relative overflow-hidden p-5 shadow-[var(--shadow-card)]">
+        <Card className="relative overflow-hidden p-5">
           <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
-          <div className="mt-4 h-72">
+          <div className="mt-4 h-64">
             {oeeTrend.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -336,13 +337,13 @@ function Dashboard() {
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>Trend výkonu za vybrané období</span>
-            <span className="inline-flex items-center gap-1 text-primary"><ArrowUpRight className="h-3.5 w-3.5" /> stabilní signál</span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Activity className="h-3.5 w-3.5" /> sledované období</span>
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5">
           <CardHeaderRow title="TOP 10 – OEE" icon={<Users className="h-4 w-4" />} action="Nejlepší výkon" />
-          <div className="mt-4 h-72">
+          <div className="mt-4 h-64">
             {perEmployee.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -365,7 +366,7 @@ function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5">
           <CardHeaderRow title="Rychlý přehled" icon={<Sparkles className="h-4 w-4" />} action="Stav systému" />
           <div className="mt-4 space-y-2.5">
             <InsightRow icon={<CircleCheck className="h-4 w-4" />} title="Výrobní linky" value={`${last30.length ? "V provozu" : "Čekají"}`} tone="success" />
@@ -382,7 +383,7 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5 ">
           <CardHeaderRow title="OEE podle směn" icon={<Gauge className="h-4 w-4" />} action="Srovnání" />
           <div className="mt-4 space-y-3">
             {shiftPerformance.length === 0 ? (
@@ -403,7 +404,7 @@ function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5 ">
           <CardHeaderRow title="Poslední signály" icon={<AlertTriangle className="h-4 w-4" />} action="Aktivita" />
           <div className="mt-4 divide-y divide-border/70">
             {openAlerts.slice(0, 5).map((w) => (
@@ -516,7 +517,7 @@ function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; an
   const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
   const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
   return (
-    <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
+    <Card className="gap-0 p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
         <Gauge className="h-4 w-4 text-muted-foreground" />
