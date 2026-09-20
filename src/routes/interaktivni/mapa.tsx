@@ -185,7 +185,7 @@ function FloorMapPage() {
                   <button type="button" className="iw-btn" onClick={() => void setProduction(workstation)}>
                     {production ? "Aktualizovat" : "Uložit"}
                   </button>
-                  <div className="iw-mono text-[11px] text-white/45">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
+                  <div className="iw-mono text-[11px] text-muted-foreground">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
                 </div>
               );
             })}
@@ -193,7 +193,7 @@ function FloorMapPage() {
         </Panel>
 
         <div className="iw-mono px-1 text-sm text-white/80">
-          <span className="text-white/45">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
+          <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
         </div>
 
         <FloorMap groups={groups} />
