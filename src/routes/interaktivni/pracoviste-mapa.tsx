@@ -60,7 +60,7 @@ function FloorMapAdminPage() {
           [...groups.entries()].map(([groupName, items]) => (
             <Panel key={groupName}>
               <PanelHeader icon={<LayoutGrid className="h-4 w-4" />} title={groupName} subtitle={`${items.length} pracovišť`} />
-              <div className="divide-y divide-white/10">
+              <div className="divide-y divide-border/70">
                 {items.map((workstation) => (
                   <div key={workstation.id} className="px-4 py-4 sm:px-5">
                     {editingId === workstation.id ? (
