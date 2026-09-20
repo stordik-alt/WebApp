@@ -114,7 +114,7 @@ function TeamsPage() {
                 const excluded = exclusionMap.get(employeeId) ?? new Set<string>();
                 return (
                   <div key={employeeId} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-                    <span className="iw-mono min-w-[10rem] truncate text-sm text-foreground/85">{employee?.full_name ?? employeeId}</span>
+                    <span className="iw-mono min-w-0 flex-1 truncate text-sm text-foreground/85">{employee?.full_name ?? employeeId}</span>
                     <div className="flex flex-wrap gap-2">
                       {secondaryWorkstations.map((workstation) => {
                         const restricted = excluded.has(workstation.id);
