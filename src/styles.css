@@ -64,11 +64,6 @@
   --shadow-md: 0 12px 32px hsl(222 35% 15% / 0.08), 0 2px 8px hsl(222 35% 15% / 0.04);
   --shadow-card: 0 1px 2px hsl(222 35% 15% / 0.04), 0 10px 30px hsl(222 35% 15% / 0.045);
 
-  /* Global neon frame tokens — light mode uses deep mint #256C52. */
-  --neon-border: 158 49% 28%;
-  --neon-border-alpha: 0.72;
-  --neon-ring-alpha: 0.05;
-  --neon-shadow: 0 5px 18px hsl(158 49% 28% / 0.07), 0 1px 4px hsl(222 35% 15% / 0.04);
 }
 
 .dark {
@@ -116,10 +111,6 @@
   --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.22), 0 1px 3px hsl(0 0% 0% / 0.15);
   --shadow-md: 0 16px 38px hsl(0 0% 0% / 0.30), 0 3px 10px hsl(0 0% 0% / 0.17);
   --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.21), 0 14px 34px hsl(0 0% 0% / 0.17);
-  --neon-border: 183 70% 52%;
-  --neon-border-alpha: 0.28;
-  --neon-ring-alpha: 0.07;
-  --neon-shadow: 0 0 10px hsl(var(--neon-border) / 0.045), 0 8px 22px hsl(0 0% 0% / 0.16);
 }
 
 @theme inline {
@@ -235,11 +226,7 @@ html:not(.dark) .bg-slate-950\/60 {
   background-color: hsl(var(--background)) !important;
   color: hsl(var(--foreground));
 }
-html:not(.dark) .bg-slate-950\/40,
-/* Scheme-aware, not a fixed hue - a hardcoded color here would clash with
-   whichever appearance scheme (blue/green/teal/orange/red/...) is active,
-   since this selector's specificity otherwise beats appearance-themes.css's
-   own scheme-aware table rule. */
+/* Scheme-aware table header surface. */
 html:not(.dark) table thead {
   background: hsl(var(--muted) / 0.75) !important;
 }
