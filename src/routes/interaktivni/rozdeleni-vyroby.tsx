@@ -331,7 +331,7 @@ function ProductionAssignmentPage() {
                 <RefreshCw className="h-4 w-4" /> Přepočítat
               </button>
             </div>
-            <div className="divide-y divide-white/10">
+            <div className="divide-y divide-border/70">
               {[...grouped.entries()].map(([workstationId, group]) => {
                 const workstation = workstationId ? workstationsById.get(workstationId) : null;
                 return (
