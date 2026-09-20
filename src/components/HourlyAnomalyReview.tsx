@@ -122,7 +122,7 @@ export function HourlyAnomalyReview() {
       </Fragment>)}</tbody></table></div>}
 
       <Dialog open={!!dialog} onOpenChange={(open) => { if (!open) { setDialog(null); setReason(""); setNote(""); } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-lg">
           <DialogHeader><DialogTitle>{dialog?.newStatus === "MANUALLY_EXCLUDED" ? "Vyřadit hodinu ze statistik" : "Zahrnout hodinu do statistik"}</DialogTitle></DialogHeader>
           {dialog ? <div className="space-y-3 text-sm">
             <p className="text-muted-foreground">{dialog.row.work_date} · {dialog.row.shift} · {dialog.row.line} · hodina {dialog.row.hour}:00 · {dialog.row.product_code ?? "bez produktu"}. Vyřazení nemaže ani nemění výrobní data, mění pouze statistický stav.</p>
