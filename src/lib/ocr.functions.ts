@@ -147,7 +147,7 @@ Ignoruj hlavičku a soustřeď se pouze na TABULKU PRACOVNÍKŮ.
 
 Pro KAŽDÝ viditelný řádek vrať pouze:
 - employee_name: přesné jméno zaměstnance,
-- position: HA/TUP, případně odvoď z H_/T_,
+- position: HA/TUP, pokud je přímo čitelná; jinak vrať null. Aplikace ji může odvodit z názvu linky (HandAssy => HA, TouchUp => TUP).
 - oee: OEE přímo z tohoto řádku,
 - confidence.
 
