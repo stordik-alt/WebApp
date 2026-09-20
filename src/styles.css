@@ -236,12 +236,6 @@ html:not(.dark) .bg-slate-950\/60 {
   color: hsl(var(--foreground));
 }
 html:not(.dark) .bg-slate-950\/40,
-html:not(.dark) .bg-slate-950\/60,
-html:not(.dark) .bg-card\/90,
-html:not(.dark) .bg-card\/70 {
-  border-color: hsl(var(--neon-border) / var(--neon-border-alpha)) !important;
-}
-
 /* Scheme-aware, not a fixed hue - a hardcoded color here would clash with
    whichever appearance scheme (blue/green/teal/orange/red/...) is active,
    since this selector's specificity otherwise beats appearance-themes.css's
