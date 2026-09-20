@@ -200,7 +200,7 @@ function AnalysisPage() {
                   <Link to="/zamestnanec/$id" params={{ id: employee.id }} className="truncate font-medium hover:underline">{employee.full_name}</Link>
                   {perf.enoughData ? <Badge className="shrink-0 bg-success text-success-foreground">Dostatečné</Badge> : <Badge variant="outline" className="shrink-0 border-warning text-warning">Málo dat</Badge>}
                 </div>
-                <div className="mt-2.5 grid grid-cols-4 gap-2 border-t border-border/50 pt-2.5 text-center">
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-4">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>
