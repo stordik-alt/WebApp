@@ -157,8 +157,8 @@ function Dashboard() {
       title="Dashboard"
       subtitle="Řídicí centrum výrobního výkonu"
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm sm:w-auto">
             <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
             <label className="sr-only" htmlFor="dashboard-from-date">Datum od</label>
             <input
@@ -166,7 +166,7 @@ function Dashboard() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-[118px] bg-transparent text-xs font-medium text-foreground outline-none"
+              className="min-w-0 flex-1 bg-transparent text-xs font-medium text-foreground outline-none sm:w-[118px] sm:flex-none"
               aria-label="Datum od"
             />
             <span className="text-xs text-muted-foreground">–</span>
@@ -188,10 +188,10 @@ function Dashboard() {
               30 dní
             </button>
           </div>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full sm:w-auto">
             <Link to="/denni-data">Zadat denní data</Link>
           </Button>
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link to="/tydenni-data">Zadat týdenní data</Link>
           </Button>
         </div>
