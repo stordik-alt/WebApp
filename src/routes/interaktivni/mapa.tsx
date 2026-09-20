@@ -156,7 +156,7 @@ function FloorMapPage() {
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Kód produktu + zbývající kusy; priorita se nastavuje až v Rozdělení výroby" />
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-border/70">
             {mainWorkstations.map((workstation) => {
               const production = productionByWorkstation.get(workstation.id);
               const draft = drafts[workstation.id] ?? { code: production?.product_code ?? "", pieces: production ? String(production.remaining_pieces) : "" };
