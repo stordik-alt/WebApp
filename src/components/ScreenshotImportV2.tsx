@@ -70,7 +70,7 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
         const { data: duplicate } = await (supabase as any).from("import_items").select("id,screenshot_path,status,created_at").eq("source_hash", sourceHash).in("status", ["PROCESSING", "VALIDATING", "PENDING_APPROVAL", "AUTO_APPROVED", "APPROVED"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (duplicate) { updateItem(key, { status: "DUPLICATE", message: "Stejný screenshot již byl úspěšně importován nebo je právě zpracováván.", itemId: duplicate.id, screenshotPath: duplicate.screenshot_path }); return; }
         const extension = (file.name.split(".").pop() || "png").toLowerCase();
-        const path = `daily/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
+        const path = `daily/${localDateKey()}/${crypto.randomUUID()}.${extension}`;
         const upload = await supabase.storage.from("screenshots").upload(path, file, { contentType: file.type || "image/png" });
         if (upload.error) throw upload.error;
         const created = await createImportItem(currentBatchId, path, sourceHash);
