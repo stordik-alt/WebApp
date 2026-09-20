@@ -207,7 +207,7 @@ function UsersPage() {
                 <tr><td className="p-4 text-muted-foreground" colSpan={4}>Zatím žádné účty.</td></tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="border-b border-border/60 last:border-0">
+                  <tr key={u.id} className="border-b border-border last:border-0">
                     <td className="p-3">
                       <div className="font-medium text-foreground">{`${u.first_name} ${u.last_name}`.trim() || "(bez jména)"}</div>
                       {!u.role ? <Badge variant="outline" className="mt-1">{roleLabel(null)}</Badge> : null}
@@ -249,7 +249,7 @@ function UsersPage() {
             users.map((u) => (
               <Card key={u.id} className="p-3">
                 <div className="min-w-0"><div className="truncate font-medium text-foreground">{`${u.first_name} ${u.last_name}`.trim() || "(bez jména)"}</div><p className="truncate text-xs text-muted-foreground">{u.email ?? "–"}</p>{!u.role ? <Badge variant="outline" className="mt-1">{roleLabel(null)}</Badge> : null}</div>
-                <div className="mt-3 grid gap-2 border-t border-border/50 pt-2.5">
+                <div className="mt-3 grid gap-2 border-t border-border pt-2.5">
                   <Select value={u.role ?? "none"} onValueChange={(role) => setRole.mutate({ id: u.id, role })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
