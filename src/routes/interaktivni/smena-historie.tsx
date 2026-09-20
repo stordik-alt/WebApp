@@ -76,7 +76,7 @@ function ShiftHistoryPage() {
   if (!canManage) {
     return (
       <AppShell title="Historie směny" subtitle="Srovnání plánu se skutečností.">
-        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
+        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -86,12 +86,12 @@ function ShiftHistoryPage() {
   return (
     <AppShell title="Historie směny" subtitle="Plánovaný stav ze ZAHÁJIT VÝROBU vedle skutečných potvrzených importů - jen pro přehled.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <div className="iw-mono px-1 text-xs text-white/50">Stav směny: {shiftQuery.data?.status ?? "…"}</div>
+        <div className="iw-mono px-1 text-xs text-muted-foreground">Stav směny: {shiftQuery.data?.status ?? "…"}</div>
 
         <Panel>
           <PanelHeader icon={<History className="h-4 w-4" />} title="Časové úseky" subtitle="PERSON → ČAS → PRACOVIŠTĚ → VÝROBEK → KOLEGOVÉ → VÝSLEDEK" />
           {!hasSnapshot ? (
-            <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Tato směna ještě nebyla zahájena (ZAHÁJIT VÝROBU) - historie zatím neexistuje.</div>
+            <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Tato směna ještě nebyla zahájena (ZAHÁJIT VÝROBU) - historie zatím neexistuje.</div>
           ) : (
             <div className="divide-y divide-white/10">
               {segments.map((segment) => {
@@ -102,16 +102,16 @@ function ShiftHistoryPage() {
                   <div key={segment.id} className="grid gap-2 px-4 py-3 sm:grid-cols-2 sm:px-5">
                     <div>
                       <p className="iw-label mb-1">Plán (od {new Date(segment.segment_start_at).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}{segment.segment_end_at ? ` do ${new Date(segment.segment_end_at).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}` : ""})</p>
-                      <p className="iw-mono text-sm text-white/85">{employee?.full_name ?? segment.employee_id}</p>
-                      <p className="iw-mono text-xs text-white/50">{workstation?.display_name ?? segment.workstation_id}{segment.product_code ? ` · ${segment.product_code}` : ""}</p>
+                      <p className="iw-mono text-sm text-foreground/85">{employee?.full_name ?? segment.employee_id}</p>
+                      <p className="iw-mono text-xs text-muted-foreground">{workstation?.display_name ?? segment.workstation_id}{segment.product_code ? ` · ${segment.product_code}` : ""}</p>
                     </div>
                     <div>
                       <p className="iw-label mb-1">Skutečnost (daily_records)</p>
                       {actuals.length === 0 ? (
-                        <p className="text-xs text-white/40">Zatím nepotvrzeno importem.</p>
+                        <p className="text-xs text-muted-foreground">Zatím nepotvrzeno importem.</p>
                       ) : (
                         actuals.map((record, index) => (
-                          <p key={index} className="iw-mono text-xs text-white/70">
+                          <p key={index} className="iw-mono text-xs text-foreground/70">
                             {record.line} · {record.product ?? "?"} {record.oee != null ? `· OEE ${Number(record.oee).toFixed(0)}%` : ""}
                           </p>
                         ))
@@ -120,7 +120,7 @@ function ShiftHistoryPage() {
                   </div>
                 );
               })}
-              {segments.length === 0 ? <div className="px-4 py-4 text-sm text-white/45 sm:px-5">Žádné historické segmenty.</div> : null}
+              {segments.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Žádné historické segmenty.</div> : null}
             </div>
           )}
         </Panel>
