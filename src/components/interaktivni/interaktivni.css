@@ -30,6 +30,11 @@
    protože jde záměrně o odlišné prostředí, ne o další stránku aplikace. */
 .iw-scope {
   color: hsl(var(--iw-text));
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .iw-scope::before {
@@ -287,7 +292,7 @@
 .iw-btn-active { background: hsl(var(--iw-live-green) / 0.16); border-color: hsl(var(--iw-live-green) / 0.5); color: hsl(var(--iw-live-green)); }
 
 /* Malý informační štítek (jméno zaměstnance, kód apod.) */
-.iw-chip {
+ .iw-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
