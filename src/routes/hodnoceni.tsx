@@ -160,7 +160,7 @@ function HandlerEvaluationPage() {
                 <Plus className="h-4 w-4" /> Nové hodnocení
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[92vh] overflow-y-auto">
+            <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)]">
               <DialogHeader>
                 <DialogTitle>
                   {editing ? "Upravit hodnocení" : "Nové hodnocení"}
