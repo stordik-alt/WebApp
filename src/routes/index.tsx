@@ -76,7 +76,8 @@ function Dashboard() {
   const weeklyInRange = useMemo(() => {
     if (!fromDate && !toDate) return weekly;
     return weekly.filter((w) => {
-      const monday = isoWeekMonday(w.iso_year, w.iso_week).toISOString().slice(0, 10);
+      const mondayDate = isoWeekMonday(w.iso_year, w.iso_week);
+      const monday = localDateKey(mondayDate);
       if (fromDate && monday < fromDate) return false;
       if (toDate && monday > toDate) return false;
       return true;
@@ -197,14 +198,14 @@ function Dashboard() {
       }
     >
       <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/25 bg-[radial-gradient(circle_at_90%_10%,hsl(var(--primary)/0.14),transparent_28%),radial-gradient(circle_at_15%_100%,hsl(var(--chart-4)/0.09),transparent_32%),hsl(var(--card)/0.92)] p-3 shadow-[0_0_24px_hsl(var(--primary)/0.07),0_0_48px_hsl(var(--chart-4)/0.04),var(--shadow-card)] backdrop-blur ring-1 ring-primary/10 sm:p-4">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--chart-4)/0.45),hsl(var(--primary)/0.55),hsl(var(--chart-3)/0.45),transparent)]" />
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/20 bg-card/80 p-3 shadow-[var(--shadow-card)] backdrop-blur sm:p-4">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl lg:pr-3">
             <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
               <Sparkles className="h-2.5 w-2.5" /> Live overview
             </div>
-            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Výkon je pod kontrolou.</h2>
+            <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Řídicí přehled výkonu</h2>
             <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Jedním pohledem vidíte OEE, kvalitu, lidi i signály, které vyžadují pozornost.</p>
           </div>
           <div className="w-full space-y-2 lg:w-[520px] lg:shrink-0">
@@ -310,9 +311,9 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
-        <Card className="relative overflow-hidden p-5 shadow-[var(--shadow-card)]">
+        <Card className="relative overflow-hidden p-5">
           <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
-          <div className="mt-4 h-72">
+          <div className="mt-4 h-64">
             {oeeTrend.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -336,11 +337,11 @@ function Dashboard() {
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>Trend výkonu za vybrané období</span>
-            <span className="inline-flex items-center gap-1 text-primary"><ArrowUpRight className="h-3.5 w-3.5" /> stabilní signál</span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground"><Activity className="h-3.5 w-3.5" /> sledované období</span>
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5">
           <CardHeaderRow title="TOP 10 – OEE" icon={<Users className="h-4 w-4" />} action="Nejlepší výkon" />
           <div className="mt-4 h-72">
             {perEmployee.length === 0 ? (
@@ -365,7 +366,7 @@ function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5">
           <CardHeaderRow title="Rychlý přehled" icon={<Sparkles className="h-4 w-4" />} action="Stav systému" />
           <div className="mt-4 space-y-2.5">
             <InsightRow icon={<CircleCheck className="h-4 w-4" />} title="Výrobní linky" value={`${last30.length ? "V provozu" : "Čekají"}`} tone="success" />
@@ -516,7 +517,7 @@ function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; an
   const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
   const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
   return (
-    <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
+    <Card className="gap-0 p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
         <Gauge className="h-4 w-4 text-muted-foreground" />
