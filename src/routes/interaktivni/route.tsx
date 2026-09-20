@@ -112,7 +112,7 @@ function InteraktivniLayout() {
     <ShiftSelectionProvider>
       <div className="iw-scope min-h-[calc(100vh-8rem)]">
         <LiveBackground />
-        <div className="mb-3 flex items-center gap-3 border-b border-border/60 pb-3">
+        <div className="mb-3 flex items-center gap-3 border-b border-border pb-3">
           {/* Na mobilu horizontální scroll místo zalamování - běžný vzor mobilních aplikací,
               ne "wrapované" menu, které by na malé obrazovce vypadalo jako klasický web. */}
           <nav className="iw-scrollbar-none flex flex-1 items-center gap-1 overflow-x-auto">

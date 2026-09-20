@@ -55,7 +55,7 @@ function FloorMapAdminPage() {
         {isLoading ? (
           <Panel className="p-5 text-sm text-muted-foreground">Načítám mapu haly…</Panel>
         ) : isError ? (
-          <Panel className="p-5 text-sm text-rose-700 dark:text-rose-300">Nepodařilo se načíst mapu haly.</Panel>
+          <Panel className="p-5 text-sm text-primary dark:text-primary">Nepodařilo se načíst mapu haly.</Panel>
         ) : (
           [...groups.entries()].map(([groupName, items]) => (
             <Panel key={groupName}>

@@ -1,0 +1,235 @@
+/* Premium Modern Enterprise visual layer for Visual_new.
+   Visual-only overrides: no data, routing, calculations or workflow logic. */
+
+:root {
+  --enterprise-bg: 220 25% 96%;
+  --enterprise-surface: 0 0% 100%;
+  --enterprise-surface-subtle: 220 20% 98%;
+  --enterprise-ink: 222 28% 16%;
+  --enterprise-muted: 220 12% 43%;
+  --enterprise-border: 220 17% 86%;
+  --enterprise-accent: 168 76% 34%;
+  --enterprise-accent-soft: 168 55% 94%;
+  --enterprise-focus: 168 76% 34%;
+  --enterprise-shadow: 220 28% 18%;
+
+  --radius: .72rem;
+  --radius-sm: .5rem;
+  --radius-md: .68rem;
+  --radius-lg: .9rem;
+}
+
+html:not(.dark) {
+  --background: var(--enterprise-bg);
+  --foreground: var(--enterprise-ink);
+  --card: var(--enterprise-surface);
+  --card-foreground: var(--enterprise-ink);
+  --popover: var(--enterprise-surface);
+  --popover-foreground: var(--enterprise-ink);
+  --primary: var(--enterprise-accent);
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 18% 93%;
+  --secondary-foreground: 222 24% 22%;
+  --muted: 220 18% 94%;
+  --muted-foreground: var(--enterprise-muted);
+  --accent: var(--enterprise-accent-soft);
+  --accent-foreground: 168 60% 24%;
+  --border: var(--enterprise-border);
+  --input: 220 16% 78%;
+  --ring: var(--enterprise-focus);
+  --sidebar: 222 28% 15%;
+  --sidebar-foreground: 220 20% 94%;
+  --sidebar-primary: 168 76% 48%;
+  --sidebar-primary-foreground: 222 28% 10%;
+  --sidebar-accent: 222 22% 22%;
+  --sidebar-accent-foreground: 220 20% 96%;
+  --sidebar-border: 222 18% 27%;
+  --sidebar-ring: 168 76% 48%;
+  --shadow-card: 0 1px 2px hsl(var(--enterprise-shadow) / .05), 0 8px 24px hsl(var(--enterprise-shadow) / .055);
+  --chart-1: 168 76% 34%;
+  --chart-2: 214 82% 45%;
+  --chart-3: 28 84% 52%;
+  --chart-4: 262 70% 54%;
+  --chart-5: 345 72% 50%;
+  --chart-6: 190 75% 38%;
+}
+
+html.dark {
+  --background: 222 28% 8%;
+  --foreground: 220 18% 94%;
+  --card: 222 25% 12%;
+  --card-foreground: 220 18% 94%;
+  --popover: 222 25% 13%;
+  --popover-foreground: 220 18% 94%;
+  --primary: 168 76% 46%;
+  --primary-foreground: 222 28% 8%;
+  --secondary: 222 20% 18%;
+  --secondary-foreground: 220 18% 91%;
+  --muted: 222 20% 17%;
+  --muted-foreground: 220 12% 66%;
+  --accent: 168 32% 17%;
+  --accent-foreground: 168 62% 76%;
+  --border: 222 17% 25%;
+  --input: 222 18% 29%;
+  --ring: 168 76% 46%;
+  --sidebar: 222 30% 9%;
+  --sidebar-foreground: 220 18% 94%;
+  --sidebar-primary: 168 76% 46%;
+  --sidebar-primary-foreground: 222 28% 8%;
+  --sidebar-accent: 222 22% 15%;
+  --sidebar-accent-foreground: 220 18% 94%;
+  --sidebar-border: 222 18% 21%;
+  --sidebar-ring: 168 76% 46%;
+  --shadow-card: 0 1px 2px hsl(0 0% 0% / .22), 0 10px 28px hsl(0 0% 0% / .14);
+  --chart-1: 168 76% 46%;
+  --chart-2: 204 88% 62%;
+  --chart-3: 35 90% 62%;
+  --chart-4: 270 82% 70%;
+  --chart-5: 350 82% 68%;
+  --chart-6: 190 78% 60%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 0 0, hsl(var(--primary) / .035), transparent 32rem),
+    hsl(var(--background));
+}
+
+.card {
+  border-color: hsl(var(--border));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.card:hover {
+  border-color: hsl(var(--primary) / .22);
+}
+
+button:not([data-radix-collection-item]),
+[role="button"] {
+  font-weight: 600;
+}
+
+header {
+  border-color: hsl(var(--border) / .85) !important;
+  box-shadow: 0 1px 0 hsl(var(--border) / .35), 0 8px 24px hsl(220 28% 18% / .025);
+}
+
+[data-sidebar="sidebar"] {
+  box-shadow: 10px 0 30px hsl(220 28% 18% / .08);
+}
+
+input,
+select,
+textarea,
+[data-slot="select-trigger"] {
+  border-radius: var(--radius-sm) !important;
+  border-color: hsl(var(--input)) !important;
+  min-height: 2.4rem;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+[data-slot="select-trigger"]:focus-visible {
+  box-shadow: 0 0 0 3px hsl(var(--ring) / .12) !important;
+}
+
+[data-slot="select-content"] {
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 44px hsl(220 28% 18% / .16);
+}
+
+[role="dialog"] {
+  border-color: hsl(var(--border));
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px hsl(220 28% 18% / .2);
+}
+
+html.dark [role="dialog"] {
+  box-shadow: 0 24px 70px hsl(0 0% 0% / .45);
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+table thead th {
+  letter-spacing: .01em;
+}
+
+table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.kpi-enterprise {
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-enterprise::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: hsl(var(--primary));
+  opacity: .8;
+}
+
+@media (max-width: 1023px) {
+  header {
+    padding-top: max(.7rem, env(safe-area-inset-top));
+  }
+
+  main {
+    padding-bottom: max(5.5rem, calc(4rem + env(safe-area-inset-bottom))) !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .card {
+    border-radius: .62rem;
+  }
+
+  [role="dialog"] {
+    max-height: calc(100dvh - 1rem);
+    overflow: auto;
+    border-radius: .78rem;
+  }
+
+  table {
+    min-width: max-content;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, table tbody tr {
+    transition: none !important;
+  }
+}
+
+
+/* Screen-level enterprise utilities */
+.page-section { min-width: 0; }
+.data-surface { border: 1px solid hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+.data-surface > [data-table-scroll], .table-scroll { min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.table-scroll > table { min-width: 760px; }
+
+@media (max-width: 767px) {
+  .page-section { width: 100%; }
+  .data-surface { border-radius: var(--radius-sm); }
+  .table-scroll > table { min-width: 680px; }
+}
+
+
+/* Final responsive audit helpers */
+html, body, #root { min-width: 0; }
+main, [role="main"] { min-width: 0; }
+button, a, input, select, textarea { max-width: 100%; }
+@media (max-width: 767px) {
+  h1 { text-wrap: balance; }
+  .overflow-x-auto { scrollbar-width: thin; }
+  [data-radix-popper-content-wrapper] { max-width: calc(100vw - 16px); }
+}

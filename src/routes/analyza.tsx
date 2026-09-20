@@ -195,12 +195,12 @@ function AnalysisPage() {
             <EmptyState icon={FlaskConical} title="Pro zvolené období nejsou data." description="Zkuste zvolit jiné období nebo vyčkejte na další záznamy." />
           ) : (
             rows.map(({ employee, perf }) => (
-              <div key={employee.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
+              <div key={employee.id} className="rounded-[var(--radius-md)] border border-border bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <Link to="/zamestnanec/$id" params={{ id: employee.id }} className="truncate font-medium hover:underline">{employee.full_name}</Link>
                   {perf.enoughData ? <Badge className="shrink-0 bg-success text-success-foreground">Dostatečné</Badge> : <Badge variant="outline" className="shrink-0 border-warning text-warning">Málo dat</Badge>}
                 </div>
-                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-4">
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border pt-2.5 text-center sm:grid-cols-4">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{perf.shifts}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">OEE</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgOee)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Quality</p><p className="text-sm font-semibold tabular-nums">{fmt(perf.avgQuality)}</p></div>

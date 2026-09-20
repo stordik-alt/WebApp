@@ -288,12 +288,12 @@ function ReportsPage() {
             <EmptyState icon={FileText} title="Pro zvolené filtry nejsou žádná data." description="Zkuste upravit filtry nebo zvolit jiné období." />
           ) : (
             perEmployee.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
+              <div key={r.id} className="rounded-[var(--radius-md)] border border-border bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{r.name}</span>
                   {r.alerts > 0 ? <Badge variant="destructive" className="shrink-0">{r.alerts} alertů</Badge> : null}
                 </div>
-                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-3">
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border pt-2.5 text-center sm:grid-cols-3">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Směny</p><p className="text-sm font-semibold tabular-nums">{r.shifts}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">HA / TUP</p><p className="text-sm font-semibold tabular-nums">{r.ha} / {r.tup}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Linek</p><p className="text-sm font-semibold tabular-nums">{r.lineRecords}</p></div>
@@ -342,7 +342,7 @@ function ReportsPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {filteredDaily.slice(0, 200).map((d) => (
-            <div key={d.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
+            <div key={d.id} className="rounded-[var(--radius-md)] border border-border bg-muted/25 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{d.work_date} · {d.shift}</span>
                 <span className="text-sm font-semibold tabular-nums">{fmt(d.oee)} % OEE</span>

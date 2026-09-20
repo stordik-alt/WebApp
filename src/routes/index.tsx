@@ -158,7 +158,7 @@ function Dashboard() {
       subtitle="Řídicí centrum výrobního výkonu"
       actions={
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/80 bg-card/55 px-2.5 py-1.5 shadow-sm sm:w-auto">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 shadow-sm sm:w-auto">
             <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
             <label className="sr-only" htmlFor="dashboard-from-date">Datum od</label>
             <input
@@ -198,11 +198,11 @@ function Dashboard() {
       }
     >
       <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/20 bg-card/80 p-3  backdrop-blur sm:p-4">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
+      <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:p-5">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-primary/50" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl lg:pr-3">
-            <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+            <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
               <Sparkles className="h-2.5 w-2.5" /> Live overview
             </div>
             <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Řídicí přehled výkonu</h2>
@@ -252,7 +252,7 @@ function Dashboard() {
       {isAdmin && health && (health.stuckImports > 0 || health.pendingApproval > 0) ? (
         <div className="grid gap-2 sm:grid-cols-2">
           {health.stuckImports > 0 ? (
-            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/45 bg-destructive/5 p-4 shadow-sm transition-colors hover:bg-destructive/10">
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-lg border border-destructive/35 bg-destructive/5 p-4 shadow-sm transition-colors hover:bg-destructive/10">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
                 <div>
@@ -264,7 +264,7 @@ function Dashboard() {
             </Link>
           ) : null}
           {health.pendingApproval > 0 ? (
-            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-2xl border border-warning/45 bg-warning/5 p-4 shadow-sm transition-colors hover:bg-warning/10">
+            <Link to="/ke-schvaleni" className="flex items-center justify-between gap-3 rounded-lg border border-warning/35 bg-warning/5 p-4 shadow-sm transition-colors hover:bg-warning/10">
               <div className="flex items-center gap-2 text-warning">
                 <ShieldCheck className="h-5 w-5 shrink-0" />
                 <div>

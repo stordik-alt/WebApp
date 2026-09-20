@@ -233,7 +233,7 @@ function ProductionAssignmentPage() {
               ))}
             </div>
           </div>
-          <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+          <div className="border-t border-border px-4 py-4 sm:px-5">
             <p className="iw-label mb-2">Přidat / odebrat pro dnešek</p>
             <div className="flex flex-wrap gap-2">
               {(employeesQuery.data ?? [])
@@ -258,7 +258,7 @@ function ProductionAssignmentPage() {
             </div>
           </div>
           {(exceptionsQuery.data ?? []).length > 0 ? (
-            <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+            <div className="border-t border-border px-4 py-4 sm:px-5">
               <div className="space-y-2">
                 {(exceptionsQuery.data ?? []).map((exception) => (
                   <div key={exception.id} className="flex items-center justify-between gap-3 text-sm">
@@ -273,7 +273,7 @@ function ProductionAssignmentPage() {
               </div>
             </div>
           ) : null}
-          <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+          <div className="border-t border-border px-4 py-4 sm:px-5">
             <p className="iw-label mb-2">Dočasní operátoři</p>
             <div className="flex flex-wrap gap-2">
               {(employeesQuery.data ?? [])
@@ -316,7 +316,7 @@ function ProductionAssignmentPage() {
               })
             )}
           </div>
-          <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+          <div className="border-t border-border px-4 py-3 sm:px-5">
             <button type="button" className="iw-btn iw-btn-active w-full justify-center sm:w-auto" disabled={productions.length === 0} onClick={() => void saveProductionSelection()}>
               Uložit výběr a priority
             </button>
@@ -363,7 +363,7 @@ function ProductionAssignmentPage() {
               })}
               {assignments.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Zatím žádný návrh - klikni na "Přepočítat".</div> : null}
             </div>
-            <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+            <div className="border-t border-border px-4 py-4 sm:px-5">
               <span className="iw-label mr-3">Stav směny: {shiftQuery.data?.status ?? "…"}</span>
               <button type="button" className="iw-cta mt-3 w-full justify-center sm:mt-0 sm:w-auto" disabled={!isDraft || starting} onClick={() => void handleStart()}>
                 <PlayCircle className="h-4 w-4" /> ZAHÁJIT VÝROBU
