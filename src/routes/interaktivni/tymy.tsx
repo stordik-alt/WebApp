@@ -88,7 +88,7 @@ function TeamsPage() {
             {members.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Tento tým zatím nemá žádné členy.</div> : null}
           </div>
           {nonMembers.length > 0 && teamId ? (
-            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+            <div className="border-t border-border px-4 py-3 sm:px-5">
               <p className="iw-label mb-2">Přidat do týmu</p>
               <div className="flex flex-wrap gap-2">
                 {nonMembers.map((employee) => (
