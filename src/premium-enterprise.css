@@ -19,7 +19,7 @@
   --radius-lg: .9rem;
 }
 
-html:not(.dark) {
+html.theme-original:not(.dark) {
   --background: var(--enterprise-bg);
   --foreground: var(--enterprise-ink);
   --card: var(--enterprise-surface);
@@ -54,7 +54,7 @@ html:not(.dark) {
   --chart-6: 190 75% 38%;
 }
 
-html.dark {
+html.dark.theme-original {
   --background: 222 28% 8%;
   --foreground: 220 18% 94%;
   --card: 222 25% 12%;
