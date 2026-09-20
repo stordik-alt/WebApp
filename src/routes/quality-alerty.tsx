@@ -145,7 +145,7 @@ function QualityAlertsPage() {
                   {w.alert_resolved ? <Badge variant="outline" className="shrink-0">Vyřešeno</Badge> : <Badge variant="destructive" className="shrink-0">Nevyřešeno</Badge>}
                 </div>
                 {w.alert_note ? <p className="mt-2 truncate text-xs text-muted-foreground">{w.alert_note}</p> : null}
-                <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-border/50 pt-2.5 text-center sm:grid-cols-3">
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Yield</p><p className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} %</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
                   <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Chyba op.</p><p className="text-sm font-semibold">{w.operator_error === null || w.operator_error === undefined ? "–" : w.operator_error ? "Ano" : "Ne"}</p></div>
