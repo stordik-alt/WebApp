@@ -116,7 +116,7 @@ export function HourlyAnomalyReview() {
             </div>
           </td>
         </tr>
-        {expanded === r.hourly_id ? <tr className="border-b border-border/40 bg-slate-900/30"><td colSpan={9} className="px-3 py-2">
+        {expanded === r.hourly_id ? <tr className="border-b border-border/40 bg-muted/20"><td colSpan={9} className="px-3 py-2">
           {eventsQuery.isLoading ? <p className="text-xs text-muted-foreground">Načítám historii…</p> : !eventsQuery.data?.length ? <p className="text-xs text-muted-foreground">Zatím žádná ruční rozhodnutí.</p> : <ul className="space-y-1 text-[11px] text-muted-foreground">{eventsQuery.data.map((ev) => <li key={ev.id}>{new Date(ev.created_at).toLocaleString("cs-CZ")} · {ev.from_status ?? "?"} → {ev.to_status}{ev.reason ? ` · ${ev.reason}` : ""}{ev.note ? ` (${ev.note})` : ""}</li>)}</ul>}
         </td></tr> : null}
       </Fragment>)}</tbody></table></div>}
