@@ -93,7 +93,7 @@ function ShiftHistoryPage() {
           {!hasSnapshot ? (
             <div className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Tato směna ještě nebyla zahájena (ZAHÁJIT VÝROBU) - historie zatím neexistuje.</div>
           ) : (
-            <div className="divide-y divide-white/10">
+            <div className="divide-y divide-border/70">
               {segments.map((segment) => {
                 const workstation = workstationsById.get(segment.workstation_id);
                 const employee = employeesById.get(segment.employee_id);
