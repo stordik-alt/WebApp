@@ -73,7 +73,7 @@ function TeamsPage() {
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Users className="h-4 w-4" />} title={teamName ? `Tým: ${teamName}` : "Základní tým"} subtitle={`${members.length} členů`} />
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-border/70">
             {members.map((member) => {
               const employee = employeesById.get(member.employee_id);
               return (
@@ -108,7 +108,7 @@ function TeamsPage() {
               title="Omezení pracovišť"
               subtitle="Zaměstnanec s omezením nesmí být na dané sekundární pracoviště přiřazen"
             />
-            <div className="divide-y divide-white/10">
+            <div className="divide-y divide-border/70">
               {[...memberIds].map((employeeId) => {
                 const employee = employeesById.get(employeeId);
                 const excluded = exclusionMap.get(employeeId) ?? new Set<string>();
