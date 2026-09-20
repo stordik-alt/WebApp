@@ -46,8 +46,8 @@ function RankingPage() {
 
   const defFrom = new Date();
   defFrom.setMonth(defFrom.getMonth() - 3);
-  const [from, setFrom] = useState(defFrom.toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(localDateKey(defFrom));
+  const [to, setTo] = useState(localDateKey());
   const [line, setLine] = useState("all");
   const [position, setPosition] = useState("all");
   const [onlyActive, setOnlyActive] = useState(true);
@@ -69,7 +69,7 @@ function RankingPage() {
         );
         const w = weekly.filter((r) => {
           if (r.employee_id !== e.id) return false;
-          const monday = isoWeekMonday(r.iso_year, r.iso_week).toISOString().slice(0, 10);
+          const monday = localDateKey(isoWeekMonday(r.iso_year, r.iso_week));
           return monday >= from && monday <= to;
         });
         const shifts = aggregateShifts(d, evaluations, links);
