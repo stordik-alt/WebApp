@@ -143,7 +143,7 @@ export function QualityAlertDialog({
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto sm:w-[calc(100%-3rem)]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
+          <DialogTitle className="flex flex-wrap items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" /> Vyšetření Quality Alertu
           </DialogTitle>
         </DialogHeader>
@@ -298,7 +298,7 @@ export function QualityAlertDialog({
             </div>
           </div>
         ) : null}
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose}>
             Zrušit
           </Button>
