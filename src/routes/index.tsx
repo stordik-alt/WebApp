@@ -198,7 +198,7 @@ function Dashboard() {
       }
     >
       <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/20 bg-card/80 p-3 shadow-[var(--shadow-card)] backdrop-blur sm:p-4">
+      <div className="relative overflow-hidden rounded-[1.35rem] border border-primary/20 bg-card/80 p-3  backdrop-blur sm:p-4">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl lg:pr-3">
@@ -343,7 +343,7 @@ function Dashboard() {
 
         <Card className="p-5">
           <CardHeaderRow title="TOP 10 – OEE" icon={<Users className="h-4 w-4" />} action="Nejlepší výkon" />
-          <div className="mt-4 h-72">
+          <div className="mt-4 h-64">
             {perEmployee.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -383,7 +383,7 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5 ">
           <CardHeaderRow title="OEE podle směn" icon={<Gauge className="h-4 w-4" />} action="Srovnání" />
           <div className="mt-4 space-y-3">
             {shiftPerformance.length === 0 ? (
@@ -404,7 +404,7 @@ function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-5 shadow-[var(--shadow-card)]">
+        <Card className="p-5 ">
           <CardHeaderRow title="Poslední signály" icon={<AlertTriangle className="h-4 w-4" />} action="Aktivita" />
           <div className="mt-4 divide-y divide-border/70">
             {openAlerts.slice(0, 5).map((w) => (
