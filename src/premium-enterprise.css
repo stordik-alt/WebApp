@@ -222,3 +222,14 @@ table tbody tr {
   .data-surface { border-radius: var(--radius-sm); }
   .table-scroll > table { min-width: 680px; }
 }
+
+
+/* Final responsive audit helpers */
+html, body, #root { min-width: 0; }
+main, [role="main"] { min-width: 0; }
+button, a, input, select, textarea { max-width: 100%; }
+@media (max-width: 767px) {
+  h1 { text-wrap: balance; }
+  .overflow-x-auto { scrollbar-width: thin; }
+  [data-radix-popper-content-wrapper] { max-width: calc(100vw - 16px); }
+}
