@@ -146,7 +146,7 @@ function FloorMapPage() {
   if (!canManage) {
     return (
       <AppShell title="Mapa haly" subtitle="Aktuální stav výrobní haly.">
-        <Panel className="p-5 text-sm text-white/60">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
+        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
       </AppShell>
     );
   }
@@ -167,7 +167,7 @@ function FloorMapPage() {
                 <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_auto_1fr] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
                     <span className="iw-chip">{workstation.area}</span>
-                    <span className="iw-mono truncate text-sm text-white/85">{workstation.display_name}</span>
+                    <span className="iw-mono truncate text-sm text-foreground/85">{workstation.display_name}</span>
                   </div>
                   <input
                     value={draft.code}
