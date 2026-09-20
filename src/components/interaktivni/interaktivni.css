@@ -254,6 +254,7 @@
 .iw-cta:focus-visible,
 .iw-btn:focus-visible,
 .iw-control:focus-visible { outline: 2px solid hsl(var(--iw-live-green)); outline-offset: 2px; }
+.iw-label:focus-visible { outline: 2px solid hsl(var(--iw-live-green)); outline-offset: 2px; border-radius: 0.5rem; }
 .iw-cta:active:not(:disabled) { transform: scale(0.98); }
 .iw-cta:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
 @keyframes iw-breathe {
