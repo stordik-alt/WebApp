@@ -196,7 +196,7 @@ function RankingPage() {
             <EmptyState icon={Trophy} title="Pro zvolené filtry nejsou žádná data." description="Zkuste rozšířit období nebo snížit minimální počet směn." />
           ) : (
             rows.map(({ employee, perf }, i) => (
-              <div key={employee.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div key={employee.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span className="text-lg leading-none">{medal(i)}</span>
