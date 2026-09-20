@@ -139,7 +139,7 @@ function QualityAlertsPage() {
             <EmptyState icon={ShieldCheck} title="Žádné Quality Alerty." description="Všechny týdenní záznamy jsou v pořádku." />
           ) : (
             alerts.map((w) => (
-              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-slate-950/35" : "border-destructive/30 bg-destructive/5"}`}>
+              <div key={w.id} className={`rounded-xl border p-3 ${w.alert_resolved ? "border-border/60 bg-muted/25" : "border-destructive/30 bg-destructive/5"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week} · {w.alert_cause ?? "Bez příčiny"}</p></div>
                   {w.alert_resolved ? <Badge variant="outline" className="shrink-0">Vyřešeno</Badge> : <Badge variant="destructive" className="shrink-0">Nevyřešeno</Badge>}
