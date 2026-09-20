@@ -32,17 +32,19 @@
   background: radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--iw-grid-line) / 0.10), transparent 60%), hsl(var(--iw-bg-deep));
 }
 
-/* Jemná drátová mřížka jako blueprint/schéma haly - statická, jen prosvítá. */
+/* Jemná drátová mřížka jako blueprint/schéma haly - statická, jen prosvítá.
+   Bez maskování na celou výšku/šířku (dřív mizela mimo horní elipsu) a se
+   silnější základní intenzitou, aby prosvítala i skrz průhledné karty
+   posazené kdekoli na stránce, ne jen na volné ploše nahoře. */
 .iw-grid {
   position: fixed;
   inset: 0;
   z-index: -2;
   pointer-events: none;
   background-image:
-    linear-gradient(hsl(var(--iw-grid-line) / 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--iw-grid-line) / 0.07) 1px, transparent 1px);
+    linear-gradient(hsl(var(--iw-grid-line) / 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--iw-grid-line) / 0.16) 1px, transparent 1px);
   background-size: 42px 42px;
-  mask-image: radial-gradient(ellipse 75% 65% at 50% 20%, black 40%, transparent 85%);
 }
 
 /* Pomalu putující "scan" paprsek přes celou mřížku - jediný pohyblivý prvek
@@ -61,7 +63,7 @@
   right: 0;
   height: 45vh;
   top: -45vh;
-  background: linear-gradient(180deg, transparent, hsl(var(--iw-grid-line) / 0.05), transparent);
+  background: linear-gradient(180deg, transparent, hsl(var(--iw-grid-line) / 0.12), transparent);
   animation: iw-scan 14s linear infinite;
 }
 @keyframes iw-scan {
@@ -89,14 +91,17 @@
   100% { transform: translateY(-105vh) translateX(var(--iw-drift-x, 30px)); opacity: 0; }
 }
 
-/* Sklo-panelový povrch pro karty tohoto prostředí (nahrazuje plain shadcn Card). */
+/* Sklo-panelový povrch pro karty tohoto prostředí (nahrazuje plain shadcn Card).
+   Bez blur (rozostření by tenké 1px linky mřížky prakticky smazalo) a s nízkou
+   neprůhledností, aby animované pozadí (mřížka/scan/částice) prosvítalo skrz
+   VŠECHNY karty vždy - i vnořené (skupina ve FloorMap obsahuje další .iw-panel
+   karty uvnitř), ne jen na volné ploše mimo karty. */
 .iw-panel {
   position: relative;
-  background: linear-gradient(180deg, hsl(var(--iw-bg-panel) / 0.92), hsl(var(--iw-bg-panel) / 0.82));
-  border: 1px solid hsl(var(--iw-grid-line) / 0.16);
+  background: linear-gradient(180deg, hsl(var(--iw-bg-panel) / 0.35), hsl(var(--iw-bg-panel) / 0.24));
+  border: 1px solid hsl(var(--iw-grid-line) / 0.25);
   border-radius: var(--radius-lg, 1rem);
-  box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.08) inset, 0 18px 40px hsl(0 0% 0% / 0.35);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.14) inset, 0 18px 40px hsl(0 0% 0% / 0.35);
   color: hsl(218 30% 94%);
 }
 
