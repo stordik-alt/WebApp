@@ -267,7 +267,7 @@ function WeeklyPage() {
           </Button>
         </Card>
 
-        <div className="min-w-0 overflow-hidden rounded-xl border !border-primary/40 bg-card shadow-[0_0_18px_hsl(var(--primary)/0.10),0_0_34px_hsl(var(--chart-4)/0.06),var(--shadow-card)] !ring-1 !ring-primary/15">
+        <div className="min-w-0 overflow-hidden rounded-[var(--radius-md)] border !border-primary/40 bg-card shadow-[0_0_18px_hsl(var(--primary)/0.10),0_0_34px_hsl(var(--chart-4)/0.06),var(--shadow-card)] !ring-1 !ring-primary/15">
           <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Input className="h-9 w-full sm:w-[180px]" placeholder="Hledat zaměstnance" value={weeklyFilterText} onChange={(e) => setWeeklyFilterText(e.target.value)} />
             <Select value={weeklyFilterStatus} onValueChange={setWeeklyFilterStatus}>
@@ -353,18 +353,18 @@ function WeeklyPage() {
               <EmptyState icon={CalendarRange} title="Zatím žádné týdenní záznamy." description="Záznamy se zde objeví po prvním týdenním vyhodnocení." />
             ) : (
               filteredWeekly.map((w) => (
-                <div key={w.id} className={`rounded-xl border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border/60 bg-muted/25"}`}>
+                <div key={w.id} className={`rounded-[var(--radius-md)] border p-3 ${w.is_alert && !w.alert_resolved ? "border-destructive/30 bg-destructive/5" : "border-border bg-muted/25"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0"><p className="truncate font-medium">{empName(w.employee_id)}</p><p className="mt-0.5 text-xs text-muted-foreground">{w.iso_year}/T{w.iso_week}</p></div>
                     {w.is_alert ? (w.alert_resolved ? <Badge variant="outline" className="shrink-0">Alert vyřešen</Badge> : <Badge variant="destructive" className="shrink-0">QUALITY ALERT</Badge>) : <Badge className="shrink-0 bg-success text-success-foreground">OK</Badge>}
                   </div>
                   {w.alert_cause ? <p className="mt-2 truncate text-xs text-muted-foreground">{w.alert_cause}{w.operator_error === true ? " (chyba operátora)" : ""}</p> : null}
-                  <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border/50 pt-2.5 text-center">
+                  <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border pt-2.5 text-center">
                     <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Yield</p><p className="text-sm font-semibold tabular-nums">{fmt(w.yield_pct)} %</p></div>
                     <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Auto skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.auto_quality_score)}</p></div>
                     <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Finální skóre</p><p className="text-sm font-semibold tabular-nums">{fmt(w.final_quality_score)}</p></div>
                   </div>
-                  <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
+                  <div className="mt-3 flex justify-end gap-1 border-t border-border pt-2">
                     {w.is_alert ? <Button size="sm" variant="outline" onClick={() => openAlert(w)}>Vyšetřit</Button> : null}
                     <Button size="sm" variant="ghost" onClick={() => remove.mutate(w.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
