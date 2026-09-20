@@ -1948,19 +1948,14 @@ export type Database = {
         };
         Returns: Json;
       };
-      approve_import_item:
-        | {
-            Args: { p_actor_id?: string; p_import_item_id: string };
-            Returns: Json;
-          }
-        | {
-            Args: {
-              p_actor_id?: string;
-              p_confirm_conflict?: boolean;
-              p_import_item_id: string;
-            };
-            Returns: Json;
-          };
+      approve_import_item: {
+        Args: {
+          p_actor_id?: string;
+          p_confirm_conflict?: boolean;
+          p_import_item_id: string;
+        };
+        Returns: Json;
+      };
       approve_import_item_legacy:
         | {
             Args: { p_actor_id?: string; p_import_item_id: string };
