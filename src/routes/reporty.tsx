@@ -288,7 +288,7 @@ function ReportsPage() {
             <EmptyState icon={FileText} title="Pro zvolené filtry nejsou žádná data." description="Zkuste upravit filtry nebo zvolit jiné období." />
           ) : (
             perEmployee.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div key={r.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{r.name}</span>
                   {r.alerts > 0 ? <Badge variant="destructive" className="shrink-0">{r.alerts} alertů</Badge> : null}
@@ -342,7 +342,7 @@ function ReportsPage() {
         </div>
         <div className="space-y-2 p-3 md:hidden">
           {filteredDaily.slice(0, 200).map((d) => (
-            <div key={d.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+            <div key={d.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{d.work_date} · {d.shift}</span>
                 <span className="text-sm font-semibold tabular-nums">{fmt(d.oee)} % OEE</span>
