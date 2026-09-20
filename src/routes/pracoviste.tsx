@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { parseImportedLine } from "@/lib/workplace-line-parser";
 
 export const Route = createFileRoute("/pracoviste")({
   head: () => ({ meta: [
@@ -20,36 +21,8 @@ export const Route = createFileRoute("/pracoviste")({
 });
 
 type Workplace = { id: string; code: string; line_name: string; workplace_name: string; area: "HA" | "TUP"; source_line: string | null; records: number; lastDate: string | null; avgOee: number | null; avgAvailability: number | null };
-type ParsedImport = { code: string; line_name: string; workplace_name: string; area: "HA" | "TUP"; source_line: string };
 type DetailRecord = { date: string; product: string; hours: number; oee: number | null };
 type SortKey = "code" | "line" | "name" | "oee" | "availability" | "records";
-
-function parseImportedLine(value: string): ParsedImport | null {
-  const source_line = value.trim();
-  const match = source_line.match(/^(\d{3}\.\d{2})\s*-\s*(.+)$/i);
-  if (!match) return null;
-  const code = match[1] ?? "";
-  const remainder = (match[2] ?? "").trim();
-  const prefix = code.slice(0, 3);
-  if (prefix !== "041" && prefix !== "050") return null;
-  const area: "HA" | "TUP" = prefix === "050" ? "TUP" : "HA";
-  // The line token (e.g. "L3/1", optionally with an underscore sub-station
-  // suffix like "L1/1_1", or "Olovo") can appear ANYWHERE in the remainder -
-  // real workplace strings like "HandAssy L3/1 el.WI" or "HandAssy L1/1_1 -
-  // OPF" have extra descriptive text after it. Previously the token was only
-  // recognized when it was the very last thing in the string, so any of
-  // these fell through to "Neurčeno" with the whole raw string dumped into
-  // the name column instead. Text on both sides of the token is now kept
-  // and joined into the workplace name rather than discarded.
-  const lineMatch = remainder.match(/(L\d+\s*\/\s*\d+(?:_\d+)?(?:\s+HF)?|Olovo)/i);
-  const lineToken = lineMatch?.[1] ?? "";
-  const line_name = lineMatch ? (/^olovo$/i.test(lineToken) ? "Olovo" : lineToken.replace(/\s*\/\s*/g, "/").replace(/\s+HF$/i, " HF").toUpperCase()) : "Neurčeno";
-  const before = lineMatch ? remainder.slice(0, lineMatch.index).replace(/-\s*$/, "").trim() : remainder;
-  const after = lineMatch ? remainder.slice((lineMatch.index ?? 0) + lineMatch[0].length).replace(/^-\s*/, "").trim() : "";
-  const workplace_name = [before, after].filter(Boolean).join(" ").trim() || remainder;
-  if (!workplace_name) return null;
-  return { code, line_name, workplace_name, area, source_line };
-}
 
 function oeeTone(value: number | null) {
   if (value == null) return "text-muted-foreground";

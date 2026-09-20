@@ -1,0 +1,307 @@
+/*
+ * Vizuální jazyk Interaktivního prostředí (Verze 2.02) - "živá výrobní hala",
+ * záměrně odlišný od zbytku aplikace (žádné shadcn Card/plain bílé plochy).
+ * Škálovatelnost/výkon: čisté CSS animace (transform/opacity), žádný canvas/JS
+ * tik, respektuje prefers-reduced-motion (viz styles.css - globální pravidlo
+ * na *, *::before, *::after už animace zkrátí na 0.01ms).
+ */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+.iw-scope {
+  --iw-bg-deep: 224 55% 6%;
+  --iw-bg-panel: 223 45% 10%;
+  --iw-grid-line: 190 70% 60%;
+  --iw-live-green: 152 65% 52%;
+  --iw-live-amber: 38 92% 58%;
+  --iw-live-red: 350 78% 60%;
+  --iw-live-blue: 200 85% 60%;
+  --iw-live-gray: 218 15% 55%;
+  --iw-font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  position: relative;
+  isolation: isolate;
+  font-family: var(--iw-font-mono);
+}
+
+/* Základní hlubší plocha - i ve světlém režimu zůstává "mission control" tmavá,
+   protože jde záměrně o odlišné prostředí, ne o další stránku aplikace. */
+.iw-scope::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--iw-grid-line) / 0.10), transparent 60%), hsl(var(--iw-bg-deep));
+}
+
+/* Jemná drátová mřížka jako blueprint/schéma haly - statická, jen prosvítá.
+   Bez maskování na celou výšku/šířku (dřív mizela mimo horní elipsu) a se
+   silnější základní intenzitou, aby prosvítala i skrz průhledné karty
+   posazené kdekoli na stránce, ne jen na volné ploše nahoře. */
+.iw-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image:
+    linear-gradient(hsl(var(--iw-grid-line) / 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--iw-grid-line) / 0.16) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+/* Pomalu putující "scan" paprsek přes celou mřížku - jediný pohyblivý prvek
+   pozadí, evokuje živý sběr dat, ne dekoraci. */
+.iw-scanline {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.iw-scanline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 45vh;
+  top: -45vh;
+  background: linear-gradient(180deg, transparent, hsl(var(--iw-grid-line) / 0.12), transparent);
+  animation: iw-scan 14s linear infinite;
+}
+@keyframes iw-scan {
+  0% { transform: translateY(-10vh); }
+  100% { transform: translateY(240vh); }
+}
+
+/* Drifting "data" jiskry - malý počet, staggerované, čistě CSS. */
+.iw-particle {
+  position: fixed;
+  z-index: -1;
+  bottom: -8px;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: hsl(var(--iw-grid-line) / 0.5);
+  box-shadow: 0 0 6px 1px hsl(var(--iw-grid-line) / 0.35);
+  animation: iw-drift linear infinite;
+  pointer-events: none;
+}
+@keyframes iw-drift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  8% { opacity: 0.9; }
+  92% { opacity: 0.5; }
+  100% { transform: translateY(-105vh) translateX(var(--iw-drift-x, 30px)); opacity: 0; }
+}
+
+/* Sklo-panelový povrch pro karty tohoto prostředí (nahrazuje plain shadcn Card).
+   Bez blur (rozostření by tenké 1px linky mřížky prakticky smazalo) a s nízkou
+   neprůhledností, aby animované pozadí (mřížka/scan/částice) prosvítalo skrz
+   VŠECHNY karty vždy - i vnořené (skupina ve FloorMap obsahuje další .iw-panel
+   karty uvnitř), ne jen na volné ploše mimo karty. */
+.iw-panel {
+  position: relative;
+  background: linear-gradient(180deg, hsl(var(--iw-bg-panel) / 0.35), hsl(var(--iw-bg-panel) / 0.24));
+  border: 1px solid hsl(var(--iw-grid-line) / 0.25);
+  border-radius: var(--radius-lg, 1rem);
+  box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.14) inset, 0 18px 40px hsl(0 0% 0% / 0.35);
+  color: hsl(218 30% 94%);
+}
+
+/* Kompozitní selektor (vyšší specificita než .iw-panel nebo .border-0 samotné) -
+   garantuje, že .iw-panel překryje Tailwindovo border-0 bez ohledu na pořadí
+   importu CSS (AccordionItem v FloorMap.tsx potřebuje zrušit výchozí border-b). */
+.iw-panel.border-0 {
+  border: 1px solid hsl(var(--iw-grid-line) / 0.16);
+}
+
+.iw-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid hsl(var(--iw-grid-line) / 0.12);
+}
+
+/* Varianta pro hlavičky s vlastním obsahem pod titulkem (např. filtry) -
+   samostatná třída místo spoléhání na to, že Tailwind utility třídy přebijí
+   .iw-panel-header v cascade (stejná specificita, pořadí importu není jisté). */
+.iw-panel-header-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid hsl(var(--iw-grid-line) / 0.12);
+}
+
+.iw-mono { font-family: var(--iw-font-mono); letter-spacing: 0.02em; }
+.iw-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.14em; color: hsl(218 20% 62%); }
+
+/* Živý pulzující "puls" bod - vyjadřuje, že se na daném pracovišti PRÁVĚ TEĎ vyrábí. */
+.iw-pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--iw-dot, var(--iw-live-green)));
+  box-shadow: 0 0 0 0 hsl(var(--iw-dot, var(--iw-live-green)) / 0.6);
+}
+.iw-pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: hsl(var(--iw-dot, var(--iw-live-green)));
+  animation: iw-ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes iw-ping {
+  0% { transform: scale(1); opacity: 0.7; }
+  75%, 100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Stavové barvy jako CSS proměnná na kartě, aby ji sdílel puls, okraj i text. */
+.iw-status-full { --iw-dot: var(--iw-live-green); }
+.iw-status-under { --iw-dot: var(--iw-live-amber); }
+.iw-status-none { --iw-dot: var(--iw-live-red); }
+.iw-status-temp { --iw-dot: var(--iw-live-blue); }
+.iw-status-secondary { --iw-dot: var(--iw-live-gray); }
+
+.iw-panel-live {
+  border-left: 3px solid hsl(var(--iw-dot, var(--iw-live-gray)) / 0.75);
+  box-shadow: 0 1px 0 hsl(var(--iw-grid-line) / 0.08) inset, 0 0 0 1px hsl(var(--iw-dot, var(--iw-live-gray)) / 0.12), 0 18px 40px hsl(0 0% 0% / 0.35);
+}
+
+/* Tenký "kapacitní" ukazatel se shimmerem, aby i statická karta působila jako živě aktualizovaná. */
+.iw-capacity-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: hsl(218 20% 100% / 0.08);
+  overflow: hidden;
+}
+.iw-capacity-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: hsl(var(--iw-dot, var(--iw-live-green)));
+  transition: width 500ms ease;
+}
+.iw-capacity-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.35), transparent);
+  width: 40%;
+  animation: iw-shimmer 2.6s ease-in-out infinite;
+}
+@keyframes iw-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
+
+/* Skryje scrollbar u horizontálně scrollovatelné sub-navigace na mobilu -
+   scroll zůstává funkční (touch/wheel), jen bez viditelného pruhu. */
+.iw-scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.iw-scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* Ovládací prvky (datum/směna/text/číslo) v jednotném tmavém stylu prostředí. */
+.iw-scope input,
+.iw-scope select,
+.iw-control {
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--iw-grid-line) / 0.2);
+  background: hsl(0 0% 100% / 0.04);
+  color: hsl(218 30% 94%);
+  padding: 0 0.6rem;
+  font-size: 0.8rem;
+  font-family: var(--iw-font-mono);
+}
+.iw-scope input[type="date"]:focus,
+.iw-scope select:focus {
+  outline: none;
+  border-color: hsl(var(--iw-live-green) / 0.6);
+  box-shadow: 0 0 0 3px hsl(var(--iw-live-green) / 0.12);
+}
+
+/* Primární akce ("ZAHÁJIT VÝROBU") - jemně dýchající glow, aby působila jako
+   živé, aktivní ovládání systému, ne obyčejné tlačítko formuláře. */
+.iw-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1.1rem;
+  border-radius: 0.6rem;
+  font-family: var(--iw-font-mono);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: hsl(152 55% 10%);
+  background: hsl(var(--iw-live-green));
+  border: none;
+  cursor: pointer;
+  animation: iw-breathe 3.2s ease-in-out infinite;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.iw-cta:hover:not(:disabled) { filter: brightness(1.08); }
+.iw-cta:active:not(:disabled) { transform: scale(0.98); }
+.iw-cta:disabled { opacity: 0.35; cursor: not-allowed; animation: none; }
+@keyframes iw-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--iw-live-green) / 0.35); }
+  50% { box-shadow: 0 0 0 8px hsl(var(--iw-live-green) / 0); }
+}
+
+/* Sekundární tlačítka (přidat/odebrat/přepočítat...) - stejná tmavá rodina jako .iw-cta, jen bez glow. */
+.iw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-family: var(--iw-font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(218 30% 90%);
+  background: hsl(0 0% 100% / 0.06);
+  border: 1px solid hsl(var(--iw-grid-line) / 0.18);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.iw-btn:hover:not(:disabled) { background: hsl(0 0% 100% / 0.11); border-color: hsl(var(--iw-grid-line) / 0.32); }
+.iw-btn:active:not(:disabled) { transform: scale(0.98); }
+.iw-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.iw-btn-danger { border-color: hsl(var(--iw-live-red) / 0.4); color: hsl(var(--iw-live-red)); }
+.iw-btn-danger:hover:not(:disabled) { background: hsl(var(--iw-live-red) / 0.12); }
+.iw-btn-active { background: hsl(var(--iw-live-green) / 0.16); border-color: hsl(var(--iw-live-green) / 0.5); color: hsl(var(--iw-live-green)); }
+
+/* Malý informační štítek (jméno zaměstnance, kód apod.) */
+.iw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.6rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  font-family: var(--iw-font-mono);
+  font-size: 0.72rem;
+  background: hsl(0 0% 100% / 0.06);
+  border: 1px solid hsl(var(--iw-grid-line) / 0.14);
+  color: hsl(218 28% 88%);
+}
+.iw-chip-temp { border-color: hsl(var(--iw-live-blue) / 0.45); color: hsl(var(--iw-live-blue)); }
+
+/* Dotykové cíle na mobilu ≥44px (Apple/Google doporučení) - na desktopu
+   zůstává hustší, myší ovládaná varianta beze změny. */
+@media (max-width: 767px) {
+  .iw-scope input,
+  .iw-scope select,
+  .iw-control,
+  .iw-btn,
+  .iw-cta {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iw-scanline::after, .iw-particle, .iw-pulse-dot::after, .iw-capacity-fill::after, .iw-cta { animation: none !important; }
+}
