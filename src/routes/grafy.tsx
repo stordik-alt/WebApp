@@ -38,7 +38,8 @@ const METRICS: { key: Metric; label: string; unit: string }[] = [
 ];
 
 const SERIES_COLORS = [
-  "#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#db2777", "#65a30d",
+  "hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--chart-6))",
 ];
 
 function isoDate(date: Date) {
@@ -130,7 +131,7 @@ function ChartsPage() {
   return (
     <AppShell title="Grafy" subtitle="Porovnání zaměstnanců, metrik a produktů v čase">
       <div className="space-y-6">
-        <Card className="grid gap-5 p-5 shadow-[var(--shadow-card)] lg:grid-cols-[1.1fr_1fr_1fr_1fr]">
+        <Card className="grid gap-4 p-4 shadow-[var(--shadow-card)] sm:gap-5 sm:p-5 lg:grid-cols-[1.1fr_1fr_1fr_1fr]">
           <div className="space-y-2">
             <Label>Zaměstnanci</Label>
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border p-2">
@@ -214,7 +215,7 @@ function ChartsPage() {
           </div>
         </Card>
 
-        <Card className="p-4 shadow-[var(--shadow-card)] sm:p-6">
+        <Card className="p-4 shadow-[var(--shadow-card)] sm:p-5">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Porovnávací graf</h2>
@@ -235,7 +236,7 @@ function ChartsPage() {
           ) : chartData.length === 0 ? (
             <div className="flex h-[420px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">Pro zvolenou kombinaci nejsou žádná schválená data.</div>
           ) : (
-            <div className="h-[420px] w-full">
+            <div className="h-[360px] w-full sm:h-[420px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 24, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
