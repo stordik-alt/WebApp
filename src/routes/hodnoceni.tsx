@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { localDateKey } from "@/lib/metrics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -55,7 +56,7 @@ type FormState = {
 
 const EMPTY: FormState = {
   employee_id: "",
-  work_date: new Date().toISOString().substring(0, 10),
+  work_date: localDateKey(),
   shift: "Ranní",
   score: "50",
   note: "",
@@ -339,7 +340,7 @@ function HandlerEvaluationPage() {
             <EmptyState icon={ClipboardCheck} title="Zatím žádné hodnocení." description="Hodnocení se zde objeví po prvním záznamu." />
           ) : (
             evaluations.map((ev) => (
-              <div key={ev.id} className="rounded-xl border border-border/60 bg-slate-950/35 p-3">
+              <div key={ev.id} className="rounded-xl border border-border/60 bg-muted/25 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0"><p className="truncate font-medium">{employeeNames.get(ev.employee_id) || "Neznámý"}</p><p className="mt-0.5 text-xs text-muted-foreground">{ev.work_date} · {ev.shift}</p></div>
                   <Badge variant={ev.score >= 80 ? "default" : ev.score >= 60 ? "secondary" : "destructive"} className="shrink-0">{ev.score}</Badge>
