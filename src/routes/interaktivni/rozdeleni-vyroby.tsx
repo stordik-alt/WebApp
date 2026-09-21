@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, PlayCircle, RefreshCw, UserPlus, Users2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { useEmployees } from "@/lib/data";
@@ -201,9 +200,9 @@ function ProductionAssignmentPage() {
 
   if (!canManage) {
     return (
-      <AppShell title="Rozdělení výroby" subtitle="Obsazení, výběr výrob a návrh rozdělení operátorů.">
+      
         <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
-      </AppShell>
+      
     );
   }
 
@@ -211,7 +210,7 @@ function ProductionAssignmentPage() {
   const isDraft = shiftQuery.data?.status === "draft";
 
   return (
-    <AppShell title="Rozdělení výroby" subtitle="Kvalifikace určuje KDO, priorita KAM při nedostatku, rotace KTERÝ konkrétní člověk.">
+    
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Users2 className="h-4 w-4" />} title="Krok 1 · Obsazení pro tuto směnu" subtitle="Základní tým se výjimkou nemění - platí jen pro dnešek" />
@@ -372,6 +371,6 @@ function ProductionAssignmentPage() {
           </Panel>
         ) : null}
       </div>
-    </AppShell>
+    
   );
 }
