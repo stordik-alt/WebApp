@@ -162,11 +162,10 @@ function WorkplacesPage() {
       setCreateError("Vyplňte kód, linku a název pracoviště.");
       return;
     }
-    if (!/^\\d{3}\\.\\d{2}$/.test(code)) {
+    if (!/^\d{3}\.\d{2}$/.test(code)) {
       setCreateError("Kód musí mít formát 041.01 nebo 050.01.");
       return;
     }
-
     setCreateSaving(true);
     setCreateError(null);
     try {
@@ -217,13 +216,6 @@ function WorkplacesPage() {
             </div>
             <Button size="sm" onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" />Přidat pracoviště</Button>
           </div>
-          <div className="border-t border-border px-3 py-2 sm:px-4">
-            <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><SlidersHorizontal className="h-4 w-4" /></span>
-              <span className="font-semibold">Filtry a řazení</span>
-              <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
-            </button>
-          </div>
           {showCreate ? (
             <div className="border-t border-border bg-muted/10 px-3 py-4 sm:px-4">
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -245,10 +237,12 @@ function WorkplacesPage() {
               </div>
             </div>
           ) : null}
+          <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
             <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><SlidersHorizontal className="h-4 w-4" /></span>
               <span className="font-semibold">Filtry a řazení</span>
-            </div>
+              <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+            </button>
             <span className="shrink-0 text-xs text-muted-foreground">{filteredWorkplaces.length}/{workplaces.length}</span>
           </div>
           {showFilters ? (
