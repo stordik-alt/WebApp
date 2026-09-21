@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, Save } from "lucide-react";
 import { useState } from "react";
-import { AppShell } from "@/components/AppShell";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { groupWorkstations, listWorkstations, updateWorkstation, type IwWorkstation } from "@/lib/floorMap";
 
@@ -50,7 +49,7 @@ function FloorMapAdminPage() {
   }
 
   return (
-    <AppShell title="Mapa haly" subtitle="Best-effort rekonstrukce reálného rozložení – oprav skupinu, název nebo poznámku podle skutečnosti.">
+    
       <div className="grid min-w-0 gap-4 sm:gap-6">
         {isLoading ? (
           <Panel className="p-5 text-sm text-muted-foreground">Načítám mapu haly…</Panel>
@@ -92,6 +91,6 @@ function FloorMapAdminPage() {
           ))
         )}
       </div>
-    </AppShell>
+    
   );
 }
