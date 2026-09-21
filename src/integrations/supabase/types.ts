@@ -931,6 +931,7 @@ export type Database = {
           ended_at: string | null;
           id: string;
           priority: number | null;
+          product_id: string | null;
           product_code: string;
           remaining_pieces: number;
           sequence_no: number;
@@ -945,6 +946,7 @@ export type Database = {
           ended_at?: string | null;
           id?: string;
           priority?: number | null;
+          product_id?: string | null;
           product_code: string;
           remaining_pieces: number;
           sequence_no?: number;
@@ -959,6 +961,7 @@ export type Database = {
           ended_at?: string | null;
           id?: string;
           priority?: number | null;
+          product_id?: string | null;
           product_code?: string;
           remaining_pieces?: number;
           sequence_no?: number;
@@ -968,6 +971,13 @@ export type Database = {
           workstation_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "iw_shift_productions_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "iw_shift_productions_shift_id_fkey";
             columns: ["shift_id"];
