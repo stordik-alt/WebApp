@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart, Building2, Wrench, History, AlertOctagon } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, CalendarRange, FileBarChart, Activity, Trophy, Package, Menu, Ruler, AlertTriangle, Info, ShieldCheck, UserCog, LogOut, BarChart3, Award, LineChart, Building2, Wrench, History, AlertOctagon, ArrowLeft } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -46,13 +46,39 @@ function Brand() { return <div className="shrink-0 border-b border-sidebar-borde
 function SignOutButton() { return <Button variant="ghost" size="sm" className="h-10 w-full justify-start gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground" onClick={() => void supabase.auth.signOut()}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-sidebar-accent/45"><LogOut className="h-4 w-4" /></span><span>Odhlásit se</span></Button>; }
 function SidebarSettings() { return <div className="shrink-0 grid gap-1 border-t border-sidebar-border/70 p-3"><EnvironmentSwitcher /><AppearanceSettings /><ThemeToggle /><SignOutButton /></div>; }
 
-export function AppShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
+export function AppShell({ title, subtitle, actions, children, environment, backTo = "/", backLabel = "Zpět do hodnocení" }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode; environment?: boolean; backTo?: string; backLabel?: string }) {
   const [open, setOpen] = useState(false); const { isTester } = useAuth();
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  const shellContent = <div key={pathname} className="os-motion-enter"><RouteGuard>{children}</RouteGuard></div>;
+  if (environment) {
+    return <div data-app-title={title} data-read-only={isTester ? "true" : "false"} className="min-h-screen w-full min-w-0 overflow-x-clip bg-background text-foreground">
+      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/95 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[var(--os-content-max)] min-w-0 items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link to={backTo} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-border/80 bg-card/70 px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent" aria-label={backLabel}>
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">{backLabel}</span>
+            </Link>
+            <div className="hidden h-7 w-px bg-border/70 sm:block" />
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">Production environment</div>
+              <div className="flex items-center gap-2">
+                <h1 className="os-page-title truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>
+                {isTester ? <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">Tester · pouze čtení</span> : null}
+              </div>
+              {subtitle ? <p className="hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p> : null}
+            </div>
+          </div>
+          <div className="shrink-0"><span className="sm:hidden"><OptiShiftLogo compact /></span><span className="hidden sm:block"><OptiShiftLogo /></span></div>
+        </div>
+      </header>
+      <main className="mx-auto min-w-0 w-full max-w-[var(--os-content-max)] overflow-x-visible px-4 pb-12 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pb-8">{shellContent}</main>
+    </div>;
+  }
   return <div data-app-title={title} data-read-only={isTester ? "true" : "false"} className="min-h-screen w-full min-w-0 overflow-x-clip bg-background text-foreground">
     <div className="pointer-events-none fixed inset-0 -z-10" />
     <aside className="fixed inset-y-0 left-0 z-40 hidden min-h-0 w-[var(--os-sidebar-width)] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[12px_0_30px_-24px_black] lg:flex"><Brand /><NavList /><SidebarSettings /><div className="shrink-0 px-5 pb-5 text-[10px] leading-relaxed text-sidebar-foreground/35">Interní výrobní systém · cloudová data</div></aside>
-    <div className="relative z-0 min-w-0 w-full overflow-x-auto overscroll-x-contain lg:pl-[var(--os-sidebar-width,248px)]"><header className="sticky top-0 z-30 w-full min-w-0 border-b border-border/80 bg-background/95 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-3.5 lg:px-8"><div className="mx-auto flex w-full max-w-[1480px] min-w-0 flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-1 items-center gap-3"><Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><Button variant="outline" size="icon" className="rounded-xl border-border/80 bg-card/70 lg:hidden" aria-label="Menu"><Menu className="h-5 w-5" /></Button></SheetTrigger><SheetContent side="left" className="flex h-dvh max-h-dvh min-h-0 w-[285px] max-w-[85vw] flex-col overflow-hidden border-sidebar-border bg-sidebar p-0 text-sidebar-foreground touch-pan-y"><Brand /><NavList onNavigate={() => setOpen(false)} /><SidebarSettings /></SheetContent></Sheet><div className="min-w-0"><div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">Production monitoring</div><div className="flex items-center gap-2"><h1 className="os-page-title truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>{isTester?<span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">Tester · pouze čtení</span>:null}</div>{subtitle?<p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>:null}</div></div>{!isTester&&actions?<div className="order-3 flex w-full min-w-0 flex-wrap items-center justify-center gap-2 sm:order-none sm:w-auto sm:justify-end">{actions}</div>:null}<div className="shrink-0"><span className="sm:hidden"><OptiShiftLogo compact /></span><span className="hidden sm:block"><OptiShiftLogo /></span></div></div></header><main className="mx-auto min-w-0 w-full max-w-[var(--os-content-max)] overflow-x-visible px-4 pb-24 pt-5 sm:px-6 sm:pt-6 md:pb-6 lg:px-8 lg:pb-8"><div key={pathname} className="os-motion-enter"><RouteGuard>{children}</RouteGuard></div></main></div><BottomNav />
+    <div className="relative z-0 min-w-0 w-full overflow-x-auto overscroll-x-contain lg:pl-[var(--os-sidebar-width,248px)]"><header className="sticky top-0 z-30 w-full min-w-0 border-b border-border/80 bg-background/95 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-3.5 lg:px-8"><div className="mx-auto flex w-full max-w-[1480px] min-w-0 flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-1 items-center gap-3"><Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><Button variant="outline" size="icon" className="rounded-xl border-border/80 bg-card/70 lg:hidden" aria-label="Menu"><Menu className="h-5 w-5" /></Button></SheetTrigger><SheetContent side="left" className="flex h-dvh max-h-dvh min-h-0 w-[285px] max-w-[85vw] flex-col overflow-hidden border-sidebar-border bg-sidebar p-0 text-sidebar-foreground touch-pan-y"><Brand /><NavList onNavigate={() => setOpen(false)} /><SidebarSettings /></SheetContent></Sheet><div className="min-w-0"><div className="mb-0.5 hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 sm:block">Production monitoring</div><div className="flex items-center gap-2"><h1 className="os-page-title truncate text-lg font-bold tracking-tight sm:text-xl">{title}</h1>{isTester?<span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">Tester · pouze čtení</span>:null}</div>{subtitle?<p className="mt-0.5 hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>:null}</div></div>{!isTester&&actions?<div className="order-3 flex w-full min-w-0 flex-wrap items-center justify-center gap-2 sm:order-none sm:w-auto sm:justify-end">{actions}</div>:null}<div className="shrink-0"><span className="sm:hidden"><OptiShiftLogo compact /></span><span className="hidden sm:block"><OptiShiftLogo /></span></div></div></header><main className="mx-auto min-w-0 w-full max-w-[var(--os-content-max)] overflow-x-visible px-4 pb-24 pt-5 sm:px-6 sm:pt-6 md:pb-6 lg:px-8 lg:pb-8">{shellContent}</main></div><BottomNav />
   </div>;
 }
 
