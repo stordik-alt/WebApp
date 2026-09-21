@@ -60,33 +60,74 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
  * akordeony (sekce 13 zadání - žádné pouhé zmenšení mapy na mobilu).
  */
 export function FloorMap({ groups }: { groups: Map<string, FloorMapWorkstationView[]> }) {
+  const entries = [...groups.entries()];
+  const leftGroups = entries.filter(([name]) => /delta|linka\s*1|ha\s*1/i.test(name));
+  const rightGroups = entries.filter(([name]) => !leftGroups.some(([n]) => n === name));
+
+  const renderGroup = ([groupName, views]: [string, FloorMapWorkstationView[]]) => (
+    <section key={groupName} className="iw-hall-zone">
+      <div className="iw-hall-zone-title">
+        <span>{groupName}</span>
+        <span className="iw-hall-zone-count">{views.length} prac.</span>
+      </div>
+      <div className="iw-hall-stations">
+        {views.map((view) => <WorkstationCard key={view.workstation.id} view={view} />)}
+      </div>
+    </section>
+  );
+
   return (
-    <>
-      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
-        {[...groups.entries()].map(([groupName, views]) => (
-          <Panel key={groupName} className="p-4">
-            <h3 className="iw-label mb-3">{groupName}</h3>
-            <div className="grid gap-2">
-              {views.map((view) => (
-                <WorkstationCard key={view.workstation.id} view={view} />
-              ))}
-            </div>
-          </Panel>
-        ))}
+    <div className="iw-hall-map" aria-label="Vizualizace výrobní haly">
+      <div className="iw-hall-header">
+        <div>
+          <div className="iw-label">FLOOR PLAN / LIVE PRODUCTION</div>
+          <div className="iw-hall-title">Výrobní hala</div>
+        </div>
+        <div className="iw-hall-legend">
+          <span><i className="iw-legend-dot iw-legend-live" /> Výroba</span>
+          <span><i className="iw-legend-dot iw-legend-warn" /> Snížená kapacita</span>
+          <span><i className="iw-legend-dot iw-legend-off" /> Bez operátora</span>
+        </div>
       </div>
 
-      <Accordion type="multiple" className="grid gap-2 md:hidden">
-        {[...groups.entries()].map(([groupName, views]) => (
-          <AccordionItem key={groupName} value={groupName} className="iw-panel rounded-lg border-0 px-3">
-            <AccordionTrigger className="iw-label py-3 hover:no-underline">{groupName}</AccordionTrigger>
-            <AccordionContent className="grid gap-2 pb-3">
-              {views.map((view) => (
-                <WorkstationCard key={view.workstation.id} view={view} />
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    </>
+      <div className="iw-hall-floor">
+        <div className="iw-hall-lane iw-hall-lane-one">
+          <div className="iw-hall-lane-label">LINKA 1</div>
+          <div className="iw-hall-flow" aria-hidden="true">
+            <span /><span /><span /><span />
+          </div>
+          <div className="iw-hall-machine iw-hall-ersa">ERSA</div>
+          <div className="iw-hall-lane-groups">{leftGroups.map(renderGroup)}</div>
+        </div>
+
+        <div className="iw-hall-center">
+          <div className="iw-hall-center-line" />
+          <div className="iw-hall-center-node">HA<br /><span>→ TUP</span></div>
+          <div className="iw-hall-center-line" />
+        </div>
+
+        <div className="iw-hall-lane iw-hall-lane-two">
+          <div className="iw-hall-lane-label">LINKA 2</div>
+          <div className="iw-hall-lane-groups">{rightGroups.map(renderGroup)}</div>
+        </div>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="iw-hall-empty">Mapa čeká na konfiguraci pracovišť.</div>
+      ) : null}
+
+      <div className="md:hidden">
+        <Accordion type="multiple" className="grid gap-2">
+          {entries.map(([groupName, views]) => (
+            <AccordionItem key={groupName} value={groupName} className="iw-panel rounded-lg border-0 px-3">
+              <AccordionTrigger className="iw-label py-3 hover:no-underline">{groupName}</AccordionTrigger>
+              <AccordionContent className="grid gap-2 pb-3">
+                {views.map((view) => <WorkstationCard key={view.workstation.id} view={view} />)}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </div>
+    </div>
   );
 }
