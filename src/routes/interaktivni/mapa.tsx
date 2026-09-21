@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Factory, Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
-import { AppShell } from "@/components/AppShell";
 import { FloorMap, type FloorMapWorkstationView } from "@/components/interaktivni/FloorMap";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
@@ -170,14 +169,14 @@ function FloorMapPage() {
 
   if (!canManage) {
     return (
-      <AppShell title="Mapa haly" subtitle="Aktuální stav výrobní haly.">
+      
         <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
-      </AppShell>
+      
     );
   }
 
   return (
-    <AppShell title="Mapa haly" subtitle="Vyber výrobu na každé lince z aktuálních uložených produktů a zadej zbývající kusy.">
+    
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Produkt se vybírá z aktivních a schválených produktů; priorita se nastavuje až v Rozdělení výroby" />
@@ -271,6 +270,6 @@ function FloorMapPage() {
 
         <FloorMap groups={groups} />
       </div>
-    </AppShell>
+    
   );
 }
