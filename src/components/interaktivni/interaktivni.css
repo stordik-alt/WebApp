@@ -195,7 +195,7 @@
   height: 100%;
   border-radius: 999px;
   background: hsl(var(--iw-dot, var(--iw-live-green)));
-  transition: width 500ms ease;
+  transition: width var(--os-motion-base, 180ms) var(--os-ease-standard, ease-out);
 }
 .iw-capacity-fill::after {
   content: "";
@@ -445,4 +445,31 @@
 }
 @media (prefers-reduced-motion:reduce) {
   .iw-hall-flow span { animation:none; opacity:.8; }
+}
+
+
+/* Stage 5 — functional motion primitives */
+.iw-motion-live {
+  animation: iw-state-pulse 2.8s ease-in-out infinite;
+}
+.iw-motion-enter {
+  animation: iw-hall-enter 320ms cubic-bezier(.2,.8,.2,1) both;
+}
+.iw-motion-flow {
+  animation: iw-flow-glow 2.4s ease-in-out infinite;
+}
+@keyframes iw-state-pulse {
+  0%,100% { box-shadow: 0 1px 0 hsl(var(--iw-grid-line)/.08) inset, 0 0 0 1px hsl(var(--iw-dot)/.10), 0 18px 40px hsl(0 0% 0%/.35); }
+  50% { box-shadow: 0 1px 0 hsl(var(--iw-grid-line)/.12) inset, 0 0 0 1px hsl(var(--iw-dot)/.26), 0 0 22px hsl(var(--iw-dot)/.10); }
+}
+@keyframes iw-hall-enter {
+  from { opacity:0; transform:translateY(8px) scale(.995); }
+  to { opacity:1; transform:translateY(0) scale(1); }
+}
+@keyframes iw-flow-glow {
+  0%,100% { opacity:.55; }
+  50% { opacity:1; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .iw-motion-live, .iw-motion-enter, .iw-motion-flow { animation:none; }
 }
