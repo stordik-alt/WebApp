@@ -197,8 +197,8 @@ function Dashboard() {
         </div>
       }
     >
-      <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:p-5">
+      <div className="space-y-6">
+      <div className="os-surface relative overflow-hidden rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-card)] sm:p-5">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-primary/50" />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl lg:pr-3">
@@ -303,7 +303,7 @@ function Dashboard() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1fr_1fr]">
         <OeeGaugeCard value={avgOee} animatedValue={animatedOee} hint={`${last30.length} směn v období`} />
         <KpiCard label="Průměrné Quality Score" value={fmt(animatedQuality)} hint={`${qualityValues.length} hodnocených týdnů`} tone={avgQuality !== null && avgQuality < 0 ? "danger" : "success"} icon={<ShieldCheck className="h-4 w-4" />} />
         <KpiCard label="Průměrná výpomoc" value={fmt(animatedHelp, 0)} hint="Škála -100 až +100" icon={<HeartHandshake className="h-4 w-4" />} />
@@ -311,7 +311,7 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.55fr_1fr_0.78fr]">
-        <Card className="relative overflow-hidden p-5">
+        <Card className="os-surface-interactive relative overflow-hidden p-5">
           <CardHeaderRow title="Vývoj průměrného OEE" icon={<Activity className="h-4 w-4" />} action={periodLabel} />
           <div className="mt-4 h-64">
             {oeeTrend.length === 0 ? (
@@ -341,7 +341,7 @@ function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-5">
+        <Card className="os-surface-interactive p-5">
           <CardHeaderRow title="TOP 10 – OEE" icon={<Users className="h-4 w-4" />} action="Nejlepší výkon" />
           <div className="mt-4 h-64">
             {perEmployee.length === 0 ? (
@@ -383,7 +383,7 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[0.8fr_1.35fr]">
-        <Card className="p-5 ">
+        <Card className="os-surface-interactive p-5">
           <CardHeaderRow title="OEE podle směn" icon={<Gauge className="h-4 w-4" />} action="Srovnání" />
           <div className="mt-4 space-y-3">
             {shiftPerformance.length === 0 ? (
@@ -517,7 +517,7 @@ function OeeGaugeCard({ value, animatedValue, hint }: { value: number | null; an
   const pct = displayValue == null ? 0 : Math.max(0, Math.min(100, displayValue));
   const color = value == null ? "hsl(var(--muted-foreground))" : value >= 96 ? "hsl(var(--success))" : value >= 80 ? "hsl(var(--warning))" : "hsl(var(--destructive))";
   return (
-    <Card className="gap-0 p-5">
+    <Card className="os-surface-interactive gap-0 p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Průměrné OEE (30 dní)</span>
         <Gauge className="h-4 w-4 text-muted-foreground" />
