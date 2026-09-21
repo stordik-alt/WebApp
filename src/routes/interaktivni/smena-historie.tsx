@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
 import { useMemo } from "react";
-import { AppShell } from "@/components/AppShell";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { useEmployees } from "@/lib/data";
@@ -75,16 +74,16 @@ function ShiftHistoryPage() {
 
   if (!canManage) {
     return (
-      <AppShell title="Historie směny" subtitle="Srovnání plánu se skutečností.">
+      
         <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
-      </AppShell>
+      
     );
   }
 
   const hasSnapshot = Boolean(snapshotQuery.data);
 
   return (
-    <AppShell title="Historie směny" subtitle="Plánovaný stav ze ZAHÁJIT VÝROBU vedle skutečných potvrzených importů - jen pro přehled.">
+    
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <div className="iw-mono px-1 text-xs text-muted-foreground">Stav směny: {shiftQuery.data?.status ?? "…"}</div>
 
@@ -125,6 +124,6 @@ function ShiftHistoryPage() {
           )}
         </Panel>
       </div>
-    </AppShell>
+    
   );
 }
