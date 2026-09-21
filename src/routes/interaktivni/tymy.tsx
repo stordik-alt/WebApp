@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, UserMinus, UserPlus, Users } from "lucide-react";
 import { useMemo } from "react";
-import { AppShell } from "@/components/AppShell";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { useEmployees } from "@/lib/data";
@@ -60,16 +59,16 @@ function TeamsPage() {
 
   if (!canManage) {
     return (
-      <AppShell title="Týmy" subtitle="Týdenní základní tým Team Leadera.">
+      
         <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
-      </AppShell>
+      
     );
   }
 
   const teamName = teams.find((t) => t.id === teamId)?.name;
 
   return (
-    <AppShell title="Týmy" subtitle="Vyber tým nahoře - členství se mění administrativně, nezávisle na konkrétní směně.">
+    
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
           <PanelHeader icon={<Users className="h-4 w-4" />} title={teamName ? `Tým: ${teamName}` : "Základní tým"} subtitle={`${members.length} členů`} />
@@ -139,6 +138,6 @@ function TeamsPage() {
           </Panel>
         ) : null}
       </div>
-    </AppShell>
+    
   );
 }
