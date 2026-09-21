@@ -32,6 +32,27 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
   return (data ?? []) as IwWorkstation[];
 }
 
+export type IwWorkstationCreate = Pick<IwWorkstation, "code" | "area" | "group_name" | "display_name"> &
+  Partial<Pick<IwWorkstation, "sort_order" | "requires_ha_qual" | "requires_tup_qual" | "is_secondary" | "active" | "note" | "workplace_id">>;
+
+// # dělá: vytvoří nové pracoviště přímo v mapě haly
+export async function createWorkstation(input: IwWorkstationCreate): Promise<void> {
+  const { error } = await supabase.from("iw_workstations").insert({
+    code: input.code.trim(),
+    area: input.area,
+    group_name: input.group_name.trim(),
+    display_name: input.display_name.trim(),
+    sort_order: input.sort_order ?? 0,
+    requires_ha_qual: input.requires_ha_qual ?? false,
+    requires_tup_qual: input.requires_tup_qual ?? false,
+    is_secondary: input.is_secondary ?? input.area === "SECONDARY",
+    active: input.active ?? true,
+    note: input.note?.trim() || null,
+    workplace_id: input.workplace_id ?? null,
+  });
+  if (error) throw error;
+}
+
 export type IwWorkstationPatch = Partial<
   Pick<IwWorkstation, "group_name" | "display_name" | "sort_order" | "requires_ha_qual" | "requires_tup_qual" | "is_secondary" | "active" | "note" | "workplace_id">
 >;
