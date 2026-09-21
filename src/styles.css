@@ -351,3 +351,165 @@ html.dark [data-app-title="Dashboard"] .recharts-bar-rectangle path { filter: sa
 
 /* Tester/read-only mode: hide write actions without page-specific DOM hacks. */
 [data-read-only="true"] [data-testid="write-action"] { display: none !important; }
+
+
+/* ==========================================================================
+   OptiShift Design System v3 — Stage 1: foundations
+   Shared tokens for the standard application and the interactive hall.
+   These tokens are additive: existing feature-specific styles remain intact.
+   ========================================================================== */
+
+:root {
+  /* Typography */
+  --os-font-ui: var(--font-sans);
+  --os-font-data: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --os-text-xs: 0.6875rem;
+  --os-text-sm: 0.8125rem;
+  --os-text-md: 0.9375rem;
+  --os-text-lg: 1.0625rem;
+  --os-text-xl: 1.375rem;
+  --os-text-2xl: 1.75rem;
+  --os-text-kpi: 2.125rem;
+
+  /* Layout / spacing */
+  --os-space-1: 0.25rem;
+  --os-space-2: 0.5rem;
+  --os-space-3: 0.75rem;
+  --os-space-4: 1rem;
+  --os-space-5: 1.25rem;
+  --os-space-6: 1.5rem;
+  --os-space-8: 2rem;
+  --os-space-10: 2.5rem;
+  --os-content-max: 1600px;
+  --os-sidebar-width: 248px;
+
+  /* Surfaces */
+  --os-surface-0: hsl(var(--background));
+  --os-surface-1: hsl(var(--card));
+  --os-surface-2: hsl(var(--popover));
+  --os-surface-overlay: hsl(var(--card) / 0.88);
+  --os-border-subtle: hsl(var(--border) / 0.65);
+  --os-border-strong: hsl(var(--border));
+  --os-shadow-surface: var(--shadow-card);
+
+  /* Semantic status system */
+  --os-status-success: hsl(var(--success));
+  --os-status-warning: hsl(var(--warning));
+  --os-status-danger: hsl(var(--destructive));
+  --os-status-info: hsl(var(--chart-2));
+  --os-status-neutral: hsl(var(--muted-foreground));
+
+  /* Motion */
+  --os-motion-fast: 120ms;
+  --os-motion-base: 180ms;
+  --os-motion-slow: 280ms;
+  --os-ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --os-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Shared type roles. Use these instead of inventing page-specific typography. */
+.os-page-title {
+  font-family: var(--os-font-ui);
+  font-size: var(--os-text-xl);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+}
+.os-section-title {
+  font-family: var(--os-font-ui);
+  font-size: var(--os-text-lg);
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.os-label {
+  font-family: var(--os-font-ui);
+  font-size: var(--os-text-xs);
+  line-height: 1.3;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: hsl(var(--muted-foreground));
+}
+.os-body {
+  font-family: var(--os-font-ui);
+  font-size: var(--os-text-md);
+  line-height: 1.5;
+}
+.os-data {
+  font-family: var(--os-font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.os-kpi {
+  font-family: var(--os-font-data);
+  font-size: var(--os-text-kpi);
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+
+/* Shared surface roles. */
+.os-surface {
+  background: var(--os-surface-1);
+  border: 1px solid var(--os-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--os-shadow-surface);
+}
+.os-surface-interactive {
+  transition:
+    background-color var(--os-motion-base) var(--os-ease-standard),
+    border-color var(--os-motion-base) var(--os-ease-standard),
+    box-shadow var(--os-motion-base) var(--os-ease-standard),
+    transform var(--os-motion-base) var(--os-ease-standard);
+}
+.os-surface-interactive:hover {
+  border-color: hsl(var(--border) / 0.95);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Consistent status markers. Never rely on color alone: pair with text/icon. */
+.os-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.75rem;
+  padding: 0 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--os-text-xs);
+  font-weight: 650;
+  line-height: 1;
+}
+.os-status::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+.os-status-success { color: var(--os-status-success); background: hsl(var(--success) / 0.09); }
+.os-status-warning { color: var(--os-status-warning); background: hsl(var(--warning) / 0.10); }
+.os-status-danger { color: var(--os-status-danger); background: hsl(var(--destructive) / 0.09); }
+.os-status-info { color: var(--os-status-info); background: hsl(var(--chart-2) / 0.09); }
+.os-status-neutral { color: var(--os-status-neutral); background: hsl(var(--muted-foreground) / 0.08); }
+
+/* Functional motion primitives. */
+.os-motion-enter {
+  animation: os-fade-up var(--os-motion-slow) var(--os-ease-emphasized) both;
+}
+@keyframes os-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-surface-interactive { transform: none !important; }
+  .os-motion-enter { animation: none !important; }
+}
+
+@media (min-width: 640px) {
+  .os-page-title { font-size: var(--os-text-2xl); }
+}
