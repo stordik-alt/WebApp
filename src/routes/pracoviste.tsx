@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ChevronDown, Pencil, Save, SlidersHorizontal, X } from "lucide-react";
+import { Building2, ChevronDown, Pencil, Plus, Save, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
@@ -46,6 +46,15 @@ function WorkplacesPage() {
   const [sortKey, setSortKey] = useState<SortKey>("code");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [showFilters, setShowFilters] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createDraft, setCreateDraft] = useState({
+    code: "",
+    line_name: "",
+    workplace_name: "",
+    area: "HA" as "HA" | "TUP" | "BOTH",
+  });
 
   const { data: workplaces = [], isLoading, isError } = useQuery({
     queryKey: ["workplaces"],
@@ -138,6 +147,47 @@ function WorkplacesPage() {
   });
 
   function beginEdit(workplace: Workplace) { setEditing(workplace.id); setDraftName(workplace.workplace_name); }
+
+  function openCreate() {
+    setCreateError(null);
+    setCreateDraft({ code: "", line_name: "", workplace_name: "", area: "HA" });
+    setShowCreate(true);
+  }
+
+  async function saveCreate() {
+    const code = createDraft.code.trim().toUpperCase();
+    const lineName = createDraft.line_name.trim();
+    const workplaceName = createDraft.workplace_name.trim();
+    if (!code || !lineName || !workplaceName) {
+      setCreateError("Vyplňte kód, linku a název pracoviště.");
+      return;
+    }
+    if (!/^\\d{3}\\.\\d{2}$/.test(code)) {
+      setCreateError("Kód musí mít formát 041.01 nebo 050.01.");
+      return;
+    }
+
+    setCreateSaving(true);
+    setCreateError(null);
+    try {
+      const { error } = await (supabase as any).from("workplaces").insert({
+        code,
+        line_name: lineName,
+        workplace_name: workplaceName,
+        area: createDraft.area,
+        source_line: `${code} - ${lineName} ${workplaceName}`.trim(),
+      });
+      if (error) throw error;
+      setShowCreate(false);
+      setCreateDraft({ code: "", line_name: "", workplace_name: "", area: "HA" });
+      await queryClient.invalidateQueries({ queryKey: ["workplaces"] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCreateError(message.includes("duplicate") || message.includes("unique") ? "Pracoviště s tímto kódem už existuje." : message);
+    } finally {
+      setCreateSaving(false);
+    }
+  }
   async function saveEdit(workplace: Workplace) {
     const name = draftName.trim();
     if (!name) return;
@@ -160,12 +210,45 @@ function WorkplacesPage() {
     <AppShell title="Pracoviště" subtitle="Přehled pracovišť podle kódu, linky a názvu.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Card className="overflow-hidden p-0">
-          <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
-            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Building2 className="h-4 w-4" /></span>
+              <span className="font-semibold">Správa pracovišť</span>
+            </div>
+            <Button size="sm" onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" />Přidat pracoviště</Button>
+          </div>
+          <div className="border-t border-border px-3 py-2 sm:px-4">
+            <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><SlidersHorizontal className="h-4 w-4" /></span>
               <span className="font-semibold">Filtry a řazení</span>
               <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${showFilters ? "rotate-180" : ""}`} />
             </button>
+          </div>
+          {showCreate ? (
+            <div className="border-t border-border bg-muted/10 px-3 py-4 sm:px-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div><div className="font-semibold">Nové pracoviště</div><div className="text-xs text-muted-foreground">Pracoviště se uloží do hlavního seznamu modulu Hodnocení.</div></div>
+                <Button type="button" variant="ghost" size="icon" onClick={() => setShowCreate(false)} aria-label="Zavřít"><X className="h-4 w-4" /></Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div><Label>Kód *</Label><Input className="mt-1" value={createDraft.code} onChange={(e) => setCreateDraft((d) => ({ ...d, code: e.target.value }))} placeholder="041.01" /></div>
+                <div><Label>Linka *</Label><Input className="mt-1" value={createDraft.line_name} onChange={(e) => setCreateDraft((d) => ({ ...d, line_name: e.target.value }))} placeholder="L3/1" /></div>
+                <div className="md:col-span-2"><Label>Název pracoviště *</Label><Input className="mt-1" value={createDraft.workplace_name} onChange={(e) => setCreateDraft((d) => ({ ...d, workplace_name: e.target.value }))} placeholder="HandAssy" /></div>
+              </div>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div><Label>Oblast *</Label><select className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-44" value={createDraft.area} onChange={(e) => setCreateDraft((d) => ({ ...d, area: e.target.value as "HA" | "TUP" | "BOTH" }))}><option value="HA">HA</option><option value="TUP">TUP</option><option value="BOTH">HA + TUP</option></select></div>
+                <div className="flex flex-wrap gap-2">
+                  {createError ? <span className="self-center text-sm text-destructive">{createError}</span> : null}
+                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Zrušit</Button>
+                  <Button type="button" onClick={saveCreate} disabled={createSaving}>{createSaving ? "Ukládám…" : "Vytvořit pracoviště"}</Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}>
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><SlidersHorizontal className="h-4 w-4" /></span>
+              <span className="font-semibold">Filtry a řazení</span>
+            </div>
             <span className="shrink-0 text-xs text-muted-foreground">{filteredWorkplaces.length}/{workplaces.length}</span>
           </div>
           {showFilters ? (
