@@ -111,7 +111,7 @@ function InteraktivniLayout() {
   const pathname = useRouterState({ select: (st) => st.location.pathname });
   const currentSection = [...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => pathname === item.to)?.label ?? "Interaktivní prostředí";
   return (
-    <AppShell title={currentSection} subtitle="Živé řízení výrobní haly.">
+    <AppShell title="Výrobní linky" subtitle="Živé řízení výrobní haly." environment backTo="/" backLabel="Zpět do hodnocení">
       <ShiftSelectionProvider>
         <div className="iw-scope min-h-[calc(100vh-8rem)]">
         <LiveBackground />
