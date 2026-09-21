@@ -4,6 +4,7 @@ import { useState } from "react";
 import { localDateKey } from "@/lib/metrics";
 import { ShiftSelectionProvider, useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
 import { LiveBackground } from "@/components/interaktivni/LiveBackground";
+import { AppShell } from "@/components/AppShell";
 import type { IwShiftName } from "@/lib/shift-windows";
 import "@/components/interaktivni/interaktivni.css";
 
@@ -108,9 +109,11 @@ function SelectionBar() {
  */
 function InteraktivniLayout() {
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  const currentSection = [...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => pathname === item.to)?.label ?? "Interaktivní prostředí";
   return (
-    <ShiftSelectionProvider>
-      <div className="iw-scope min-h-[calc(100vh-8rem)]">
+    <AppShell title={currentSection} subtitle="Živé řízení výrobní haly.">
+      <ShiftSelectionProvider>
+        <div className="iw-scope min-h-[calc(100vh-8rem)]">
         <LiveBackground />
         <div className="mb-3 flex items-center gap-3 border-b border-border pb-3">
           {/* Na mobilu horizontální scroll místo zalamování - běžný vzor mobilních aplikací,
@@ -144,7 +147,8 @@ function InteraktivniLayout() {
         <div key={pathname} className="animate-in fade-in duration-300">
           <Outlet />
         </div>
-      </div>
-    </ShiftSelectionProvider>
+        </div>
+      </ShiftSelectionProvider>
+    </AppShell>
   );
 }
