@@ -32,7 +32,7 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
   const ratio = view.designedCapacity ? Math.min(1, view.assignedCount / view.designedCapacity) : view.assignedCount > 0 ? 1 : 0;
 
   return (
-    <div className={`iw-panel iw-panel-live rounded-lg p-3 ${STATUS_CLASS[status]}`}>
+    <div className={`iw-panel iw-panel-live iw-motion-enter rounded-lg p-3 ${STATUS_CLASS[status]}`}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="iw-mono truncate text-xs font-semibold text-foreground">{view.workstation.display_name}</span>
         <StatusBadge status={status} />
@@ -93,7 +93,7 @@ export function FloorMap({ groups }: { groups: Map<string, FloorMapWorkstationVi
       <div className="iw-hall-floor">
         <div className="iw-hall-lane iw-hall-lane-one">
           <div className="iw-hall-lane-label">LINKA 1</div>
-          <div className="iw-hall-flow" aria-hidden="true">
+          <div className="iw-hall-flow iw-motion-flow" aria-hidden="true">
             <span /><span /><span /><span />
           </div>
           <div className="iw-hall-machine iw-hall-ersa">ERSA</div>
