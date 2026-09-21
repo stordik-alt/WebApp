@@ -22,6 +22,7 @@ export type IwShiftProduction = {
   id: string;
   shift_id: string;
   workstation_id: string;
+  product_id: string | null;
   product_code: string;
   area: IwShiftProductionArea;
   remaining_pieces: number;
@@ -32,6 +33,23 @@ export type IwShiftProduction = {
   created_at: string;
   updated_at: string;
 };
+
+export type IwActiveProduct = {
+  id: string;
+  code: string;
+  name: string | null;
+};
+
+export async function listActiveProducts(): Promise<IwActiveProduct[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, code, name")
+    .eq("active", true)
+    .eq("approval_status", "approved")
+    .order("code", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as IwActiveProduct[];
+}
 
 // # dělá: najde nebo vytvoří draft směnu pro daný tým/datum/směnu (unikátní na team_id+work_date+shift)
 export async function ensureShift(input: { teamId: string; workDate: string; shift: IwShiftName; createdBy: string }): Promise<IwShift> {
@@ -65,6 +83,7 @@ export async function listActiveProductions(shiftId: string): Promise<IwShiftPro
 export async function startProduction(input: {
   shiftId: string;
   workstationId: string;
+  productId: string;
   productCode: string;
   area: IwShiftProductionArea;
   remainingPieces: number;
@@ -75,6 +94,7 @@ export async function startProduction(input: {
     .insert({
       shift_id: input.shiftId,
       workstation_id: input.workstationId,
+      product_id: input.productId,
       product_code: input.productCode,
       area: input.area,
       remaining_pieces: input.remainingPieces,
@@ -86,8 +106,11 @@ export async function startProduction(input: {
   return data as IwShiftProduction;
 }
 
-// # dělá: upraví zbývající kusy/prioritu běžící výroby (bez ukončení)
-export async function updateProduction(id: string, patch: Partial<Pick<IwShiftProduction, "remaining_pieces" | "priority">>): Promise<void> {
+// # dělá: upraví běžící výrobu; změna produktu se uloží spolu s canonical product_id
+export async function updateProduction(
+  id: string,
+  patch: Partial<Pick<IwShiftProduction, "remaining_pieces" | "priority" | "product_id" | "product_code">>,
+): Promise<void> {
   const { error } = await supabase.from("iw_shift_productions").update(patch).eq("id", id);
   if (error) throw error;
 }
@@ -100,6 +123,7 @@ export async function changeProduction(input: {
   shiftId: string;
   workstationId: string;
   previousProductionId: string;
+  productId: string;
   productCode: string;
   area: IwShiftProductionArea;
   remainingPieces: number;
@@ -114,6 +138,7 @@ export async function changeProduction(input: {
     .insert({
       shift_id: input.shiftId,
       workstation_id: input.workstationId,
+      product_id: input.productId,
       product_code: input.productCode,
       area: input.area,
       remaining_pieces: input.remainingPieces,
