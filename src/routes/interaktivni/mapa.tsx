@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Factory } from "lucide-react";
+import { Factory, Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { FloorMap, type FloorMapWorkstationView } from "@/components/interaktivni/FloorMap";
@@ -10,7 +10,10 @@ import { listWorkstations, type IwWorkstation } from "@/lib/floorMap";
 import { computeExpectedCompletion } from "@/lib/shift-eta";
 import { productCapacityFor, productionCapacity } from "@/lib/production-capacity";
 import { listAssignments } from "@/lib/shiftAssignments";
-import { ensureShift, listActiveProductions, resolveProductProfile, startProduction, updateProduction } from "@/lib/shiftProductions";
+import { ensureShift, listActiveProductions, listActiveProducts, resolveProductProfile, startProduction, updateProduction } from "@/lib/shiftProductions";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/interaktivni/mapa")({
   head: () => ({
@@ -29,7 +32,8 @@ function nowHHMM() {
 function FloorMapPage() {
   const { leaderUserId, canManage, teamId, workDate, shift } = useShiftSelection();
   const queryClient = useQueryClient();
-  const [drafts, setDrafts] = useState<Record<string, { code: string; pieces: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { productId: string; code: string; pieces: string }>>({});
+  const [openProductSelector, setOpenProductSelector] = useState<string | null>(null);
 
   const shiftQuery = useQuery({
     queryKey: ["iw_shift", teamId, workDate, shift],
@@ -39,6 +43,16 @@ function FloorMapPage() {
 
   const workstationsQuery = useQuery({ queryKey: ["iw_workstations"], queryFn: listWorkstations });
   const mainWorkstations = (workstationsQuery.data ?? []).filter((w) => !w.is_secondary);
+
+  const productsQuery = useQuery({
+    queryKey: ["iw_active_products"],
+    queryFn: listActiveProducts,
+    staleTime: 60_000,
+  });
+
+  const products = productsQuery.data ?? [];
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const productByCode = useMemo(() => new Map(products.map((p) => [p.code, p])), [products]);
 
   const productionsQuery = useQuery({
     queryKey: ["iw_shift_productions", shiftQuery.data?.id],
@@ -75,17 +89,25 @@ function FloorMapPage() {
 
   async function setProduction(workstation: IwWorkstation) {
     const draft = drafts[workstation.id];
-    if (!draft?.code.trim()) return;
+    if (!draft?.productId) return;
     const pieces = Number(draft.pieces);
     if (!Number.isFinite(pieces) || pieces < 0) return;
+
+    const product = productById.get(draft.productId);
+    if (!product) return;
+
     const existing = productionByWorkstation.get(workstation.id);
     if (existing) {
       await updateProduction(existing.id, { remaining_pieces: pieces });
+      if (existing.product_id !== product.id) {
+        await updateProduction(existing.id, { product_id: product.id, product_code: product.code });
+      }
     } else {
       await startProduction({
         shiftId: shiftQuery.data!.id,
         workstationId: workstation.id,
-        productCode: draft.code.trim(),
+        productId: product.id,
+        productCode: product.code,
         area: workstation.area === "TUP" ? "TUP" : "HA",
         remainingPieces: pieces,
       });
@@ -124,9 +146,12 @@ function FloorMapPage() {
         if (eta.status === "WILL_FINISH") expectedCompletionLabel = `Dokončení: ${new Date(eta.expectedCompletionAt).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}`;
         if (eta.status === "WONT_FINISH") expectedCompletionLabel = "Výrobek se během této směny nevyrobí.";
       }
+      const selectedProduct = production
+        ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
+        : null;
       return {
         workstation,
-        productCode: production?.product_code ?? null,
+        productCode: selectedProduct?.code ?? production?.product_code ?? null,
         remainingPieces: production?.remaining_pieces ?? null,
         designedCapacity: capacity,
         assignedCount: assignment.count,
@@ -141,7 +166,7 @@ function FloorMapPage() {
       result.set(view.workstation.group_name, list);
     }
     return result;
-  }, [workstationsQuery.data, productionByWorkstation, assignmentsQuery.data, profilesQuery.data, shift, workDate]);
+  }, [workstationsQuery.data, productionByWorkstation, assignmentsQuery.data, profilesQuery.data, shift, workDate, productById, productByCode]);
 
   if (!canManage) {
     return (
@@ -152,29 +177,75 @@ function FloorMapPage() {
   }
 
   return (
-    <AppShell title="Mapa haly" subtitle="Zadej výrobu a zbývající kusy na každou linku - kapacita a dokončení se počítají živě.">
+    <AppShell title="Mapa haly" subtitle="Vyber výrobu na každé lince z aktuálních uložených produktů a zadej zbývající kusy.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
         <Panel>
-          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Kód produktu + zbývající kusy; priorita se nastavuje až v Rozdělení výroby" />
+          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Produkt se vybírá z aktivních a schválených produktů; priorita se nastavuje až v Rozdělení výroby" />
           <div className="divide-y divide-border/70">
             {mainWorkstations.map((workstation) => {
               const production = productionByWorkstation.get(workstation.id);
-              const draft = drafts[workstation.id] ?? { code: production?.product_code ?? "", pieces: production ? String(production.remaining_pieces) : "" };
-              const profile = production ? profilesQuery.data?.get(production.product_code) : null;
-              const capacity = profile ? productCapacityFor({ area: workstation.area === "TUP" ? "TUP" : "HA", h_capacity: profile.h_capacity, t_capacity: profile.t_capacity }) : null;
+              const selectedProduct = production
+                ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
+                : null;
+              const storedDraft = drafts[workstation.id];
+              const draft = storedDraft ?? {
+                productId: selectedProduct?.id ?? "",
+                code: selectedProduct?.code ?? production?.product_code ?? "",
+                pieces: production ? String(production.remaining_pieces) : "",
+              };
+              const capacity = selectedProduct
+                ? productCapacityFor({
+                    area: workstation.area === "TUP" ? "TUP" : "HA",
+                    h_capacity: profilesQuery.data?.get(selectedProduct.code)?.h_capacity ?? null,
+                    t_capacity: profilesQuery.data?.get(selectedProduct.code)?.t_capacity ?? null,
+                  })
+                : null;
 
               return (
-                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_1fr_80px_auto_1fr] sm:items-center sm:px-5">
+                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_minmax(0,1fr)_80px_auto_1fr] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
                     <span className="iw-chip">{workstation.area}</span>
                     <span className="iw-mono truncate text-sm text-foreground/85">{workstation.display_name}</span>
                   </div>
-                  <input
-                    value={draft.code}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, code: e.target.value } }))}
-                    placeholder="Kód produktu"
-                    aria-label="Kód produktu"
-                  />
+
+                  <Popover open={openProductSelector === workstation.id} onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}>
+                    <PopoverTrigger asChild>
+                      <button type="button" className="iw-btn flex min-w-0 items-center justify-between gap-2 text-left">
+                        <span className="min-w-0 truncate">
+                          {selectedProduct ? `${selectedProduct.code}${selectedProduct.name ? ` · ${selectedProduct.name}` : ""}` : "Vyber produkt"}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[min(520px,calc(100vw-2rem))] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Hledat kód nebo název produktu..." />
+                        <CommandList>
+                          <CommandEmpty>Žádný aktivní a schválený produkt.</CommandEmpty>
+                          {products.map((product) => (
+                            <CommandItem
+                              key={product.id}
+                              value={`${product.code} ${product.name ?? ""}`}
+                              onSelect={() => {
+                                setDrafts((d) => ({
+                                  ...d,
+                                  [workstation.id]: { productId: product.id, code: product.code, pieces: draft.pieces },
+                                }));
+                                setOpenProductSelector(null);
+                              }}
+                            >
+                              <Check className={cn("h-4 w-4", draft.productId === product.id ? "opacity-100" : "opacity-0")} />
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">{product.code}</div>
+                                {product.name ? <div className="truncate text-xs text-muted-foreground">{product.name}</div> : null}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
                   <input
                     value={draft.pieces}
                     onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
@@ -182,9 +253,11 @@ function FloorMapPage() {
                     inputMode="numeric"
                     aria-label="Zbývající kusy"
                   />
-                  <button type="button" className="iw-btn" onClick={() => void setProduction(workstation)}>
+
+                  <button type="button" className="iw-btn" disabled={!draft.productId || !draft.pieces} onClick={() => void setProduction(workstation)}>
                     {production ? "Aktualizovat" : "Uložit"}
                   </button>
+
                   <div className="iw-mono text-[11px] text-muted-foreground">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
                 </div>
               );
