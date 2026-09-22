@@ -29,7 +29,7 @@ type WorkplaceMaster = {
   updated_at: string;
 };
 
-function hallGroup(lineName: string, workplaceName: string): string {
+export function hallGroup(lineName: string, workplaceName: string): string {
   const value = `${lineName} ${workplaceName}`.toLocaleLowerCase("cs-CZ");
   if (value.includes("olovo") || value.includes("krátká linka")) return "Olovo";
   if (/^l1\//i.test(lineName.trim())) return "L1 (Delta)";
@@ -37,7 +37,7 @@ function hallGroup(lineName: string, workplaceName: string): string {
   return "Sekundární";
 }
 
-function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
+export function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
   const value = lineName.trim().toUpperCase();
   const olovo = hallGroup(lineName, workplaceName) === "Olovo";
   if (olovo) return 100 + (area === "HA" ? 0 : 1);
