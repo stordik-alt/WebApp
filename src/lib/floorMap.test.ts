@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { hallGroup, hallSortOrder } from "@/lib/floorMap";
+import { hallGroup, hallSortOrder, normalizeParentLine } from "@/lib/floorMap";
 
 describe("small hall workplace synchronization", () => {
-  it("maps L1 and L3 workplaces to the correct hall groups", () => {
+  it("groups child workplaces under the parent line", () => {\n    expect(normalizeParentLine("L1/1_1", "HandAssy OPF")).toBe("L1/1");\n    expect(normalizeParentLine("L1/4 HF", "TouchUp")).toBe("L1/4");\n    expect(normalizeParentLine("L3/4", "TouchUp")).toBe("L3/4");\n  });\n\n  it("maps L1 and L3 workplaces to the correct hall groups", () => {
     expect(hallGroup("L1/1", "HandAssy")).toBe("L1 (Delta)");
     expect(hallGroup("L3/4", "TouchUp")).toBe("L3 (Ersa)");
     expect(hallGroup("Olovo", "HandAssy krátká linka")).toBe("Olovo");
