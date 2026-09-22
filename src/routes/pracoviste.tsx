@@ -332,9 +332,10 @@ function WorkplacesPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="workplace-area">Oblast</Label>
-              <select id="workplace-area" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draftArea} onChange={(event) => setDraftArea(event.target.value as "HA" | "TUP")}>
+              <select id="workplace-area" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draftArea} onChange={(event) => setDraftArea(event.target.value as "HA" | "TUP" | "BOTH")}>
                 <option value="HA">HA</option>
                 <option value="TUP">TUP</option>
+                <option value="BOTH">HA + TUP</option>
               </select>
             </div>
             {formError ? <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{formError}</div> : null}
