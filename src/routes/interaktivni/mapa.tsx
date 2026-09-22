@@ -223,7 +223,7 @@ function FloorMapPage() {
                     <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[110px_minmax(220px,1.25fr)_minmax(280px,2fr)_90px_auto] sm:items-center sm:px-5">
                       <div className="flex items-center gap-2">
                         <span className="iw-chip shrink-0">{workstation.area}</span>
-                        <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span>
+                        {!workstation.is_synthetic ? {!workstation.is_synthetic ? <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span> : null} : null}
                       </div>
 
                       <div className="min-w-0">
