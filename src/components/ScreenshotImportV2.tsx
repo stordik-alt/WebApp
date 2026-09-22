@@ -171,7 +171,12 @@ export function ScreenshotImportV2({ employees, onImported }: { employees: Emplo
       // HA->TUP linkage is only ever evaluated after the whole batch is
       // approved (never per-screenshot - the HA and TUP sides are normally
       // two different screenshots, and processing order isn't guaranteed).
-      await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id }).catch(() => {});
+      try {
+        const { error: linkageError } = await (supabase as any).rpc("evaluate_batch_ha_tup_linkage", { p_batch_id: batch.id });
+        if (linkageError) console.warn("Vyhodnocení HA→TUP vazby dávky se nepodařilo dokončit:", linkageError);
+      } catch (error) {
+        console.warn("Vyhodnocení HA→TUP vazby dávky selhalo:", error);
+      }
       // completeImportBatch only aggregates already-persisted per-item results
       // into import_batches' summary counters - it never creates or mutates
       // import_items/daily_records. Its failure must never surface as "import
