@@ -180,114 +180,137 @@ function FloorMapPage() {
   }
 
   return (
-      <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Panel className="overflow-hidden">
-          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Produkty se vybírají z aktivních a schválených produktů. Každá nadřazená linka obsahuje svá HA a TUP pracoviště." />
-          <div className="divide-y divide-border/70">
-            {[...groups.entries()].map(([parentLine, lineWorkstations]) => (
-              <details key={parentLine} open={parentLine === [...groups.keys()][0]} className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border/70 bg-muted/10 px-4 py-3 sm:px-5">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="iw-mono text-base font-bold text-foreground">{parentLine}</span>
-                    <span className="text-xs text-muted-foreground">{lineWorkstations.length} pracovišť</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-                </summary>
-                <div className="divide-y divide-border/60">
-              const production = productionByWorkstation.get(workstation.id);
-              const selectedProduct = production
-                ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
-                : null;
-              const storedDraft = drafts[workstation.id];
-              const draft = storedDraft ?? {
-                productId: selectedProduct?.id ?? "",
-                code: selectedProduct?.code ?? production?.product_code ?? "",
-                pieces: production ? String(production.remaining_pieces) : "",
-              };
-              const capacity = selectedProduct
-                ? productCapacityFor({
-                    area: workstation.area === "TUP" ? "TUP" : "HA",
-                    h_capacity: profilesQuery.data?.get(selectedProduct.code)?.h_capacity ?? null,
-                    t_capacity: profilesQuery.data?.get(selectedProduct.code)?.t_capacity ?? null,
-                  })
-                : null;
+    <div className="grid min-w-0 gap-4 sm:gap-6">
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          icon={<Factory className="h-4 w-4" />}
+          title="Výroba na lince"
+          subtitle="Produkty se vybírají z aktivních a schválených produktů. Každá nadřazená linka obsahuje svá HA a TUP pracoviště."
+        />
+        <div className="divide-y divide-border/70">
+          {[...groups.entries()].map(([parentLine, lineWorkstations], groupIndex) => (
+            <details key={parentLine} open={groupIndex === 0} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border/70 bg-muted/10 px-4 py-3 sm:px-5">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="iw-mono text-base font-bold text-foreground">{parentLine}</span>
+                  <span className="text-xs text-muted-foreground">{lineWorkstations.length} pracovišť</span>
+                </span>
+                <span className="text-xs text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+              </summary>
 
-              return (
-                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[110px_minmax(220px,1.25fr)_minmax(280px,2fr)_90px_auto] sm:items-center sm:px-5">
-                  <div className="flex items-center gap-2">
-                    <span className="iw-chip shrink-0">{workstation.area}</span>
-                    <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="iw-mono break-words text-sm font-semibold leading-5 text-foreground/90">{workstation.workplace_name || workstation.display_name}</div>
-                    <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{workstation.area === "TUP" ? "TouchUp" : "HandAssy"}</div>
-                  </div>
+              <div className="divide-y divide-border/60">
+                {lineWorkstations.map((workstationView) => {
+                  const workstation = workstationView.workstation;
+                  const production = productionByWorkstation.get(workstation.id);
+                  const selectedProduct = production
+                    ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
+                    : null;
+                  const storedDraft = drafts[workstation.id];
+                  const draft = storedDraft ?? {
+                    productId: selectedProduct?.id ?? "",
+                    code: selectedProduct?.code ?? production?.product_code ?? "",
+                    pieces: production ? String(production.remaining_pieces) : "",
+                  };
+                  const capacity = selectedProduct
+                    ? productCapacityFor({
+                        area: workstation.area === "TUP" ? "TUP" : "HA",
+                        h_capacity: profilesQuery.data?.get(selectedProduct.code)?.h_capacity ?? null,
+                        t_capacity: profilesQuery.data?.get(selectedProduct.code)?.t_capacity ?? null,
+                      })
+                    : null;
 
-                  <Popover open={openProductSelector === workstation.id} onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}>
-                    <PopoverTrigger asChild>
-                      <button type="button" className="iw-btn min-w-0 w-full items-center justify-between gap-2 text-left">
-                        <span className="min-w-0 break-words">
-                          {selectedProduct ? `${selectedProduct.code}${selectedProduct.name ? ` · ${selectedProduct.name}` : ""}` : "Vyber produkt"}
-                        </span>
-                        <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                  return (
+                    <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[110px_minmax(220px,1.25fr)_minmax(280px,2fr)_90px_auto] sm:items-center sm:px-5">
+                      <div className="flex items-center gap-2">
+                        <span className="iw-chip shrink-0">{workstation.area}</span>
+                        <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span>
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="iw-mono break-words text-sm font-semibold leading-5 text-foreground/90">
+                          {workstation.workplace_name || workstation.display_name}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                          {workstation.area === "TUP" ? "TouchUp" : "HandAssy"}
+                        </div>
+                      </div>
+
+                      <Popover
+                        open={openProductSelector === workstation.id}
+                        onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}
+                      >
+                        <PopoverTrigger asChild>
+                          <button type="button" className="iw-btn min-w-0 w-full items-center justify-between gap-2 text-left">
+                            <span className="min-w-0 break-words">
+                              {selectedProduct ? selectedProduct.code + (selectedProduct.name ? " · " + selectedProduct.name : "") : "Vyber produkt"}
+                            </span>
+                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[min(520px,calc(100vw-2rem))] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Hledat kód nebo název produktu..." />
+                            <CommandList>
+                              <CommandEmpty>Žádný aktivní a schválený produkt.</CommandEmpty>
+                              {products.map((product) => (
+                                <CommandItem
+                                  key={product.id}
+                                  value={product.code + " " + (product.name ?? "")}
+                                  onSelect={() => {
+                                    setDrafts((d) => ({
+                                      ...d,
+                                      [workstation.id]: { productId: product.id, code: product.code, pieces: draft.pieces },
+                                    }));
+                                    setOpenProductSelector(null);
+                                  }}
+                                >
+                                  <Check className={cn("h-4 w-4", draft.productId === product.id ? "opacity-100" : "opacity-0")} />
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{product.code}</div>
+                                    {product.name ? <div className="truncate text-xs text-muted-foreground">{product.name}</div> : null}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+
+                      <input
+                        value={draft.pieces}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
+                        placeholder="Ks"
+                        inputMode="numeric"
+                        aria-label="Zbývající kusy"
+                      />
+
+                      <button
+                        type="button"
+                        className="iw-btn"
+                        disabled={!draft.productId || !draft.pieces}
+                        onClick={() => void setProduction(workstation)}
+                      >
+                        {production ? "Aktualizovat" : "Uložit"}
                       </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[min(520px,calc(100vw-2rem))] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Hledat kód nebo název produktu..." />
-                        <CommandList>
-                          <CommandEmpty>Žádný aktivní a schválený produkt.</CommandEmpty>
-                          {products.map((product) => (
-                            <CommandItem
-                              key={product.id}
-                              value={`${product.code} ${product.name ?? ""}`}
-                              onSelect={() => {
-                                setDrafts((d) => ({
-                                  ...d,
-                                  [workstation.id]: { productId: product.id, code: product.code, pieces: draft.pieces },
-                                }));
-                                setOpenProductSelector(null);
-                              }}
-                            >
-                              <Check className={cn("h-4 w-4", draft.productId === product.id ? "opacity-100" : "opacity-0")} />
-                              <div className="min-w-0">
-                                <div className="truncate font-medium">{product.code}</div>
-                                {product.name ? <div className="truncate text-xs text-muted-foreground">{product.name}</div> : null}
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
 
-                  <input
-                    value={draft.pieces}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
-                    placeholder="Ks"
-                    inputMode="numeric"
-                    aria-label="Zbývající kusy"
-                  />
-
-                  <button type="button" className="iw-btn" disabled={!draft.productId || !draft.pieces} onClick={() => void setProduction(workstation)}>
-                    {production ? "Aktualizovat" : "Uložit"}
-                  </button>
-
-                  <div className="iw-mono min-w-0 text-[11px] text-muted-foreground">{capacity ? <span>Kapacita: {capacity}</span> : null}</div>
-                </div>
-              );
-                ))}
-                </div>
-              </details>
-            ))}
-          </div>
-        </Panel>
-
-        <div className="iw-mono px-1 text-sm text-foreground/80">
-          <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span> <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
+                      <div className="iw-mono min-w-0 text-[11px] text-muted-foreground">
+                        {capacity ? <span>Kapacita: {capacity}</span> : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          ))}
         </div>
+      </Panel>
 
-        <FloorMap groups={groups} />
+      <div className="iw-mono px-1 text-sm text-foreground/80">
+        <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span>{" "}
+        <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
       </div>
+
+      <FloorMap groups={groups} />
+    </div>
   );
 }
