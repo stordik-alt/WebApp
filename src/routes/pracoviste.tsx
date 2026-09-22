@@ -168,7 +168,7 @@ function WorkplacesPage() {
     const line = draftLine.trim();
     const name = draftName.trim();
 
-    if (!/^(041|050)\\.\\d{2}$/.test(code)) {
+    if (!/^(041|050)\.\d{2}$/.test(code)) {
       setFormError("Kód musí mít formát 041.xx pro HA nebo 050.xx pro TUP.");
       return;
     }
