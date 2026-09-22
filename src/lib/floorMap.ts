@@ -115,8 +115,11 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
     });
   }
 
-  // Keep map-only entries such as TESTY/PREP and synthetic TUP stations.
+  // Keep only map-only entries that are still needed (e.g. TESTY/PREP).
+  // Synthetic TUP stations were only temporary placeholders; the real TUP workplaces
+  // are now maintained in public.workplaces and must not be synchronized into the map.
   for (const row of map) {
+    if (row.area === "TUP" && row.code.startsWith("SYN.TUP.")) continue;
     if (!row.workplace_id || !masters.some((workplace) => workplace.id === row.workplace_id)) {
       const parentLine = normalizeParentLine(row.line_name ?? row.group_name, row.workplace_name ?? row.display_name);
       const childName = row.area === "TUP" ? "TouchUp" : row.area === "HA" ? "HandAssy" : (row.workplace_name ?? row.display_name);
