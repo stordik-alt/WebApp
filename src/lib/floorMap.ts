@@ -31,7 +31,7 @@ type WorkplaceMaster = {
   updated_at: string;
 };
 
-export export function normalizeParentLine(lineName: string, workplaceName = ""): string {
+export function normalizeParentLine(lineName: string, workplaceName = ""): string {
   const value = lineName.trim();
   const match = value.match(/^(L[13]\/\d+)/i);
   if (match) return match[1].toUpperCase();
@@ -48,7 +48,7 @@ export function hallGroup(lineName: string, workplaceName: string): string {
   return "Sekundární";
 }
 
-function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
+export function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
   const parent = normalizeParentLine(lineName, workplaceName);
   if (parent === "Olovo") return 1000 + (area === "HA" ? 0 : 1);
   const match = parent.match(/^L([13])\/(\d+)/i);
@@ -153,7 +153,8 @@ export async function updateWorkstation(id: string, patch: IwWorkstationPatch): 
 export function groupWorkstations(workstations: IwWorkstation[]): Map<string, IwWorkstation[]> {
   const groups = new Map<string, IwWorkstation[]>();
   for (const workstation of workstations) {
-    const parentLine = normalizeParentLine(workstation.line_name, workstation.workplace_name);\n    const list = groups.get(parentLine) ?? [];
+    const parentLine = normalizeParentLine(workstation.line_name, workstation.workplace_name);
+    const list = groups.get(parentLine) ?? [];
     list.push(workstation);
     groups.set(parentLine, list);
   }
