@@ -40,7 +40,7 @@ function WorkplacesPage() {
   const [draftName, setDraftName] = useState("");
   const [draftCode, setDraftCode] = useState("");
   const [draftLine, setDraftLine] = useState("");
-  const [draftArea, setDraftArea] = useState<"HA" | "TUP">("HA");
+  const [draftArea, setDraftArea] = useState<"HA" | "TUP" | "BOTH">("HA");
   const [saving, setSaving] = useState(false);
   const [workplaceDialogOpen, setWorkplaceDialogOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -158,7 +158,7 @@ function WorkplacesPage() {
     setDraftCode(workplace.code);
     setDraftLine(workplace.line_name);
     setDraftName(workplace.workplace_name);
-    setDraftArea(workplace.area === "TUP" ? "TUP" : "HA");
+    setDraftArea(workplace.area === "TUP" ? "TUP" : workplace.area === "BOTH" ? "BOTH" : "HA");
     setFormError(null);
     setWorkplaceDialogOpen(true);
   }
