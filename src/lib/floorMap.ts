@@ -5,6 +5,8 @@ export type IwWorkstationArea = "HA" | "TUP" | "BOTH" | "SECONDARY";
 export type IwWorkstation = {
   id: string;
   code: string;
+  line_name: string;
+  workplace_name: string;
   workplace_id: string | null;
   area: IwWorkstationArea;
   group_name: string;
@@ -77,6 +79,8 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
     const base = existing ?? {
       id: `workplace:${workplace.id}`,
       code: workplace.code,
+      line_name: workplace.line_name,
+      workplace_name: workplace.workplace_name,
       workplace_id: workplace.id,
       area: workplace.area,
       group_name: group,
@@ -96,9 +100,11 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
       code: workplace.code,
       workplace_id: workplace.id,
       area: workplace.area,
-      group_name: existing?.group_name ?? group,
+      line_name: workplace.line_name,
+      workplace_name: workplace.workplace_name,
+      group_name: group,
       display_name: workplace.workplace_name,
-      sort_order: existing?.sort_order ?? order,
+      sort_order: order,
       updated_at: workplace.updated_at,
     });
   }
