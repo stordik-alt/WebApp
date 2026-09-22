@@ -31,25 +31,32 @@ type WorkplaceMaster = {
   updated_at: string;
 };
 
+export export function normalizeParentLine(lineName: string, workplaceName = ""): string {
+  const value = lineName.trim();
+  const match = value.match(/^(L[13]\/\d+)/i);
+  if (match) return match[1].toUpperCase();
+  const combined = `${value} ${workplaceName}`.toLocaleLowerCase("cs-CZ");
+  if (combined.includes("olovo") || combined.includes("krátká linka")) return "Olovo";
+  return value || "Neurčeno";
+}
+
 export function hallGroup(lineName: string, workplaceName: string): string {
-  const value = `${lineName} ${workplaceName}`.toLocaleLowerCase("cs-CZ");
-  if (value.includes("olovo") || value.includes("krátká linka")) return "Olovo";
-  if (/^l1\//i.test(lineName.trim())) return "L1 (Delta)";
-  if (/^l3\//i.test(lineName.trim())) return "L3 (Ersa)";
+  const parent = normalizeParentLine(lineName, workplaceName);
+  if (parent === "Olovo") return "Olovo";
+  if (/^L1\//i.test(parent)) return "L1";
+  if (/^L3\//i.test(parent)) return "L3";
   return "Sekundární";
 }
 
-export function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
-  const value = lineName.trim().toUpperCase();
-  const olovo = hallGroup(lineName, workplaceName) === "Olovo";
-  if (olovo) return 100 + (area === "HA" ? 0 : 1);
-  const match = value.match(/^L([13])\/(\d+)(?:_(\d+))?/);
-  if (!match) return 90;
+function hallSortOrder(lineName: string, workplaceName: string, area: "HA" | "TUP"): number {
+  const parent = normalizeParentLine(lineName, workplaceName);
+  if (parent === "Olovo") return 1000 + (area === "HA" ? 0 : 1);
+  const match = parent.match(/^L([13])\/(\d+)/i);
+  if (!match) return 9000;
   const line = Number(match[1]);
   const station = Number(match[2]);
-  const sub = Number(match[3] ?? 0);
-  const base = line === 1 ? 10 : 40;
-  return base + station * 4 + sub * 2 + (area === "TUP" ? 1 : 0);
+  const base = line === 1 ? 100 : 1000;
+  return base + station * 10 + (area === "HA" ? 0 : 1);
 }
 
 /**
@@ -118,7 +125,11 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
 
   return synced
     .filter((row) => row.active)
-    .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code, "cs"));
+    .sort((a, b) =>
+      hallSortOrder(a.line_name, a.workplace_name, a.area === "TUP" ? "TUP" : "HA") -
+      hallSortOrder(b.line_name, b.workplace_name, b.area === "TUP" ? "TUP" : "HA") ||
+      a.code.localeCompare(b.code, "cs")
+    );
 }
 
 export type IwWorkstationPatch = Partial<
