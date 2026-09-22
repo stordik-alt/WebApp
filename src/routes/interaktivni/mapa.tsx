@@ -180,8 +180,8 @@ function FloorMapPage() {
   }
 
   return (
-    <div className="grid min-w-0 gap-4 sm:gap-6">
-      <Panel className="overflow-hidden">
+    <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start">
+      <Panel className="min-w-0 overflow-hidden">
         <PanelHeader
           icon={<Factory className="h-4 w-4" />}
           title="Výroba na lince"
@@ -220,7 +220,7 @@ function FloorMapPage() {
                     : null;
 
                   return (
-                    <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[110px_minmax(220px,1.25fr)_minmax(280px,2fr)_90px_auto] sm:items-center sm:px-5">
+                    <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[90px_minmax(0,1fr)] lg:grid-cols-[78px_minmax(0,1fr)] sm:items-center sm:px-5">
                       <div className="flex items-center gap-2">
                         <span className="iw-chip shrink-0">{workstation.area}</span>
                         {!workstation.is_synthetic ? <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span> : null}
@@ -235,6 +235,7 @@ function FloorMapPage() {
                         </div>
                       </div>
 
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                       <Popover
                         open={openProductSelector === workstation.id}
                         onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}
@@ -275,7 +276,9 @@ function FloorMapPage() {
                           </Command>
                         </PopoverContent>
                       </Popover>
+                      </div>
 
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:col-span-2 lg:col-span-1 lg:grid-cols-[minmax(0,1fr)_auto]">
                       <input
                         value={draft.pieces}
                         onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
@@ -292,8 +295,9 @@ function FloorMapPage() {
                       >
                         {production ? "Aktualizovat" : "Uložit"}
                       </button>
+                      </div>
 
-                      <div className="iw-mono min-w-0 text-[11px] text-muted-foreground">
+                      <div className="iw-mono min-w-0 text-[11px] text-muted-foreground sm:col-span-2 lg:col-span-2">
                         {capacity ? <span>Kapacita: {capacity}</span> : null}
                       </div>
                     </div>
@@ -305,12 +309,14 @@ function FloorMapPage() {
         </div>
       </Panel>
 
-      <div className="iw-mono px-1 text-sm text-foreground/80">
+      <div className="iw-mono px-1 text-sm text-foreground/80 lg:col-span-2">
         <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span>{" "}
         <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
       </div>
 
-      <FloorMap groups={groups} />
+      <div className="min-w-0 lg:sticky lg:top-[90px]">
+        <FloorMap groups={groups} />
+      </div>
     </div>
   );
 }
