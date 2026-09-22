@@ -32,12 +32,11 @@ type WorkplaceMaster = {
 };
 
 export function normalizeParentLine(lineName: string, workplaceName = ""): string {
-  const value = lineName.trim();
-  const match = value.match(/^(L[13]\/\d+)/i);
-  if (match) return match[1].toUpperCase();
-  const combined = `${value} ${workplaceName}`.toLocaleLowerCase("cs-CZ");
-  if (combined.includes("olovo") || combined.includes("krátká linka")) return "Olovo";
-  return value || "Neurčeno";
+  const combined = `${lineName} ${workplaceName}`.trim();
+  const match = combined.match(/\b(L[13]\s*\/\s*\d+)/i);
+  if (match) return match[1].replace(/\s+/g, "").toUpperCase();
+  if (combined.toLocaleLowerCase("cs-CZ").includes("olovo") || combined.toLocaleLowerCase("cs-CZ").includes("krátká linka")) return "Olovo";
+  return lineName.trim() || "Neurčeno";
 }
 
 export function hallGroup(lineName: string, workplaceName: string): string {
@@ -116,10 +115,19 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
     });
   }
 
-  // Keep map-only entries such as TESTY/PREP and explicitly modeled synthetic TUP stations.
+  // Keep map-only entries such as TESTY/PREP and synthetic TUP stations.
   for (const row of map) {
     if (!row.workplace_id || !masters.some((workplace) => workplace.id === row.workplace_id)) {
-      synced.push({ ...row, line_name: row.line_name ?? row.group_name, workplace_name: row.workplace_name ?? row.display_name });
+      const parentLine = normalizeParentLine(row.line_name ?? row.group_name, row.workplace_name ?? row.display_name);
+      const childName = row.area === "TUP" ? "TouchUp" : row.area === "HA" ? "HandAssy" : (row.workplace_name ?? row.display_name);
+      synced.push({
+        ...row,
+        line_name: parentLine,
+        workplace_name: childName,
+        display_name: childName,
+        group_name: parentLine,
+        sort_order: hallSortOrder(parentLine, childName, row.area === "TUP" ? "TUP" : "HA"),
+      });
     }
   }
 
