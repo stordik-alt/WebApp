@@ -2,11 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Factory, Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
-import { AppShell } from "@/components/AppShell";
 import { FloorMap, type FloorMapWorkstationView } from "@/components/interaktivni/FloorMap";
 import { Panel, PanelHeader } from "@/components/interaktivni/Panel";
 import { useShiftSelection } from "@/components/interaktivni/ShiftSelectionContext";
-import { listWorkstations, type IwWorkstation } from "@/lib/floorMap";
+import { listWorkstations, normalizeParentLine, type IwWorkstation } from "@/lib/floorMap";
 import { computeExpectedCompletion } from "@/lib/shift-eta";
 import { productCapacityFor, productionCapacity } from "@/lib/production-capacity";
 import { listAssignments } from "@/lib/shiftAssignments";
@@ -161,28 +160,40 @@ function FloorMapPage() {
     });
     const result = new Map<string, FloorMapWorkstationView[]>();
     for (const view of views) {
-      const list = result.get(view.workstation.group_name) ?? [];
+      const parentLine = normalizeParentLine(view.workstation.line_name, view.workstation.workplace_name);
+      const list = result.get(parentLine) ?? [];
       list.push(view);
-      result.set(view.workstation.group_name, list);
+      result.set(parentLine, list);
+    }
+    for (const [parentLine, list] of result) {
+      list.sort((a, b) => {
+        const areaOrder = (a.workstation.area === "HA" ? 0 : 1) - (b.workstation.area === "HA" ? 0 : 1);
+        return areaOrder || a.workstation.code.localeCompare(b.workstation.code, "cs");
+      });
+      result.set(parentLine, list);
     }
     return result;
   }, [workstationsQuery.data, productionByWorkstation, assignmentsQuery.data, profilesQuery.data, shift, workDate, productById, productByCode]);
 
   if (!canManage) {
-    return (
-      <AppShell title="Mapa haly" subtitle="Aktuální stav výrobní haly.">
-        <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>
-      </AppShell>
-    );
+    return <Panel className="p-5 text-sm text-muted-foreground">Tato stránka je určena pro Team Leadery a administrátory.</Panel>;
   }
 
   return (
-    <AppShell title="Mapa haly" subtitle="Vyber výrobu na každé lince z aktuálních uložených produktů a zadej zbývající kusy.">
       <div className="grid min-w-0 gap-4 sm:gap-6">
-        <Panel>
-          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Produkt se vybírá z aktivních a schválených produktů; priorita se nastavuje až v Rozdělení výroby" />
+        <Panel className="overflow-hidden">
+          <PanelHeader icon={<Factory className="h-4 w-4" />} title="Výroba na lince" subtitle="Produkty se vybírají z aktivních a schválených produktů. Každá nadřazená linka obsahuje svá HA a TUP pracoviště." />
           <div className="divide-y divide-border/70">
-            {mainWorkstations.map((workstation) => {
+            {[...groups.entries()].map(([parentLine, lineWorkstations]) => (
+              <details key={parentLine} open={parentLine === [...groups.keys()][0]} className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border/70 bg-muted/10 px-4 py-3 sm:px-5">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="iw-mono text-base font-bold text-foreground">{parentLine}</span>
+                    <span className="text-xs text-muted-foreground">{lineWorkstations.length} pracovišť</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="divide-y divide-border/60">
               const production = productionByWorkstation.get(workstation.id);
               const selectedProduct = production
                 ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
@@ -202,16 +213,20 @@ function FloorMapPage() {
                 : null;
 
               return (
-                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[160px_minmax(0,1fr)_80px_auto_1fr] sm:items-center sm:px-5">
+                <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[110px_minmax(220px,1.25fr)_minmax(280px,2fr)_90px_auto] sm:items-center sm:px-5">
                   <div className="flex items-center gap-2">
-                    <span className="iw-chip">{workstation.area}</span>
-                    <span className="iw-mono truncate text-sm text-foreground/85">{workstation.display_name}</span>
+                    <span className="iw-chip shrink-0">{workstation.area}</span>
+                    <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="iw-mono break-words text-sm font-semibold leading-5 text-foreground/90">{workstation.workplace_name || workstation.display_name}</div>
+                    <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{workstation.area === "TUP" ? "TouchUp" : "HandAssy"}</div>
                   </div>
 
                   <Popover open={openProductSelector === workstation.id} onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}>
                     <PopoverTrigger asChild>
-                      <button type="button" className="iw-btn flex min-w-0 items-center justify-between gap-2 text-left">
-                        <span className="min-w-0 truncate">
+                      <button type="button" className="iw-btn min-w-0 w-full items-center justify-between gap-2 text-left">
+                        <span className="min-w-0 break-words">
                           {selectedProduct ? `${selectedProduct.code}${selectedProduct.name ? ` · ${selectedProduct.name}` : ""}` : "Vyber produkt"}
                         </span>
                         <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
@@ -258,10 +273,13 @@ function FloorMapPage() {
                     {production ? "Aktualizovat" : "Uložit"}
                   </button>
 
-                  <div className="iw-mono text-[11px] text-muted-foreground">{capacity ? <span>Kapacita produktu: {capacity}</span> : null}</div>
+                  <div className="iw-mono min-w-0 text-[11px] text-muted-foreground">{capacity ? <span>Kapacita: {capacity}</span> : null}</div>
                 </div>
               );
-            })}
+                ))}
+                </div>
+              </details>
+            ))}
           </div>
         </Panel>
 
@@ -271,6 +289,5 @@ function FloorMapPage() {
 
         <FloorMap groups={groups} />
       </div>
-    </AppShell>
   );
 }
