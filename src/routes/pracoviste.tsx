@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ChevronDown, Pencil, Save, SlidersHorizontal, X } from "lucide-react";
+import { Building2, ChevronDown, Pencil, Plus, Save, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { parseImportedLine } from "@/lib/workplace-line-parser";
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/pracoviste")({
   component: WorkplacesPage,
 });
 
-type Workplace = { id: string; code: string; line_name: string; workplace_name: string; area: "HA" | "TUP"; source_line: string | null; records: number; lastDate: string | null; avgOee: number | null; avgAvailability: number | null };
+type Workplace = { id: string; code: string; line_name: string; workplace_name: string; area: "HA" | "TUP" | "BOTH"; source_line: string | null; records: number; lastDate: string | null; avgOee: number | null; avgAvailability: number | null };
 type DetailRecord = { date: string; product: string; hours: number; oee: number | null };
 type SortKey = "code" | "line" | "name" | "oee" | "availability" | "records";
 
@@ -37,7 +38,12 @@ function WorkplacesPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftCode, setDraftCode] = useState("");
+  const [draftLine, setDraftLine] = useState("");
+  const [draftArea, setDraftArea] = useState<"HA" | "TUP">("HA");
   const [saving, setSaving] = useState(false);
+  const [workplaceDialogOpen, setWorkplaceDialogOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [period, setPeriod] = useState({ from: "", to: "" });
   const [search, setSearch] = useState("");
@@ -116,7 +122,7 @@ function WorkplacesPage() {
     queryFn: async (): Promise<DetailRecord[]> => {
       const workplace = workplaces.find((w) => w.id === expanded);
       if (!workplace) return [];
-      let query = supabase.from("daily_records").select("work_date,product,product_id,oee,shift,products:product_id(code)").eq("line", workplace.source_line ?? "").order("work_date", { ascending: false });
+      let query = supabase.from("daily_records").select("work_date,line,product,product_id,oee,shift,products:product_id(code)").ilike("line", `${workplace.code} - %`).order("work_date", { ascending: false });
       if (period.from) query = query.gte("work_date", period.from);
       if (period.to) query = query.lte("work_date", period.to);
       const { data, error } = await query;
@@ -137,23 +143,93 @@ function WorkplacesPage() {
     },
   });
 
-  function beginEdit(workplace: Workplace) { setEditing(workplace.id); setDraftName(workplace.workplace_name); }
-  async function saveEdit(workplace: Workplace) {
+  function openCreateDialog() {
+    setEditing(null);
+    setDraftCode("");
+    setDraftLine("");
+    setDraftName("");
+    setDraftArea("HA");
+    setFormError(null);
+    setWorkplaceDialogOpen(true);
+  }
+
+  function beginEdit(workplace: Workplace) {
+    setEditing(workplace.id);
+    setDraftCode(workplace.code);
+    setDraftLine(workplace.line_name);
+    setDraftName(workplace.workplace_name);
+    setDraftArea(workplace.area === "TUP" ? "TUP" : "HA");
+    setFormError(null);
+    setWorkplaceDialogOpen(true);
+  }
+
+  async function saveWorkplace() {
+    const code = draftCode.trim().toUpperCase();
+    const line = draftLine.trim();
     const name = draftName.trim();
-    if (!name) return;
+
+    if (!/^(041|050)\\.\\d{2}$/.test(code)) {
+      setFormError("Kód musí mít formát 041.xx pro HA nebo 050.xx pro TUP.");
+      return;
+    }
+    if (draftArea === "HA" && !code.startsWith("041.")) {
+      setFormError("Pro oblast HA musí kód začínat 041.");
+      return;
+    }
+    if (draftArea === "TUP" && !code.startsWith("050.")) {
+      setFormError("Pro oblast TUP musí kód začínat 050.");
+      return;
+    }
+    if (!line) {
+      setFormError("Vyplňte linku.");
+      return;
+    }
+    if (!name) {
+      setFormError("Vyplňte název pracoviště.");
+      return;
+    }
+
+    const sourceLine = `${code} - ${name} ${line}`;
     setSaving(true);
+    setFormError(null);
     try {
-      if (workplace.id.startsWith("import-")) {
-        const { data, error } = await (supabase as any).from("workplaces").upsert({ code: workplace.code, line_name: workplace.line_name, workplace_name: name, area: workplace.area, source_line: workplace.source_line }, { onConflict: "code" }).select("id").single();
+      if (editing) {
+        const workplace = workplaces.find((item) => item.id === editing);
+        if (!workplace) throw new Error("Pracoviště nebylo nalezeno.");
+        const { error } = await (supabase as any)
+          .from("workplaces")
+          .update({
+            line_name: line,
+            workplace_name: name,
+            area: draftArea,
+            source_line: sourceLine,
+          })
+          .eq("id", editing);
         if (error) throw error;
-        if (data?.id) setEditing(null);
       } else {
-        const { error } = await (supabase as any).from("workplaces").update({ workplace_name: name }).eq("id", workplace.id);
-        if (error) throw error;
-        setEditing(null);
+        const { error } = await (supabase as any)
+          .from("workplaces")
+          .insert({
+            code,
+            line_name: line,
+            workplace_name: name,
+            area: draftArea,
+            source_line: sourceLine,
+          });
+        if (error) {
+          if (String(error.code) === "23505") throw new Error("Pracoviště s tímto kódem už existuje.");
+          throw error;
+        }
       }
+
+      setWorkplaceDialogOpen(false);
+      setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ["workplaces"] });
-    } finally { setSaving(false); }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Pracoviště se nepodařilo uložit.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -189,7 +265,7 @@ function WorkplacesPage() {
         </Card>
 
         <Card className="overflow-hidden p-0">
-          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div><h2 className="text-lg font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div></div>
+          <div className="border-b border-border px-4 py-4 sm:px-5"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-primary/10 text-primary"><Building2 className="h-5 w-5" /></span><div className="min-w-0"><h2 className="text-lg font-semibold">Seznam pracovišť</h2><p className="text-xs text-muted-foreground">{filteredWorkplaces.length} z {workplaces.length} pracovišť · kliknutím zobrazíte záznamy</p></div></div><Button onClick={openCreateDialog} className="shrink-0"><Plus className="mr-2 h-4 w-4" />Přidat pracoviště</Button></div></div>
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-primary">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
             <>
             <div className="hidden overflow-x-auto md:block"><div className="min-w-[720px]">
@@ -200,7 +276,7 @@ function WorkplacesPage() {
                     <span className="flex items-center gap-2 font-mono font-semibold"><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}</span><span className="font-medium">{workplace.line_name}</span><span className="min-w-0 truncate font-medium">{workplace.workplace_name}</span><span className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span><span aria-hidden="true" />
                   </button>
                   {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><Button variant="outline" onClick={(event) => { event.stopPropagation(); beginEdit(workplace); }}><Pencil className="mr-2 h-4 w-4" />Upravit</Button><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
                     {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="truncate font-medium">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
                   </div>}
                 </div>
@@ -214,7 +290,7 @@ function WorkplacesPage() {
                     <span className={`shrink-0 font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span>
                   </button>
                   {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4">
-                    <div className="mb-3 space-y-2"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
+                    <div className="mb-3 space-y-2"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><Button variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); beginEdit(workplace); }}><Pencil className="mr-2 h-4 w-4" />Upravit</Button></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
                     {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="space-y-2">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="rounded-lg border border-border bg-muted/25 p-2.5 text-sm"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{record.date}</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div><p className="mt-1 truncate font-medium">{record.product}</p><p className="mt-0.5 text-xs text-muted-foreground">{record.hours} h</p></div>)}</div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
                   </div>}
                 </div>
@@ -227,6 +303,48 @@ function WorkplacesPage() {
 
         <HaTupLinkageReport />
       </div>
+
+      <Dialog open={workplaceDialogOpen} onOpenChange={(open) => { if (!saving) { setWorkplaceDialogOpen(open); if (!open) setFormError(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Upravit pracoviště" : "Vytvořit pracoviště"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="workplace-code">Kód pracoviště</Label>
+              <Input
+                id="workplace-code"
+                value={draftCode}
+                onChange={(event) => setDraftCode(event.target.value)}
+                placeholder="041.01"
+                disabled={Boolean(editing)}
+                className="font-mono"
+              />
+              {editing ? <p className="text-xs text-muted-foreground">Kód je identifikátor pracoviště a po vytvoření se nemění.</p> : <p className="text-xs text-muted-foreground">HA: 041.xx · TUP: 050.xx</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="workplace-line">Linka</Label>
+              <Input id="workplace-line" value={draftLine} onChange={(event) => setDraftLine(event.target.value)} placeholder="L1/1" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="workplace-name">Název pracoviště</Label>
+              <Input id="workplace-name" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="HandAssy OPF" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="workplace-area">Oblast</Label>
+              <select id="workplace-area" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draftArea} onChange={(event) => setDraftArea(event.target.value as "HA" | "TUP")}>
+                <option value="HA">HA</option>
+                <option value="TUP">TUP</option>
+              </select>
+            </div>
+            {formError ? <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{formError}</div> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWorkplaceDialogOpen(false)} disabled={saving}><X className="mr-2 h-4 w-4" />Zrušit</Button>
+            <Button onClick={saveWorkplace} disabled={saving}>{saving ? "Ukládám…" : <><Save className="mr-2 h-4 w-4" />Uložit</>}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
