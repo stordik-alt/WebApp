@@ -180,7 +180,7 @@ function FloorMapPage() {
   }
 
   return (
-    <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)] lg:items-start">
+    <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
       <Panel className="min-w-0 overflow-hidden lg:col-start-1 lg:row-start-1">
         <PanelHeader
           icon={<Factory className="h-4 w-4" />}
@@ -220,84 +220,85 @@ function FloorMapPage() {
                     : null;
 
                   return (
-                    <div key={workstation.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(125px,0.85fr)_minmax(150px,1.5fr)_72px_78px] sm:items-center sm:px-5">
-                      <div className="flex items-center gap-2">
-                        <span className="iw-chip shrink-0">{workstation.area}</span>
-                        {!workstation.is_synthetic ? <span className="iw-mono text-xs text-muted-foreground">{workstation.code}</span> : null}
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="iw-mono break-words text-sm font-semibold leading-5 text-foreground/90">
-                          {workstation.workplace_name || workstation.display_name}
+                    <div key={workstation.id} className="px-3 py-2.5 sm:px-4 sm:py-3">
+                      <div className="grid min-w-0 gap-2 sm:grid-cols-[145px_minmax(0,1fr)_72px_92px] sm:items-center">
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className="iw-chip shrink-0">{workstation.area}</span>
+                          <div className="min-w-0">
+                            <div className="iw-mono truncate text-xs font-semibold text-foreground/90">
+                              {workstation.workplace_name || workstation.display_name}
+                            </div>
+                            <div className="iw-mono text-[10px] text-muted-foreground">
+                              {!workstation.is_synthetic ? workstation.code : workstation.area === "TUP" ? "TouchUp" : "HandAssy"}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                          {workstation.area === "TUP" ? "TouchUp" : "HandAssy"}
+
+                        <Popover
+                          open={openProductSelector === workstation.id}
+                          onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <button type="button" className="iw-btn h-9 min-w-0 w-full items-center justify-between gap-2 overflow-hidden text-left">
+                              <span className="min-w-0 truncate">
+                                {selectedProduct ? selectedProduct.code + (selectedProduct.name ? " · " + selectedProduct.name : "") : "Vyber produkt"}
+                              </span>
+                              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[min(520px,calc(100vw-2rem))] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Hledat kód nebo název produktu..." />
+                              <CommandList>
+                                <CommandEmpty>Žádný aktivní a schválený produkt.</CommandEmpty>
+                                {products.map((product) => (
+                                  <CommandItem
+                                    key={product.id}
+                                    value={product.code + " " + (product.name ?? "")}
+                                    onSelect={() => {
+                                      setDrafts((d) => ({
+                                        ...d,
+                                        [workstation.id]: { productId: product.id, code: product.code, pieces: draft.pieces },
+                                      }));
+                                      setOpenProductSelector(null);
+                                    }}
+                                  >
+                                    <Check className={cn("h-4 w-4", draft.productId === product.id ? "opacity-100" : "opacity-0")} />
+                                    <div className="min-w-0">
+                                      <div className="truncate font-medium">{product.code}</div>
+                                      {product.name ? <div className="truncate text-xs text-muted-foreground">{product.name}</div> : null}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+
+                        <input
+                          className="h-9 w-full min-w-0"
+                          value={draft.pieces}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
+                          placeholder="Ks"
+                          inputMode="numeric"
+                          aria-label="Zbývající kusy"
+                        />
+
+                        <button
+                          type="button"
+                          className="iw-btn h-9 w-full"
+                          disabled={!draft.productId || !draft.pieces}
+                          onClick={() => void setProduction(workstation)}
+                        >
+                          {production ? "Aktualizovat" : "Uložit"}
+                        </button>
+                      </div>
+
+                      {capacity ? (
+                        <div className="iw-mono mt-1 pl-[145px] text-[10px] text-muted-foreground">
+                          Kapacita: {capacity}
                         </div>
-                      </div>
-
-                      <div className="min-w-0">
-                      <Popover
-                        open={openProductSelector === workstation.id}
-                        onOpenChange={(open) => setOpenProductSelector(open ? workstation.id : null)}
-                      >
-                        <PopoverTrigger asChild>
-                          <button type="button" className="iw-btn min-w-0 w-full items-center justify-between gap-2 text-left">
-                            <span className="min-w-0 break-words">
-                              {selectedProduct ? selectedProduct.code + (selectedProduct.name ? " · " + selectedProduct.name : "") : "Vyber produkt"}
-                            </span>
-                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[min(520px,calc(100vw-2rem))] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Hledat kód nebo název produktu..." />
-                            <CommandList>
-                              <CommandEmpty>Žádný aktivní a schválený produkt.</CommandEmpty>
-                              {products.map((product) => (
-                                <CommandItem
-                                  key={product.id}
-                                  value={product.code + " " + (product.name ?? "")}
-                                  onSelect={() => {
-                                    setDrafts((d) => ({
-                                      ...d,
-                                      [workstation.id]: { productId: product.id, code: product.code, pieces: draft.pieces },
-                                    }));
-                                    setOpenProductSelector(null);
-                                  }}
-                                >
-                                  <Check className={cn("h-4 w-4", draft.productId === product.id ? "opacity-100" : "opacity-0")} />
-                                  <div className="min-w-0">
-                                    <div className="truncate font-medium">{product.code}</div>
-                                    {product.name ? <div className="truncate text-xs text-muted-foreground">{product.name}</div> : null}
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      </div>
-
-                      <input
-                        value={draft.pieces}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [workstation.id]: { ...draft, pieces: e.target.value } }))}
-                        placeholder="Ks"
-                        inputMode="numeric"
-                        aria-label="Zbývající kusy"
-                      />
-
-                      <button
-                        type="button"
-                        className="iw-btn"
-                        disabled={!draft.productId || !draft.pieces}
-                        onClick={() => void setProduction(workstation)}
-                      >
-                        {production ? "Aktualizovat" : "Uložit"}
-                      </button>
-
-                      <div className="iw-mono min-w-0 text-[11px] text-muted-foreground sm:col-span-4">
-                        {capacity ? <span>Kapacita: {capacity}</span> : null}
-                      </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -307,8 +308,8 @@ function FloorMapPage() {
         </div>
       </Panel>
 
-      <div className="iw-mono px-1 text-sm text-foreground/80 lg:col-span-2 lg:row-start-2">
-        <span className="text-muted-foreground">Kapacita výroby (součet přes všechny aktivní linky):</span>{" "}
+      <div className="iw-mono px-1 text-xs text-foreground/80 lg:col-start-1 lg:row-start-2">
+        <span className="text-muted-foreground">Kapacita výroby:</span>{" "}
         <span className="font-semibold text-[hsl(152_65%_58%)]">{totalCapacity} operátorů</span>
       </div>
 
