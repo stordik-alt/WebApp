@@ -115,7 +115,6 @@ function InteractiveHeader() {
 
 function InteraktivniLayout() {
   const pathname = useRouterState({ select: (st) => st.location.pathname });
-  const { workDate, shift } = useShiftSelection();
 
   return (
     <ShiftSelectionProvider>
@@ -123,13 +122,7 @@ function InteraktivniLayout() {
         <LiveBackground />
         <InteractiveHeader />
         <main className="mx-auto w-full max-w-[1800px] px-3 pb-10 pt-4 sm:px-5 lg:px-6">
-          <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
-            <div>
-              <p className="iw-label">Prostředí · Sledování a řízení výroby</p>
-              <p className="iw-mono mt-1 text-sm font-semibold text-foreground/90">{workDate} · {shift}</p>
-            </div>
-            <span className="hidden text-right text-[10px] text-muted-foreground md:block">Živá mapa haly · aktuální pracoviště · výroba</span>
-          </div>
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/60 pb-3"><p className="iw-label">Prostředí · Sledování a řízení výroby</p><span className="hidden text-right text-[10px] text-muted-foreground md:block">Živá mapa haly · aktuální pracoviště · výroba</span></div>
           <div key={pathname} className="animate-in fade-in duration-300">
             <Outlet />
           </div>
