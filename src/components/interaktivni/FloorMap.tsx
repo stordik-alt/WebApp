@@ -59,11 +59,20 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
  * Responzivní mapa haly: desktop plná topologie po skupinách, mobil skládací
  * akordeony (sekce 13 zadání - žádné pouhé zmenšení mapy na mobilu).
  */
+function groupOrder(name: string): number {
+  const match = name.match(/^L([13])\/(\d+)$/i);
+  if (match) return Number(match[1]) === 1 ? Number(match[2]) : 100 + Number(match[2]);
+  if (name.toLocaleLowerCase("cs-CZ").includes("olovo")) return 1000;
+  return 9000;
+}
+
 export function FloorMap({ groups }: { groups: Map<string, FloorMapWorkstationView[]> }) {
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) => groupOrder(a) - groupOrder(b) || a.localeCompare(b, "cs-CZ"));
+
   return (
     <>
       <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
-        {[...groups.entries()].map(([groupName, views]) => (
+        {orderedGroups.map(([groupName, views]) => (
           <Panel key={groupName} className="p-4">
             <div className="mb-3 flex items-center justify-between gap-2 border-b border-border/50 pb-2">
               <h3 className="iw-mono text-sm font-bold text-foreground">{groupName}</h3>
