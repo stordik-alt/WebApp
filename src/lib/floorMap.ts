@@ -153,9 +153,9 @@ export async function updateWorkstation(id: string, patch: IwWorkstationPatch): 
 export function groupWorkstations(workstations: IwWorkstation[]): Map<string, IwWorkstation[]> {
   const groups = new Map<string, IwWorkstation[]>();
   for (const workstation of workstations) {
-    const list = groups.get(workstation.group_name) ?? [];
+    const parentLine = normalizeParentLine(workstation.line_name, workstation.workplace_name);\n    const list = groups.get(parentLine) ?? [];
     list.push(workstation);
-    groups.set(workstation.group_name, list);
+    groups.set(parentLine, list);
   }
   return groups;
 }
