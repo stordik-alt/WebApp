@@ -112,7 +112,7 @@ export async function listWorkstations(): Promise<IwWorkstation[]> {
   // Keep map-only entries such as TESTY/PREP and explicitly modeled synthetic TUP stations.
   for (const row of map) {
     if (!row.workplace_id || !masters.some((workplace) => workplace.id === row.workplace_id)) {
-      synced.push(row);
+      synced.push({ ...row, line_name: row.line_name ?? row.group_name, workplace_name: row.workplace_name ?? row.display_name });
     }
   }
 
