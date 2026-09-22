@@ -83,48 +83,17 @@ export async function listActiveProductions(shiftId: string): Promise<IwShiftPro
 export async function startProduction(input: {
   shiftId: string;
   workstationId: string;
-  workplaceId?: string | null;
   productId: string;
   productCode: string;
   area: IwShiftProductionArea;
   remainingPieces: number;
   priority?: number | null;
 }): Promise<IwShiftProduction> {
-  // Some master workplaces are represented in the UI before an iw_workstations
-  // row exists. Resolve/create the technical row so the production FK always
-  // receives a real iw_workstations.id.
-  let workstationId = input.workstationId;
-  if (input.workplaceId) {
-    const { data: existingWorkstation, error: lookupError } = await supabase
-      .from("iw_workstations")
-      .select("id")
-      .eq("workplace_id", input.workplaceId)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-
-    if (existingWorkstation) {
-      workstationId = existingWorkstation.id;
-    } else {
-      const { data: createdWorkstation, error: createError } = await supabase
-        .from("iw_workstations")
-        .insert({
-          workplace_id: input.workplaceId,
-          code: input.productCode ? input.workstationId : input.workstationId,
-          area: input.area,
-          active: true,
-        })
-        .select("id")
-        .single();
-      if (createError) throw createError;
-      workstationId = createdWorkstation.id;
-    }
-  }
-
   const { data, error } = await supabase
     .from("iw_shift_productions")
     .insert({
       shift_id: input.shiftId,
-      workstation_id: workstationId,
+      workstation_id: input.workstationId,
       product_id: input.productId,
       product_code: input.productCode,
       area: input.area,
