@@ -115,7 +115,7 @@ function FloorMapPage() {
   }
 
   const groups = useMemo(() => {
-    const workstations = workstationsQuery.data ?? [];
+    const workstations = (workstationsQuery.data ?? []).filter((w) => !w.is_secondary);
     const assignmentsByWorkstation = new Map<string, { count: number; hasTemp: boolean }>();
     for (const a of assignmentsQuery.data ?? []) {
       if (!a.workstation_id) continue;
