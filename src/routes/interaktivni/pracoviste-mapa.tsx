@@ -66,7 +66,7 @@ function FloorMapAdminPage() {
                     {editingId === workstation.id ? (
                       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_2fr_auto]">
                         <input value={draft.group_name} onChange={(e) => setDraft((d) => ({ ...d, group_name: e.target.value }))} placeholder="Skupina" aria-label="Skupina" />
-                        <input value={draft.display_name} onChange={(e) => setDraft((d) => ({ ...d, display_name: e.target.value }))} placeholder="Zobrazovaný název" aria-label="Zobrazovaný název" />
+                        <input value={draft.display_name} onChange={(e) => setDraft((d) => ({ ...d, display_name: e.target.value }))} placeholder="Název pracoviště" aria-label="Název pracoviště" />
                         <input value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} placeholder="Poznámka (volitelné)" aria-label="Poznámka" />
                         <div className="flex gap-2">
                           <button type="button" className="iw-btn iw-btn-active" disabled={saving} onClick={() => void saveEdit(workstation)}>
@@ -81,7 +81,7 @@ function FloorMapAdminPage() {
                       <button type="button" className="flex w-full flex-wrap items-center gap-3 text-left" onClick={() => beginEdit(workstation)}>
                         <span className="iw-mono text-xs font-semibold text-foreground/70">{workstation.code}</span>
                         <span className="iw-chip">{workstation.area}</span>
-                        <span className="iw-mono min-w-0 flex-1 truncate text-sm text-foreground/85">{workstation.display_name}</span>
+                        <span className="min-w-0 flex-1 text-sm text-foreground/85"><span className="font-semibold">{workstation.line_name}</span><span className="mx-1 text-muted-foreground">·</span><span>{workstation.workplace_name}</span></span>
                         {workstation.note ? <span className="text-xs text-amber-700 dark:text-amber-300">⚠ {workstation.note}</span> : null}
                       </button>
                     )}
