@@ -34,7 +34,7 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
   return (
     <div className={`iw-panel iw-panel-live rounded-lg p-3 ${STATUS_CLASS[status]}`}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="iw-mono truncate text-xs font-semibold text-foreground">{view.workstation.display_name}</span>
+        <span className="iw-mono break-words text-xs font-semibold leading-5 text-foreground">{view.workstation.workplace_name || view.workstation.display_name}</span>
         <StatusBadge status={status} />
       </div>
       <div className="iw-mono space-y-0.5 text-[11px] text-muted-foreground">
@@ -62,10 +62,13 @@ function WorkstationCard({ view }: { view: FloorMapWorkstationView }) {
 export function FloorMap({ groups }: { groups: Map<string, FloorMapWorkstationView[]> }) {
   return (
     <>
-      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
         {[...groups.entries()].map(([groupName, views]) => (
           <Panel key={groupName} className="p-4">
-            <h3 className="iw-label mb-3">{groupName}</h3>
+            <div className="mb-3 flex items-center justify-between gap-2 border-b border-border/50 pb-2">
+              <h3 className="iw-mono text-sm font-bold text-foreground">{groupName}</h3>
+              <span className="iw-label">{views.length}×</span>
+            </div>
             <div className="grid gap-2">
               {views.map((view) => (
                 <WorkstationCard key={view.workstation.id} view={view} />
