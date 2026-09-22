@@ -202,15 +202,17 @@ function FloorMapPage() {
                 {lineWorkstations.map((workstationView) => {
                   const workstation = workstationView.workstation;
                   const production = productionByWorkstation.get(workstation.id);
-                  const selectedProduct = production
-                    ? (production.product_id ? productById.get(production.product_id) : productByCode.get(production.product_code))
-                    : null;
                   const storedDraft = drafts[workstation.id];
                   const draft = storedDraft ?? {
-                    productId: selectedProduct?.id ?? "",
-                    code: selectedProduct?.code ?? production?.product_code ?? "",
+                    productId: production?.product_id ?? "",
+                    code: production?.product_code ?? "",
                     pieces: production ? String(production.remaining_pieces) : "",
                   };
+                  const selectedProduct = draft.productId
+                    ? productById.get(draft.productId) ?? productByCode.get(draft.code)
+                    : draft.code
+                      ? productByCode.get(draft.code)
+                      : null;
                   const capacity = selectedProduct
                     ? productCapacityFor({
                         area: workstation.area === "TUP" ? "TUP" : "HA",
