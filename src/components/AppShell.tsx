@@ -49,6 +49,14 @@ function SidebarSettings() { return <div className="shrink-0 grid gap-1 border-t
 export function AppShell({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false); const { isTester } = useAuth();
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  if (pathname.startsWith("/interaktivni")) {
+    return (
+      <div data-app-title={title} data-read-only={isTester ? "true" : "false"} className="min-h-screen w-full min-w-0 overflow-x-clip bg-background text-foreground">
+        <RouteGuard>{children}</RouteGuard>
+      </div>
+    );
+  }
+
   return <div data-app-title={title} data-read-only={isTester ? "true" : "false"} className="min-h-screen w-full min-w-0 overflow-x-clip bg-background text-foreground">
     <div className="pointer-events-none fixed inset-0 -z-10" />
     <aside className="fixed inset-y-0 left-0 z-40 hidden min-h-0 w-[248px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[12px_0_30px_-24px_black] lg:flex"><Brand /><NavList /><SidebarSettings /><div className="shrink-0 px-5 pb-5 text-[10px] leading-relaxed text-sidebar-foreground/35">Interní výrobní systém · cloudová data</div></aside>
