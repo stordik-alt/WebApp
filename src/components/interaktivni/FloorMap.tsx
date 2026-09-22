@@ -88,7 +88,7 @@ export function FloorMap({ groups }: { groups: Map<string, FloorMapWorkstationVi
       </div>
 
       <Accordion type="multiple" className="grid gap-2 md:hidden">
-        {[...groups.entries()].map(([groupName, views]) => (
+        {orderedGroups.map(([groupName, views]) => (
           <AccordionItem key={groupName} value={groupName} className="iw-panel rounded-lg border-0 px-3">
             <AccordionTrigger className="iw-label py-3 hover:no-underline">{groupName}</AccordionTrigger>
             <AccordionContent className="grid gap-2 pb-3">
