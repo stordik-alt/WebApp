@@ -199,13 +199,17 @@ function WorkplacesPage() {
         const { error } = await (supabase as any)
           .from("workplaces")
           .update({
+            code,
             line_name: line,
             workplace_name: name,
             area: draftArea,
             source_line: sourceLine,
           })
           .eq("id", editing);
-        if (error) throw error;
+        if (error) {
+          if (String(error.code) === "23505") throw new Error("Pracoviště s tímto kódem už existuje.");
+          throw error;
+        }
       } else {
         const { error } = await (supabase as any)
           .from("workplaces")
@@ -269,12 +273,18 @@ function WorkplacesPage() {
           {isLoading ? <div className="p-5 text-sm text-muted-foreground">Načítám pracoviště…</div> : isError ? <div className="p-5 text-sm text-primary">Nepodařilo se načíst data pracovišť.</div> : filteredWorkplaces.length === 0 ? <div className="p-5 text-sm text-muted-foreground">Zatím nebylo importováno žádné pracoviště.</div> : (
             <>
             <div className="hidden overflow-x-auto md:block"><div className="min-w-[720px]">
-              <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5"><span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span></span></div>
+              <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_100px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:px-5"><span>Kód pracoviště</span><span>Linka</span><span>Název pracoviště</span><span>Průměrné OEE</span><span>Akce</span></div>
               <div className="divide-y divide-border">{filteredWorkplaces.map((workplace) => (
                 <div key={workplace.id}>
-                  <button type="button" className="grid w-full grid-cols-[140px_120px_minmax(220px,1fr)_130px_54px] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/20 sm:px-5" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
-                    <span className="flex items-center gap-2 font-mono font-semibold"><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}</span><span className="font-medium">{workplace.line_name}</span><span className="min-w-0 truncate font-medium">{workplace.workplace_name}</span><span className={`font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span><span aria-hidden="true" />
-                  </button>
+                  <div className="grid grid-cols-[140px_120px_minmax(220px,1fr)_130px_100px] items-center gap-3 px-4 py-3 sm:px-5">
+                    <button type="button" className="flex min-w-0 items-center gap-2 text-left font-mono font-semibold" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
+                      <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />{workplace.code}
+                    </button>
+                    <button type="button" className="min-w-0 truncate text-left font-medium" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>{workplace.line_name}</button>
+                    <button type="button" className="min-w-0 truncate text-left font-medium" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>{workplace.workplace_name}</button>
+                    <button type="button" className={`text-left font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`} onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>{formatOee(workplace.avgOee)}</button>
+                    <Button variant="outline" size="sm" onClick={() => beginEdit(workplace)}><Pencil className="mr-1.5 h-4 w-4" />Upravit</Button>
+                  </div>
                   {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4 sm:px-6">
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><Button variant="outline" onClick={(event) => { event.stopPropagation(); beginEdit(workplace); }}><Pencil className="mr-2 h-4 w-4" />Upravit</Button><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
                     {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="overflow-x-auto"><div className="min-w-[620px]"><div className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Datum</span><span>Vyráběný produkt</span><span>Počet hodin</span><span>OEE</span></div><div className="divide-y divide-border">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="grid grid-cols-[130px_minmax(0,1fr)_100px_120px] gap-3 px-3 py-3 text-sm"><span>{record.date}</span><span className="truncate font-medium">{record.product}</span><span>{record.hours} h</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div>)}</div></div></div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
@@ -284,11 +294,14 @@ function WorkplacesPage() {
             </div></div>
             <div className="divide-y divide-border md:hidden">{filteredWorkplaces.map((workplace) => (
                 <div key={workplace.id}>
-                  <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/20" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />
-                    <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-mono text-xs font-semibold">{workplace.code}</span><span className="truncate text-xs text-muted-foreground">{workplace.line_name}</span></div><p className="truncate text-sm font-medium">{workplace.workplace_name}</p></div>
-                    <span className={`shrink-0 font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span>
-                  </button>
+                  <div className="flex items-center gap-2 px-3 py-3">
+                    <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setExpanded(expanded === workplace.id ? null : workplace.id)}>
+                      <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded === workplace.id ? "rotate-180" : ""}`} />
+                      <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-mono text-xs font-semibold">{workplace.code}</span><span className="truncate text-xs text-muted-foreground">{workplace.line_name}</span></div><p className="truncate text-sm font-medium">{workplace.workplace_name}</p></div>
+                      <span className={`shrink-0 font-semibold tabular-nums ${oeeTone(workplace.avgOee)}`}>{formatOee(workplace.avgOee)}</span>
+                    </button>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => beginEdit(workplace)} aria-label={`Upravit pracoviště ${workplace.code}`}><Pencil className="h-4 w-4" /><span className="sr-only">Upravit</span></Button>
+                  </div>
                   {expanded === workplace.id && <div className="border-t border-border bg-muted/10 px-4 py-4">
                     <div className="mb-3 space-y-2"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold">Záznamy pracoviště</div><div className="text-xs text-muted-foreground">{workplace.code} · {workplace.workplace_name}</div></div><Button variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); beginEdit(workplace); }}><Pencil className="mr-2 h-4 w-4" />Upravit</Button></div><div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-end"><div className="min-w-0"><Label className="text-xs">Od</Label><Input type="date" value={period.from} onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} className="w-full sm:w-auto" /></div><div className="min-w-0"><Label className="text-xs">Do</Label><Input type="date" value={period.to} onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} className="w-full sm:w-auto" /></div><Button variant="outline" onClick={() => setPeriod({ from: "", to: "" })}>Celé období</Button></div></div>
                     {detailQuery.isLoading ? <div className="py-4 text-sm text-muted-foreground">Načítám záznamy…</div> : detailQuery.data?.length ? <div className="space-y-2">{detailQuery.data.map((record) => <div key={`${record.date}-${record.product}`} className="rounded-lg border border-border bg-muted/25 p-2.5 text-sm"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{record.date}</span><span className={`font-semibold ${oeeTone(record.oee)}`}>{formatOee(record.oee)}</span></div><p className="mt-1 truncate font-medium">{record.product}</p><p className="mt-0.5 text-xs text-muted-foreground">{record.hours} h</p></div>)}</div> : <div className="py-4 text-sm text-muted-foreground">Pro zvolené období nejsou žádné záznamy.</div>}
@@ -317,10 +330,10 @@ function WorkplacesPage() {
                 value={draftCode}
                 onChange={(event) => setDraftCode(event.target.value)}
                 placeholder="041.01"
-                disabled={Boolean(editing)}
+                
                 className="font-mono"
               />
-              {editing ? <p className="text-xs text-muted-foreground">Kód je identifikátor pracoviště a po vytvoření se nemění.</p> : <p className="text-xs text-muted-foreground">HA: 041.xx · TUP: 050.xx</p>}
+              <p className="text-xs text-muted-foreground">HA: 041.xx · TUP: 050.xx</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="workplace-line">Linka</Label>
